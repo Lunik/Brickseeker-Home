@@ -1,0 +1,24 @@
+# Runtime data (SQLite, image cache, catalogue snapshots, generated secret key)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Vite
+node_modules/
+dist/
+backend/app/static/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

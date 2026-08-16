@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens. The three brand colours are LEGO's own, matching the iOS app's Réglages picker;
+ * `--brand` is rewritten at runtime by lib/theme.ts when the user changes it, so no component ever
+ * hardcodes which of the three is active.
+ *
+ * Light is defined on bare `:root` and dark overrides only the tokens — that way a component
+ * styled with `bg-surface text-ink` is correct in both themes without a single `dark:` variant.
+ */
+:root {
+  --brand: 227 0 11; /* rouge #E3000B */
+  --brand-soft: 253 232 233;
+
+  --surface: 255 255 255;
+  --surface-raised: 255 255 255;
+  --surface-sunken: 244 245 247;
+
+  --ink: 17 24 39;
+  --ink-muted: 87 96 111;
+  --ink-faint: 140 149 163;
+  --line: 226 230 236;
+
+  --positive: 21 128 61;
+  --negative: 185 28 28;
+  --warning: 180 83 9;
+
+  color-scheme: light;
+}
+
+.dark {
+  --brand-soft: 60 20 22;
+
+  --surface: 17 19 23;
+  --surface-raised: 26 29 35;
+  --surface-sunken: 10 11 14;
+
+  --ink: 241 243 246;
+  --ink-muted: 163 171 184;
+  --ink-faint: 116 124 138;
+  --line: 44 49 58;
+
+  --positive: 74 222 128;
+  --negative: 248 113 113;
+  --warning: 251 191 36;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface-sunken text-ink antialiased;
+  /* The scan screen and the bottom action bar sit against the device edge on a phone. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@layer components {
+  .card {
+    @apply rounded-card bg-surface-raised border border-line p-4;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand text-white hover:brightness-110 active:brightness-95;
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface-sunken text-ink border border-line hover:bg-line/40;
+  }
+
+  .btn-ghost {
+    @apply btn text-ink-muted hover:bg-surface-sunken hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn bg-[rgb(var(--negative))] text-white hover:brightness-110;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink
+           placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2
+           focus:ring-brand/25;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold uppercase tracking-wide text-ink-muted;
+  }
+}
+
+/* Respect the OS setting for people who ask for less motion — several screens animate sheets. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
