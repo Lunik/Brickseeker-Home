@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, imageUrl, query } from '../api/client'
 import type { CatalogStatus, MinifigRow } from '../api/types'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock, Spinner } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
 
 /**
@@ -53,7 +53,7 @@ export default function MinifigsPage() {
   if (!hasCatalog) {
     return (
       <div className="space-y-4">
-        <h1 className="text-[34px] font-bold leading-tight text-ink">Mes minifigs</h1>
+        <NavBar title="Mes minifigs" />
         <EmptyState
           icon={<Icon name="user" className="h-9 w-9" />}
           title="Catalogue des minifigs non téléchargé"

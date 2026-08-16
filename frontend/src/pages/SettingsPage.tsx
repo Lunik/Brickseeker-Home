@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import type { BatchStatus, CatalogName, CatalogStatus } from '../api/types'
 import Icon from '../components/Icon'
 import PushToggle from '../components/PushToggle'
-import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, Spinner } from '../components/ui'
+import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
 import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
 import { formatDateTime } from '../lib/format'
@@ -131,6 +131,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      <NavBar title="Paramètres" backLabel="Fermer" />
       <h1 className="text-[34px] font-bold leading-tight text-ink">Paramètres</h1>
       {feedback && <p className="text-sm text-brand">{feedback}</p>}
 

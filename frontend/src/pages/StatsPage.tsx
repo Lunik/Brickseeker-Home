@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -13,20 +14,19 @@ import {
 } from 'recharts'
 
 import { api } from '../api/client'
-import type { CollectionStats } from '../api/types'
+import type { CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar } from '../components/ui'
 import { formatEUR, formatEURCompact, formatNumber } from '../lib/format'
 
-const CHART_HEIGHT = 220
-/** Beyond this the bar labels stop being readable on a phone; the rest is grouped as "Autres". */
-const MAX_THEME_BARS = 8
+/** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
+const MAX_THEME_BARS = 10
 
 export default function StatsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['stats'],
     queryFn: () => api.get<CollectionStats>('/stats'),
   })
@@ -40,16 +40,19 @@ export default function StatsPage() {
   if (error) return <ErrorLabel message={(error as Error).message} />
   if (!data || data.setCount === 0) {
     return (
-      <EmptyState
-        icon={<Icon name="chart" className="h-9 w-9" />}
-        title="Pas encore de statistiques"
-        message="Synchronise ta collection Rebrickable pour voir sa répartition et sa valeur estimée."
-        action={
-          <button type="button" className="btn-primary" onClick={() => navigate('/collection')}>
-            Ouvrir la collection
-          </button>
-        }
-      />
+      <>
+        <NavBar title="Statistiques" />
+        <EmptyState
+          icon={<Icon name="chart" className="h-10 w-10" />}
+          title="Aucune statistique"
+          message="Liez votre compte Rebrickable et synchronisez depuis l'accueil."
+          action={
+            <button type="button" className="btn-primary" onClick={() => navigate('/')}>
+              Retour à l'accueil
+            </button>
+          }
+        />
+      </>
     )
   }
 
@@ -71,168 +74,188 @@ export default function StatsPage() {
     reliable: snapshot.isReliable,
   }))
 
-  const coverage = data.setCount ? Math.round((data.setsWithKnownPrice / data.setCount) * 100) : 0
+  const missing = data.setCount - data.setsWithKnownPrice
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[34px] font-bold leading-tight text-ink">Statistiques</h1>
-        <button
-          type="button"
-          className="nav-circle"
-          onClick={() => queryClient.invalidateQueries({ queryKey: ['stats'] })}
-          aria-label="Actualiser la valeur estimée"
-        >
-          <Icon name="refresh" />
-        </button>
-      </div>
+    <div className="space-y-6 pb-10">
+      <NavBar
+        title="Statistiques"
+        actions={
+          <button
+            type="button"
+            className="nav-circle"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['stats'] })}
+            disabled={isFetching}
+            aria-label="Actualiser la valeur estimée"
+          >
+            <Icon name="refresh" />
+          </button>
+        }
+      />
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Figure label="Sets" value={formatNumber(data.setCount)} />
-        <Figure label="Exemplaires" value={formatNumber(data.unitCount)} />
-        <Figure label="Pièces" value={formatNumber(data.partCount)} />
-        <Figure label="Thèmes" value={formatNumber(data.themeCount)} />
-        <div className="card col-span-2 sm:col-span-1">
-          <p className="text-sm text-ink-muted">Valeur estimée</p>
-          <p className="text-2xl font-bold text-ink">{formatEURCompact(data.totalValueEur)}</p>
-          {/* An estimated total is only honest next to its coverage. */}
-          <p className="text-xs text-ink-faint">
-            {data.setsWithKnownPrice} / {data.setCount} sets valorisés ({coverage} %)
-          </p>
+      <section className="space-y-3">
+        <h2 className="text-[22px] font-bold text-ink">Totaux</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <Total icon="box" value={formatNumber(data.setCount)} label="Sets" />
+          <Total icon="brick" value={formatNumber(data.partCount)} label="Pièces" />
+          <Total icon="tag" value={formatNumber(data.themeCount)} label="Thèmes" />
         </div>
       </section>
 
-      {data.setsWithKnownPrice < data.setCount && (
-        <button
-          type="button"
-          className="btn-secondary w-full"
-          onClick={() => completeMissing.mutate()}
-          disabled={completeMissing.isPending}
-        >
-          Compléter les prix manquants ({data.setCount - data.setsWithKnownPrice} set(s))
-        </button>
-      )}
-
-      <section className="space-y-2">
-        <h2 className="section-title">Sets par thème</h2>
-        <div className="card">
-          <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-            <BarChart data={topThemes} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
-              <XAxis dataKey="themeName" tick={{ fontSize: 10 }} interval={0} angle={-35} textAnchor="end" height={64} />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <section className="card space-y-2">
+        <h2 className="text-[20px] font-bold text-ink">Répartition par année</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data.yearBreakdown} margin={{ top: 8, right: 4, bottom: 4, left: -18 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }} />
+            <YAxis
+              orientation="right"
+              tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }}
+              allowDecimals={false}
+            />
+            <Tooltip contentStyle={{ fontSize: 12 }} />
+            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" />
+          </BarChart>
+        </ResponsiveContainer>
       </section>
 
-      <section className="space-y-2">
-        <h2 className="section-title">Sets par période</h2>
-        <div className="card">
-          <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-            <BarChart data={data.yearBreakdown} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="mt-1 text-xs text-ink-faint">
-            Regroupé par tranches de 5 ans — une barre par année serait illisible sur téléphone.
-          </p>
+      {/* Horizontal bars with the theme name above each, as on iOS — a vertical chart truncates
+          theme names to unreadable stubs at phone width. */}
+      <section className="card space-y-2">
+        <h2 className="text-[20px] font-bold text-ink">Répartition par thème</h2>
+        <ResponsiveContainer width="100%" height={Math.max(220, topThemes.length * 52)}>
+          <BarChart
+            data={topThemes}
+            layout="vertical"
+            margin={{ top: 8, right: 8, bottom: 4, left: 4 }}
+            barCategoryGap={18}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" horizontal={false} />
+            <XAxis type="number" tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }} allowDecimals={false} />
+            <YAxis type="category" dataKey="themeName" hide />
+            <Tooltip contentStyle={{ fontSize: 12 }} />
+            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" barSize={12} radius={[0, 3, 3, 0]}>
+              {/* The theme name sits above its own bar, as on iOS — a category axis would squeeze
+                  every label into a truncated left gutter at phone width. */}
+              <LabelList
+                dataKey="themeName"
+                position="top"
+                offset={8}
+                style={{ fill: 'rgb(var(--ink-muted))', fontSize: 12 }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </section>
+
+      <section className="card space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-[20px] font-bold text-ink">Valeur estimée</h2>
         </div>
+        <p className="text-[28px] font-bold text-ink">{formatEUR(data.totalValueEur)}</p>
+        {/* An estimated total is only honest next to its coverage. */}
+        <p className="text-[13px] text-ink-muted">
+          Basée sur {data.setsWithKnownPrice} / {data.setCount} sets ({data.pricedUnitCount} /{' '}
+          {data.unitCount} exemplaires) dont le prix est connu
+        </p>
+        {missing > 0 && (
+          <button
+            type="button"
+            className="btn-ghost w-full justify-start px-0 text-left"
+            onClick={() => completeMissing.mutate()}
+            disabled={completeMissing.isPending}
+          >
+            Compléter les prix manquants ({missing})
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn-ghost w-full justify-between gap-2 px-0 text-left"
+          onClick={() => navigate('/collection')}
+        >
+          Configurer le type (neuf/occasion) des listes
+          <Icon name="chevron-right" className="h-4 w-4" />
+        </button>
       </section>
 
       {valuePoints.length > 1 && (
-        <section className="space-y-2">
-          <h2 className="section-title">Valeur de la collection</h2>
-          <div className="card">
-            <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-              <LineChart data={valuePoints} margin={{ top: 4, right: 8, bottom: 4, left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
-                <XAxis dataKey="day" tick={{ fontSize: 10 }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 10 }} width={64} tickFormatter={(value) => formatEURCompact(value)} />
-                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value: number) => formatEUR(value)} />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  name="Valeur"
-                  stroke="rgb(var(--brand))"
-                  strokeWidth={2}
-                  dot={(props) => {
-                    const { cx, cy, payload, index } = props as {
-                      cx: number
-                      cy: number
-                      index: number
-                      payload: { reliable: boolean }
-                    }
-                    // A thin-coverage day is real but understates the collection: greyed rather
-                    // than drawn like any other point, which would show a crash that never happened.
-                    return (
-                      <circle
-                        key={index}
-                        cx={cx}
-                        cy={cy}
-                        r={3}
-                        fill={payload.reliable ? 'rgb(var(--brand))' : 'rgb(var(--ink-faint))'}
-                      />
-                    )
-                  }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-            <p className="mt-1 text-xs text-ink-faint">
-              Les points gris correspondent aux jours où moins de 80 % de la collection avait un prix.
-            </p>
-          </div>
+        <section className="card space-y-2">
+          <h2 className="text-[20px] font-bold text-ink">Valeur de la collection</h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={valuePoints} margin={{ top: 8, right: 8, bottom: 4, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }} minTickGap={24} />
+              <YAxis
+                tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }}
+                width={64}
+                tickFormatter={(value) => formatEURCompact(value)}
+              />
+              <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value: number) => formatEUR(value)} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                name="Valeur"
+                stroke="rgb(var(--brand))"
+                strokeWidth={2}
+                dot={(props) => {
+                  const { cx, cy, payload, index } = props as {
+                    cx: number
+                    cy: number
+                    index: number
+                    payload: { reliable: boolean }
+                  }
+                  // A thin-coverage day is real but understates the collection: greyed rather than
+                  // drawn like any other point, which would show a crash that never happened.
+                  return (
+                    <circle
+                      key={index}
+                      cx={cx}
+                      cy={cy}
+                      r={3}
+                      fill={payload.reliable ? 'rgb(var(--brand))' : 'rgb(var(--ink-faint))'}
+                    />
+                  )
+                }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <p className="text-[13px] text-ink-faint">
+            Les points grisés reposent sur une couverture de prix partielle : tous les sets n'avaient
+            pas de prix connu à cette date.
+          </p>
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="section-title">Superlatifs</h2>
-        <div className="space-y-2">
-          {data.mostExpensiveSet && (
-            <Superlative
-              label="Le plus cher"
-              set={data.mostExpensiveSet.name}
-              detail={formatEUR(data.mostExpensiveSetPriceEur)}
-              onClick={() => navigate(`/set/${encodeURIComponent(data.mostExpensiveSet!.setNum)}`)}
-            />
-          )}
-          {data.oldestSet && (
-            <Superlative
-              label="Le plus ancien"
-              set={data.oldestSet.name}
-              detail={String(data.oldestSet.year)}
-              onClick={() => navigate(`/set/${encodeURIComponent(data.oldestSet!.setNum)}`)}
-            />
-          )}
-          {data.largestSet && (
-            <Superlative
-              label="Le plus grand"
-              set={data.largestSet.name}
-              detail={`${formatNumber(data.largestSet.numParts)} pièces`}
-              onClick={() => navigate(`/set/${encodeURIComponent(data.largestSet!.setNum)}`)}
-            />
-          )}
-        </div>
+      <section className="card space-y-1">
+        <h2 className="text-[20px] font-bold text-ink">Superlatifs</h2>
+        <Superlative
+          label="Le plus cher"
+          set={data.mostExpensiveSet}
+          detail={formatEUR(data.mostExpensiveSetPriceEur)}
+          onOpen={navigate}
+        />
+        <Superlative
+          label="Le plus ancien"
+          set={data.oldestSet}
+          detail={data.oldestSet ? String(data.oldestSet.year) : ''}
+          onOpen={navigate}
+        />
+        <Superlative
+          label="Le plus de pièces"
+          set={data.largestSet}
+          detail={data.largestSet ? `${formatNumber(data.largestSet.numParts)} pièces` : ''}
+          onOpen={navigate}
+        />
       </section>
 
-      <button type="button" className="btn-ghost w-full" onClick={() => navigate('/collection')}>
-        Configurer le type (neuf/occasion) des listes
-      </button>
-
-      <section className="space-y-2">
-        <h2 className="section-title">Export</h2>
-        <div className="flex gap-2">
-          <a className="btn-secondary flex-1" href="/api/stats/export.csv">
-            Export CSV
+      <section className="card space-y-2">
+        <h2 className="text-[20px] font-bold text-ink">Exporter</h2>
+        <div className="flex flex-wrap gap-4">
+          <a className="text-[17px] text-brand" href="/api/stats/export.csv">
+            Exporter en CSV
           </a>
-          <a className="btn-secondary flex-1" href="/api/stats/export.pdf">
-            Export PDF
+          <a className="text-[17px] text-brand" href="/api/stats/export.pdf">
+            Exporter en PDF
           </a>
         </div>
       </section>
@@ -240,11 +263,13 @@ export default function StatsPage() {
   )
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
+function Total({ icon, value, label }: { icon: 'box' | 'brick' | 'tag'; value: string; label: string }) {
   return (
-    <div className="card">
-      <p className="text-sm text-ink-muted">{label}</p>
-      <p className="text-2xl font-bold text-ink">{value}</p>
+    <div className="flex min-h-[130px] flex-col rounded-2xl bg-surface-raised p-3">
+      <Icon name={icon} className="h-6 w-6 text-brand" />
+      <p className="mt-2 text-[22px] font-bold leading-tight text-ink">{value}</p>
+      <div className="flex-1" />
+      <p className="text-[13px] text-ink-muted">{label}</p>
     </div>
   )
 }
@@ -253,20 +278,25 @@ function Superlative({
   label,
   set,
   detail,
-  onClick,
+  onOpen,
 }: {
   label: string
-  set: string
+  set: SetRow | null
   detail: string
-  onClick: () => void
+  onOpen: (path: string) => void
 }) {
+  if (!set) return null
   return (
-    <button type="button" className="card flex w-full items-center gap-3 text-left" onClick={onClick}>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs text-ink-faint">{label}</span>
-        <span className="block truncate font-semibold text-ink">{set}</span>
+    <button
+      type="button"
+      className="flex w-full items-center gap-2 border-b border-line py-2.5 text-left last:border-0"
+      onClick={() => onOpen(`/set/${encodeURIComponent(set.setNum)}`)}
+    >
+      <span className="min-w-0 flex-1 text-[17px] text-ink">
+        {label} : {set.setNum} — {set.name}
+        {detail ? ` (${detail})` : ''}
       </span>
-      <span className="shrink-0 text-sm font-bold text-brand">{detail}</span>
+      <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-ink-faint" />
     </button>
   )
 }

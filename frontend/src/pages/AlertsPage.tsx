@@ -5,7 +5,7 @@ import { api } from '../api/client'
 import type { PriceAlert } from '../api/types'
 import { CONDITION_LABEL, formatEUR, formatRelative } from '../lib/format'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock, SetThumbnail } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, SetThumbnail } from '../components/ui'
 
 export default function AlertsPage() {
   const navigate = useNavigate()
@@ -34,7 +34,7 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-[34px] font-bold leading-tight text-ink">Alertes de prix</h1>
+      <NavBar title="Alertes de prix" />
 
       {alerts.length === 0 ? (
         <EmptyState
