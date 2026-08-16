@@ -42,16 +42,16 @@ export default function NotificationsBell() {
     <>
       <button
         type="button"
-        className="btn-ghost relative px-2 py-1.5"
+        className="nav-circle relative"
         onClick={() => {
           setOpen(true)
           if (unread > 0) markRead.mutate()
         }}
         aria-label={unread > 0 ? `Notifications (${unread} non lues)` : 'Notifications'}
       >
-        <Icon name="bell" filled={unread > 0} />
+        <Icon name="bell" filled={unread > 0} className="h-6 w-6" />
         {unread > 0 && (
-          <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
             {unread > 9 ? '9+' : unread}
           </span>
         )}

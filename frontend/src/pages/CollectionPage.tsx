@@ -68,7 +68,7 @@ export default function CollectionPage() {
   return (
     <>
       <SetListScreen
-        title="Collection"
+        title="Ma collection"
         screenId="collection"
         rows={data?.sets ?? []}
         isLoading={isLoading}

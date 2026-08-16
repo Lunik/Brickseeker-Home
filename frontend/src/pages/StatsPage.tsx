@@ -75,7 +75,7 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-ink">Statistiques</h1>
+      <h1 className="text-[34px] font-bold leading-tight text-ink">Statistiques</h1>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Figure label="Sets" value={formatNumber(data.setCount)} />

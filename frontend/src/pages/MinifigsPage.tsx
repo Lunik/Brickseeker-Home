@@ -51,7 +51,7 @@ export default function MinifigsPage() {
   if (!hasCatalog) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-ink">Mes minifigs</h1>
+        <h1 className="text-[34px] font-bold leading-tight text-ink">Mes minifigs</h1>
         <EmptyState
           icon={<Icon name="user" className="h-9 w-9" />}
           title="Catalogue des minifigs non téléchargé"

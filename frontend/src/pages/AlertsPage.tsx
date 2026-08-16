@@ -34,7 +34,7 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-ink">Alertes de prix</h1>
+      <h1 className="text-[34px] font-bold leading-tight text-ink">Alertes de prix</h1>
 
       {alerts.length === 0 ? (
         <EmptyState

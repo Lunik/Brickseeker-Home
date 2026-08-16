@@ -11,11 +11,20 @@ import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
 import { formatDateTime } from '../lib/format'
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  footer,
+  children,
+}: {
+  title: string
+  footer?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <section className="space-y-2">
-      <h2 className="section-title">{title}</h2>
+      <h2 className="section-title px-1">{title}</h2>
       <div className="card space-y-3">{children}</div>
+      {footer && <p className="section-footer">{footer}</p>}
     </section>
   )
 }
@@ -122,37 +131,37 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <h1 className="text-2xl font-bold text-ink">Réglages</h1>
+      <h1 className="text-[34px] font-bold leading-tight text-ink">Paramètres</h1>
       {feedback && <p className="text-sm text-brand">{feedback}</p>}
 
-      <Section title="Apparence">
-        <div className="space-y-1.5">
-          <span className="section-title">Couleur</span>
-          <div className="flex gap-2">
-            {(Object.keys(BRAND_COLORS) as BrandColor[]).map((color) => (
-              <button
-                key={color}
-                type="button"
-                className={`flex-1 rounded-xl border-2 px-3 py-2 text-sm font-semibold ${
-                  brandColor === color ? 'border-brand' : 'border-line'
-                }`}
-                style={{ color: BRAND_COLORS[color].hex }}
-                onClick={() => void updatePreferences({ 'appTheme.brandColor': color })}
-              >
-                {BRAND_COLORS[color].label}
-              </button>
-            ))}
-          </div>
+      <Section
+        title="Thème"
+        footer="Choisissez la couleur de marque et l'apparence claire/sombre de l'application."
+      >
+        <div className="flex gap-4 pb-1">
+          {(Object.keys(BRAND_COLORS) as BrandColor[]).map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={`h-12 w-12 rounded-full transition-transform active:scale-95 ${
+                brandColor === color ? 'ring-2 ring-ink ring-offset-2 ring-offset-[rgb(var(--surface-raised))]' : ''
+              }`}
+              style={{ backgroundColor: BRAND_COLORS[color].hex }}
+              onClick={() => void updatePreferences({ 'appTheme.brandColor': color })}
+              aria-label={BRAND_COLORS[color].label}
+              aria-pressed={brandColor === color}
+            />
+          ))}
         </div>
-        <div className="space-y-1.5">
-          <span className="section-title">Thème</span>
-          <div className="flex gap-2">
+        <div className="border-t border-line pt-3">
+          <div className="segmented">
             {(Object.keys(APPEARANCE_LABELS) as AppearanceMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
-                className={appearance === mode ? 'btn-primary flex-1' : 'btn-secondary flex-1'}
+                className={`segmented-option ${appearance === mode ? 'segmented-option-active' : ''}`}
                 onClick={() => void updatePreferences({ 'appTheme.appearanceMode': mode })}
+                aria-pressed={appearance === mode}
               >
                 {APPEARANCE_LABELS[mode]}
               </button>
@@ -161,14 +170,14 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Objectif €/pièce">
-        <label className="block space-y-1.5">
-          <span className="text-sm text-ink-muted">
-            Sert à colorer le prix par pièce sur la fiche d'un set. 0,12 € est la règle du pouce
-            habituelle.
-          </span>
+      <Section
+        title="Valeur cible"
+        footer="Seuil de €/pièce en dessous duquel un set est considéré comme un bon rapport qualité-prix. Affiché en vert sur la fiche set si le prix est inférieur à cette valeur, en rouge au-dessus."
+      >
+        <label className="flex items-center gap-3">
+          <span className="flex-1 text-[17px] text-ink">Cible €/pièce</span>
           <input
-            className="input"
+            className="w-24 bg-transparent text-right text-[17px] text-ink focus:outline-none"
             type="number"
             step="0.01"
             min="0"
@@ -177,10 +186,11 @@ export default function SettingsPage() {
               void updatePreferences({ 'appTheme.preferredPricePerPart': Number(event.target.value) })
             }
           />
+          <span className="text-[17px] text-ink-faint">€</span>
         </label>
       </Section>
 
-      <Section title="Rebrickable">
+      <Section title="Compte Rebrickable">
         <div className="flex flex-wrap gap-2">
           <Badge tone={credentials.rebrickableApiKey ? 'positive' : 'warning'}>
             {credentials.rebrickableApiKey ? 'Clé API configurée' : 'Clé API manquante'}
@@ -247,7 +257,7 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Brickset (liste cadeaux)">
+      <Section title="Compte Brickset">
         <div className="flex flex-wrap gap-2">
           <Badge tone={credentials.bricksetApiKey ? 'positive' : 'neutral'}>
             {credentials.bricksetApiKey ? 'Clé API configurée' : 'Clé API manquante'}
@@ -298,7 +308,7 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="BrickLink (cote neuf/occasion)">
+      <Section title="Compte BrickLink">
         <Badge tone={credentials.bricklink ? 'positive' : 'neutral'}>
           {credentials.bricklink ? 'Identifiants configurés' : 'Non configuré'}
         </Badge>

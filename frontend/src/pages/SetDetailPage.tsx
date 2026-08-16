@@ -10,9 +10,19 @@ import PriceHistoryChart from '../components/PriceHistoryChart'
 import ScanPriceEntry from '../components/ScanPriceEntry'
 import Icon from '../components/Icon'
 import ValuationCard from '../components/ValuationCard'
-import { Badge, ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, Sheet, SetThumbnail } from '../components/ui'
+import {
+  Badge,
+  ConfirmDialog,
+  EmptyState,
+  ErrorLabel,
+  LoadingBlock,
+  Sheet,
+  SetThumbnail,
+  StatusLine,
+} from '../components/ui'
 import { useSettings } from '../lib/settings-context'
 import {
+  baseSetNum,
   CONDITION_LABEL,
   formatDateTime,
   formatEUR,
@@ -149,126 +159,137 @@ export default function SetDetailPage() {
 
   return (
     <div className="space-y-5 pb-8">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" className="btn-ghost px-2 py-1" onClick={() => navigate(-1)}>
-          <Icon name="chevron-left" className="mr-0.5 inline h-4 w-4 align-text-bottom" />
-          Retour
-        </button>
-        {/* Buttons, not only a swipe: a gesture alone is not an affordance, and screen readers
-            consume horizontal swipes. */}
-        {siblings.length > 1 && index >= 0 && (
-          <div className="flex items-center gap-1 text-xs text-ink-faint">
+      {/* The pager header, matching the iOS sheet: chevrons grouped in one pill on the left, the
+          position centred, "Fermer" on the right. */}
+      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-2 bg-surface/90 px-4 py-2 backdrop-blur">
+        {siblings.length > 1 && index >= 0 ? (
+          <div className="flex items-center rounded-full bg-surface-raised">
             <button
               type="button"
-              className="btn-ghost px-2 py-1"
+              className="flex h-11 w-12 items-center justify-center text-brand disabled:opacity-30"
               disabled={index <= 0}
               onClick={() =>
                 navigate(`/set/${encodeURIComponent(siblings[index - 1])}`, { state: { siblings } })
               }
               aria-label="Set précédent"
             >
-              <Icon name="chevron-left" className="h-4 w-4" />
+              <Icon name="chevron-left" className="h-6 w-6" />
             </button>
-            <span>
-              {index + 1} / {siblings.length}
-            </span>
             <button
               type="button"
-              className="btn-ghost px-2 py-1"
+              className="flex h-11 w-12 items-center justify-center text-brand disabled:opacity-30"
               disabled={index >= siblings.length - 1}
               onClick={() =>
                 navigate(`/set/${encodeURIComponent(siblings[index + 1])}`, { state: { siblings } })
               }
               aria-label="Set suivant"
             >
-              <Icon name="chevron-right" className="h-4 w-4" />
+              <Icon name="chevron-right" className="h-6 w-6" />
             </button>
           </div>
+        ) : (
+          <span className="w-24" />
         )}
+        <span className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold text-ink">
+          {siblings.length > 1 && index >= 0 ? `${index + 1} sur ${siblings.length}` : ''}
+        </span>
+        <button type="button" className="nav-pill" onClick={() => navigate(-1)}>
+          Fermer
+        </button>
       </div>
 
-      <section className="card space-y-3">
+      <section className="space-y-3">
         {data.set.setImgUrl && (
           <img
             src={imageUrl(data.set.setImgUrl)}
             alt={data.set.name}
-            className="mx-auto max-h-56 w-full object-contain"
+            className="mx-auto max-h-64 w-full object-contain"
           />
         )}
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-ink">{data.set.setNum}</h1>
-            {data.isInWishlist && (
-              <Badge tone="brand">
-                <Icon name="heart" filled className="h-3 w-3" /> Liste cadeaux
-              </Badge>
-            )}
+
+        <div className="space-y-1 text-center">
+          <h1 className="text-[34px] font-bold leading-tight text-ink">{baseSetNum(data.set.setNum)}</h1>
+          <p className="text-[22px] leading-tight text-ink">{data.set.name}</p>
+          <p className="text-[17px] text-ink-muted">
+            {[data.set.year || null, `${formatNumber(data.set.numParts)} pièces`].filter(Boolean).join(' · ')}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
             {data.nonSetKind && <Badge tone="warning">{NON_SET_LABEL[data.nonSetKind]}</Badge>}
             {data.isOfflineResult && <Badge tone="neutral">Résultat hors-ligne</Badge>}
           </div>
-          <p className="text-base text-ink">{data.set.name}</p>
-          <p className="text-sm text-ink-muted">
-            {[data.themeName, data.set.year || null, `${formatNumber(data.set.numParts)} pièces`]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {data.isInCollection ? (
-            <>
-              <Badge tone="positive">
-                Dans ma collection{data.currentListName ? ` · ${data.currentListName}` : ''}
-              </Badge>
-              <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => setShowLists(true)}>
-                Changer de liste
-              </button>
-              <div className="flex items-center gap-1 text-xs">
-                <button
-                  type="button"
-                  className="btn-ghost px-2 py-1"
-                  onClick={() => setQuantity.mutate(Math.max(1, data.quantity - 1))}
-                  aria-label="Retirer un exemplaire"
-                >
-                  <Icon name="minus" className="h-4 w-4" />
-                </button>
-                <span className="min-w-6 text-center font-semibold text-ink">{data.quantity}</span>
-                <button
-                  type="button"
-                  className="btn-ghost px-2 py-1"
-                  onClick={() => setQuantity.mutate(data.quantity + 1)}
-                  aria-label="Ajouter un exemplaire"
-                >
-                  <Icon name="plus" className="h-4 w-4" />
-                </button>
-              </div>
+        {data.isInCollection ? (
+          <StatusLine>
+            Dans votre liste «&nbsp;{data.currentListName ?? 'collection'}&nbsp;»
+          </StatusLine>
+        ) : (
+          <StatusLine tone="neutral">Pas dans votre collection</StatusLine>
+        )}
+
+        {data.isInCollection && (
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <span className="text-[20px] text-ink">Quantité : ×{data.quantity}</span>
+            <div className="flex items-center rounded-xl bg-surface-raised">
               <button
                 type="button"
-                className="btn-ghost px-2 py-1 text-xs text-[rgb(var(--negative))]"
-                onClick={() => setConfirmRemove(true)}
+                className="flex h-11 w-12 items-center justify-center text-ink disabled:opacity-30"
+                onClick={() => setQuantity.mutate(Math.max(1, data.quantity - 1))}
+                disabled={data.quantity <= 1}
+                aria-label="Retirer un exemplaire"
               >
-                Retirer
+                <Icon name="minus" className="h-5 w-5" />
               </button>
-            </>
+              <span className="h-6 w-px bg-line" />
+              <button
+                type="button"
+                className="flex h-11 w-12 items-center justify-center text-ink"
+                onClick={() => setQuantity.mutate(data.quantity + 1)}
+                aria-label="Ajouter un exemplaire"
+              >
+                <Icon name="plus" className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Centred tinted text actions, as on iOS — not a row of filled buttons. */}
+        <div className="space-y-1 pt-1">
+          {data.isInCollection ? (
+            <button type="button" className="btn-ghost w-full" onClick={() => setShowLists(true)}>
+              Changer de liste
+            </button>
           ) : (
-            <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={() => setShowLists(true)}>
+            <button type="button" className="btn-ghost w-full" onClick={() => setShowLists(true)}>
+              <Icon name="box" className="h-5 w-5" />
               Ajouter à ma collection
             </button>
           )}
           <button
             type="button"
-            className="btn-secondary px-3 py-1.5 text-xs"
+            className="btn-ghost w-full"
             onClick={() => setWishlist.mutate(!data.isInWishlist)}
           >
-            {data.isInWishlist ? 'Retirer des cadeaux' : 'Ajouter aux cadeaux'}
+            <Icon name="heart" filled={data.isInWishlist} className="h-5 w-5" />
+            {data.isInWishlist ? 'Retirer de votre liste cadeaux' : 'Ajouter à votre liste cadeaux'}
           </button>
-          <button
-            type="button"
-            className="btn-secondary px-3 py-1.5 text-xs"
-            onClick={() => setShowScanPrice(true)}
-          >
+          <button type="button" className="btn-ghost w-full" onClick={() => setShowAlertEditor(true)}>
+            <Icon name="bell" className="h-5 w-5" />
+            Alerte de prix
+          </button>
+          <button type="button" className="btn-ghost w-full" onClick={() => setShowScanPrice(true)}>
+            <Icon name="tag" className="h-5 w-5" />
             Prix vu en magasin
           </button>
+          {data.isInCollection && (
+            <button
+              type="button"
+              className="btn-ghost w-full text-[rgb(var(--negative))]"
+              onClick={() => setConfirmRemove(true)}
+            >
+              Retirer de ma collection
+            </button>
+          )}
         </div>
       </section>
 

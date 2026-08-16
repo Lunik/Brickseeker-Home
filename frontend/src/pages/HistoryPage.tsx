@@ -52,7 +52,7 @@ export default function HistoryPage() {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-ink">Carte des scans</h1>
+          <h1 className="text-[34px] font-bold leading-tight text-ink">Carte des scans</h1>
           <button type="button" className="btn-secondary" onClick={() => setShowMap(false)}>
             Liste
           </button>

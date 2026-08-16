@@ -5,16 +5,16 @@ import { filterAndSort, useFilterState } from '../hooks/useFilterState'
 import FilterSheet from './FilterSheet'
 import Icon from './Icon'
 import SetRow from './SetRow'
-import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, Sheet, Spinner } from './ui'
+import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Sheet, Spinner } from './ui'
 
 /**
  * The one browse screen. Collection, Historique, Liste cadeaux and Nouveaux sets are this screen
- * with different data; the minifig gallery is this screen with `renderItem` swapping the list for
+ * with different data; the minifig gallery is this screen with `renderItems` swapping the list for
  * a grid.
  *
- * Everything here — the persistent filter state, the trailing selection indicator, the bottom
- * action bar, the per-row context menu reusing the bulk code path — exists for a reason paid for
- * once in the iOS app. Copy this screen rather than assembling a new one.
+ * Everything here — the persistent filter state, the trailing selection indicator, the floating
+ * select button, the per-row context menu reusing the bulk code path — exists for a reason paid
+ * for once in the iOS app. Copy this screen rather than assembling a new one.
  */
 
 export interface BulkAction {
@@ -38,14 +38,16 @@ export interface SetListScreenProps {
   showOwnedFilter?: boolean
   showAvailabilityFilter?: boolean
   showLists?: boolean
+  searchPlaceholder?: string
   subtitleFor?: (row: SetRowData) => string | null
   bulkActions?: BulkAction[]
   onOpenSet?: (row: SetRowData, visible: SetRowData[]) => void
   emptyState?: ReactNode
+  /** Extra pill buttons for the navigation bar, left of the filter button. */
+  navActions?: ReactNode
   header?: ReactNode
   onRefresh?: () => void
   isRefreshing?: boolean
-  /** Swaps the list for a custom presentation (the minifig gallery's grid). */
   renderItems?: (rows: SetRowData[]) => ReactNode
 }
 
@@ -60,10 +62,12 @@ export default function SetListScreen({
   showOwnedFilter = false,
   showAvailabilityFilter = true,
   showLists = false,
+  searchPlaceholder = 'Nom ou numéro de set',
   subtitleFor,
   bulkActions = [],
   onOpenSet,
   emptyState,
+  navActions,
   header,
   onRefresh,
   isRefreshing = false,
@@ -78,15 +82,9 @@ export default function SetListScreen({
   const [menuFor, setMenuFor] = useState<SetRowData | null>(null)
   const [pending, setPending] = useState<{ action: BulkAction; targets: string[] } | null>(null)
 
-  const visible = useMemo(
-    () => filterAndSort(rows, { filter: filter as FilterState }),
-    [rows, filter],
-  )
+  const visible = useMemo(() => filterAndSort(rows, { filter: filter as FilterState }), [rows, filter])
 
-  const themes = useMemo(
-    () => [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(),
-    [rows],
-  )
+  const themes = useMemo(() => [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(), [rows])
   const years = useMemo(
     () => [...new Set(rows.map((row) => row.year).filter((year) => year > 0))].sort((a, b) => b - a),
     [rows],
@@ -142,54 +140,48 @@ export default function SetListScreen({
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selected.has(row.setNum))
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-ink">{title}</h1>
-        <div className="flex items-center gap-1">
-          {onRefresh && (
+    <div className="space-y-3 pb-24">
+      <NavBar
+        title={title}
+        actions={
+          <>
+            {navActions}
+            {onRefresh && (
+              <button
+                type="button"
+                className="nav-circle"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                aria-label="Actualiser"
+              >
+                {isRefreshing ? <Spinner className="h-5 w-5" /> : <Icon name="refresh" />}
+              </button>
+            )}
             <button
               type="button"
-              className="btn-ghost px-2"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              aria-label="Actualiser"
+              className="nav-circle"
+              onClick={() => setShowFilters(true)}
+              aria-label={isActive ? 'Filtres (actifs)' : 'Filtres'}
             >
-              {isRefreshing ? <Spinner className="h-4 w-4" /> : <Icon name="refresh" />}
+              <Icon name="filter" filled={isActive} />
             </button>
-          )}
-          {bulkActions.length > 0 && rows.length > 0 && (
-            <button
-              type="button"
-              className="btn-ghost px-2 text-sm"
-              onClick={() => (selecting ? leaveSelection() : setSelecting(true))}
-            >
-              {selecting ? 'Terminé' : 'Sélectionner'}
-            </button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {header}
-
-      <div className="flex gap-2">
+      <div className="relative">
+        <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-faint" />
         <input
           type="search"
-          className="input flex-1"
-          placeholder="Rechercher un set…"
+          className="search-field"
+          placeholder={searchPlaceholder}
           value={filter.search}
           onChange={(event) => setFilter({ search: event.target.value })}
           aria-label="Rechercher"
         />
-        <button
-          type="button"
-          className={isActive ? 'btn-primary px-3' : 'btn-secondary px-3'}
-          onClick={() => setShowFilters(true)}
-          aria-label={isActive ? 'Filtres (actifs)' : 'Filtres'}
-        >
-          <Icon name="filter" filled={isActive} />
-        </button>
       </div>
 
+      {header}
       {actionError && <ErrorLabel message={actionError} />}
 
       {isLoading ? (
@@ -199,12 +191,10 @@ export default function SetListScreen({
       ) : visible.length === 0 ? (
         (emptyState ?? (
           <EmptyState
-            icon={<Icon name="search" className="h-9 w-9" />}
+            icon={<Icon name="search" className="h-10 w-10" />}
             title={rows.length === 0 ? 'Rien à afficher' : 'Aucun résultat'}
             message={
-              rows.length === 0
-                ? undefined
-                : 'Aucun set ne correspond à cette recherche ou à ces filtres.'
+              rows.length === 0 ? undefined : 'Aucun set ne correspond à cette recherche ou à ces filtres.'
             }
             action={
               rows.length > 0 ? (
@@ -219,31 +209,37 @@ export default function SetListScreen({
         renderItems(visible)
       ) : (
         <>
-          <p className="text-xs text-ink-faint">
-            {visible.length} set{visible.length > 1 ? 's' : ''}
-            {visible.length !== rows.length ? ` sur ${rows.length}` : ''}
-          </p>
-          <ul className="divide-y divide-line">
-            {visible.map((row) => (
-              <li key={row.setNum}>
-                <SetRow
-                  row={row}
-                  subtitle={subtitleFor?.(row)}
-                  selecting={selecting}
-                  selected={selected.has(row.setNum)}
-                  onClick={() => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible))}
-                  onContextMenu={
-                    selecting || bulkActions.length === 0
-                      ? undefined
-                      : (event) => {
-                          event.preventDefault()
-                          setMenuFor(row)
-                        }
-                  }
-                />
+          {/* One grouped card holding every row, dividers inset past the thumbnail. */}
+          <ul className="list-card">
+            {visible.map((row, index) => (
+              <li
+                key={row.setNum}
+                className={index > 0 ? 'border-t border-line ml-[76px] pl-0' : ''}
+              >
+                <div className={index > 0 ? '-ml-[76px]' : ''}>
+                  <SetRow
+                    row={row}
+                    subtitle={subtitleFor?.(row)}
+                    selecting={selecting}
+                    selected={selected.has(row.setNum)}
+                    onClick={() => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible))}
+                    onContextMenu={
+                      selecting || bulkActions.length === 0
+                        ? undefined
+                        : (event) => {
+                            event.preventDefault()
+                            setMenuFor(row)
+                          }
+                    }
+                  />
+                </div>
               </li>
             ))}
           </ul>
+          <p className="px-1 text-[13px] text-ink-faint">
+            {visible.length} set{visible.length > 1 ? 's' : ''}
+            {visible.length !== rows.length ? ` sur ${rows.length}` : ''}
+          </p>
         </>
       )}
 
@@ -279,28 +275,44 @@ export default function SetListScreen({
         </div>
       </Sheet>
 
+      {/* Selection is entered from a floating button, and its controls sit at the bottom — a
+          top-bar control would be hidden by the keyboard while the search field is focused. */}
+      {bulkActions.length > 0 && rows.length > 0 && !selecting && (
+        <button
+          type="button"
+          className="fixed bottom-8 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-surface-raised text-brand shadow-lg"
+          onClick={() => setSelecting(true)}
+          aria-label="Sélectionner des sets"
+        >
+          <Icon name="checklist" className="h-6 w-6" />
+        </button>
+      )}
+
       {selecting && (
-        // Bottom-anchored, never in the header: on iOS the search field hid a top bar, and the
-        // same happens here on a phone keyboard.
-        <div className="fixed inset-x-0 bottom-16 z-30 mx-auto w-full max-w-3xl border-t border-line bg-surface/95 px-4 py-2 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-2xl border-t border-line bg-surface/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="btn-ghost text-xs"
+              className="btn-ghost px-1 py-0 text-[13px]"
               onClick={() =>
                 setSelected(allVisibleSelected ? new Set() : new Set(visible.map((row) => row.setNum)))
               }
             >
               {allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
             </button>
-            <span className="text-xs text-ink-muted">{selected.size} sélectionné(s)</span>
+            <span className="text-[13px] text-ink-muted">{selected.size} sélectionné(s)</span>
             <span className="flex-1" />
             {busy && <Spinner className="h-4 w-4" />}
+            <button type="button" className="btn-ghost px-1 py-0 text-[15px] font-semibold" onClick={leaveSelection}>
+              Terminé
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
             {bulkActions.map((action) => (
               <button
                 key={action.key}
                 type="button"
-                className={`${action.destructive ? 'btn-danger' : 'btn-secondary'} px-3 py-1.5 text-xs`}
+                className={`${action.destructive ? 'btn-danger' : 'btn-secondary'} flex-1 px-3 py-2 text-[13px]`}
                 disabled={busy || selected.size === 0}
                 onClick={() => request(action, [...selected])}
               >

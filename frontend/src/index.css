@@ -3,29 +3,32 @@
 @tailwind utilities;
 
 /*
- * Design tokens. The three brand colours are LEGO's own, matching the iOS app's Réglages picker;
- * `--brand` is rewritten at runtime by lib/theme.ts when the user changes it, so no component ever
- * hardcodes which of the three is active.
+ * Design tokens, matched to the iOS app measured side by side in the simulator.
  *
- * Light is defined on bare `:root` and dark overrides only the tokens — that way a component
- * styled with `bg-surface text-ink` is correct in both themes without a single `dark:` variant.
+ * Dark mode is **pure black** (SwiftUI's `.systemBackground`) with `.secondarySystemBackground`
+ * cards and no borders — the card reads as raised purely by being lighter than the page. Light
+ * mode is the inverse grouped style: a grey page, white cards. Getting these two backgrounds wrong
+ * is what made the first pass look like a different app.
+ *
+ * `--brand` is rewritten at runtime by lib/theme.ts, so nothing hardcodes which of the three LEGO
+ * colours is active.
  */
 :root {
   --brand: 227 0 11; /* rouge #E3000B */
   --brand-soft: 253 232 233;
 
-  --surface: 255 255 255;
-  --surface-raised: 255 255 255;
-  --surface-sunken: 244 245 247;
+  --surface: 242 242 247; /* grouped page background */
+  --surface-raised: 255 255 255; /* cards */
+  --surface-sunken: 229 229 234; /* controls inside a card */
 
-  --ink: 17 24 39;
-  --ink-muted: 87 96 111;
-  --ink-faint: 140 149 163;
-  --line: 226 230 236;
+  --ink: 0 0 0;
+  --ink-muted: 60 60 67;
+  --ink-faint: 138 138 142;
+  --line: 209 209 214;
 
-  --positive: 21 128 61;
-  --negative: 185 28 28;
-  --warning: 180 83 9;
+  --positive: 52 199 89;
+  --negative: 255 59 48;
+  --warning: 255 149 0;
 
   color-scheme: light;
 }
@@ -33,18 +36,18 @@
 .dark {
   --brand-soft: 60 20 22;
 
-  --surface: 17 19 23;
-  --surface-raised: 26 29 35;
-  --surface-sunken: 10 11 14;
+  --surface: 0 0 0;
+  --surface-raised: 28 28 30;
+  --surface-sunken: 44 44 46;
 
-  --ink: 241 243 246;
-  --ink-muted: 163 171 184;
-  --ink-faint: 116 124 138;
-  --line: 44 49 58;
+  --ink: 255 255 255;
+  --ink-muted: 174 174 178;
+  --ink-faint: 142 142 147;
+  --line: 56 56 58;
 
-  --positive: 74 222 128;
-  --negative: 248 113 113;
-  --warning: 251 191 36;
+  --positive: 48 209 88;
+  --negative: 255 69 58;
+  --warning: 255 159 10;
 
   color-scheme: dark;
 }
@@ -56,53 +59,92 @@ body,
 }
 
 body {
-  @apply bg-surface-sunken text-ink antialiased;
-  /* The scan screen and the bottom action bar sit against the device edge on a phone. */
+  @apply bg-surface text-ink antialiased;
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 @layer components {
+  /* The grouped card. No border: the lighter fill is what raises it, exactly as on iOS. */
   .card {
-    @apply rounded-card bg-surface-raised border border-line p-4;
+    @apply rounded-2xl bg-surface-raised p-4;
+  }
+
+  /* A card holding rows, with the dividers inset past the leading content (iOS list style). */
+  .list-card {
+    @apply overflow-hidden rounded-2xl bg-surface-raised;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
-           transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[17px] font-semibold
+           transition-opacity active:opacity-60 disabled:opacity-40 disabled:pointer-events-none;
   }
 
   .btn-primary {
-    @apply btn bg-brand text-white hover:brightness-110 active:brightness-95;
+    @apply btn bg-brand text-white;
   }
 
   .btn-secondary {
-    @apply btn bg-surface-sunken text-ink border border-line hover:bg-line/40;
+    @apply btn bg-surface-sunken text-ink;
   }
 
+  /* iOS's most common action: tinted text, no chrome at all. */
   .btn-ghost {
-    @apply btn text-ink-muted hover:bg-surface-sunken hover:text-ink;
+    @apply btn bg-transparent font-normal text-brand;
   }
 
   .btn-danger {
-    @apply btn bg-[rgb(var(--negative))] text-white hover:brightness-110;
+    @apply btn bg-[rgb(var(--negative))] text-white;
+  }
+
+  /* The pill buttons in a navigation bar — circular for an icon, oval for a word. */
+  .nav-pill {
+    @apply inline-flex min-h-11 items-center justify-center gap-1 rounded-full bg-surface-raised px-4
+           text-[17px] text-brand transition-opacity active:opacity-60 disabled:opacity-40;
+  }
+
+  .nav-circle {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-brand
+           transition-opacity active:opacity-60 disabled:opacity-40;
   }
 
   .input {
-    @apply w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink
-           placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2
-           focus:ring-brand/25;
+    @apply w-full rounded-xl bg-surface-sunken px-3 py-3 text-[17px] text-ink
+           placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
+  }
+
+  /* The search field is a fully-rounded pill with the glass inside it. */
+  .search-field {
+    @apply w-full rounded-full bg-surface-raised py-3 pl-11 pr-4 text-[17px] text-ink
+           placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium;
   }
 
+  /* Section label above a grouped card: plain grey, sentence case — never uppercase. */
   .section-title {
-    @apply text-sm font-semibold uppercase tracking-wide text-ink-muted;
+    @apply text-[17px] font-semibold text-ink-muted;
+  }
+
+  /* Explanatory copy under a grouped card. */
+  .section-footer {
+    @apply px-1 text-[13px] leading-snug text-ink-faint;
+  }
+
+  .segmented {
+    @apply flex rounded-lg bg-surface-sunken p-0.5;
+  }
+
+  .segmented-option {
+    @apply flex-1 rounded-md py-1.5 text-center text-[15px] font-medium text-ink transition-colors;
+  }
+
+  .segmented-option-active {
+    @apply bg-[rgb(var(--ink))]/15 font-semibold;
   }
 }
 
-/* Respect the OS setting for people who ask for less motion — several screens animate sheets. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
