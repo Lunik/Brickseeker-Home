@@ -75,7 +75,17 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[34px] font-bold leading-tight text-ink">Statistiques</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-[34px] font-bold leading-tight text-ink">Statistiques</h1>
+        <button
+          type="button"
+          className="nav-circle"
+          onClick={() => queryClient.invalidateQueries({ queryKey: ['stats'] })}
+          aria-label="Actualiser la valeur estimée"
+        >
+          <Icon name="refresh" />
+        </button>
+      </div>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Figure label="Sets" value={formatNumber(data.setCount)} />
@@ -210,6 +220,10 @@ export default function StatsPage() {
           )}
         </div>
       </section>
+
+      <button type="button" className="btn-ghost w-full" onClick={() => navigate('/collection')}>
+        Configurer le type (neuf/occasion) des listes
+      </button>
 
       <section className="space-y-2">
         <h2 className="section-title">Export</h2>

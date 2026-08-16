@@ -17,6 +17,8 @@ export default function MinifigsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('name')
+  const [ownedOnly, setOwnedOnly] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const status = useQuery({
     queryKey: ['catalog-status'],
@@ -27,10 +29,10 @@ export default function MinifigsPage() {
   const hasCatalog = (status.data?.minifigs.rowCount ?? 0) > 0
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['minifigs', search, sort],
+    queryKey: ['minifigs', search, sort, ownedOnly],
     queryFn: () =>
       api.get<{ count: number; results: MinifigRow[] }>(
-        `/catalog/minifigs${query({ search, sort, ownedOnly: true, limit: 200 })}`,
+        `/catalog/minifigs${query({ search, sort, ownedOnly, limit: 200 })}`,
       ),
     enabled: hasCatalog,
   })
@@ -109,6 +111,29 @@ export default function MinifigsPage() {
         </select>
       </div>
 
+      <div className="flex items-center gap-3">
+        <label className="flex items-center gap-2 text-[15px] text-ink">
+          <input
+            type="checkbox"
+            checked={ownedOnly}
+            onChange={(event) => setOwnedOnly(event.target.checked)}
+          />
+          Possédées seulement
+        </label>
+        {selected.size > 0 && (
+          <button
+            type="button"
+            className="btn-ghost ml-auto px-2 py-1 text-[13px]"
+            onClick={async () => {
+              await api.post('/prices/batch/start', { setNums: [...selected] })
+              setSelected(new Set())
+            }}
+          >
+            Actualiser les prix ({selected.size})
+          </button>
+        )}
+      </div>
+
       {isLoading ? (
         <LoadingBlock />
       ) : error ? (
@@ -124,7 +149,19 @@ export default function MinifigsPage() {
           <p className="text-xs text-ink-faint">{data.count} minifig(s)</p>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {data.results.map((minifig) => (
-              <li key={minifig.figNum} className="card space-y-2">
+              <li
+                key={minifig.figNum}
+                className={`card space-y-2 ${selected.has(minifig.figNum) ? 'ring-2 ring-brand' : ''}`}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  setSelected((current) => {
+                    const next = new Set(current)
+                    if (next.has(minifig.figNum)) next.delete(minifig.figNum)
+                    else next.add(minifig.figNum)
+                    return next
+                  })
+                }}
+              >
                 <div className="flex h-28 items-center justify-center rounded-lg bg-surface-sunken">
                   {minifig.imgUrl ? (
                     <img

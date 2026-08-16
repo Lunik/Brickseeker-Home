@@ -4,16 +4,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
 import type { SetRow } from '../api/types'
+import ListPickerSheet from '../components/ListPickerSheet'
 import ScanMap from '../components/ScanMap'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import Icon from '../components/Icon'
 import { EmptyState } from '../components/ui'
+import { useSetActions } from '../hooks/useSetActions'
 import { formatRelative } from '../lib/format'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showMap, setShowMap] = useState(false)
+  const actions = useSetActions()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['history'],
@@ -26,17 +29,13 @@ export default function HistoryPage() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
 
-  const actions: BulkAction[] = [
-    {
-      key: 'prices',
-      label: 'Rafraîchir les prix',
-      run: async (setNums) => {
-        await api.post('/prices/batch/start', { setNums })
-      },
-    },
+  const bulkActions: BulkAction[] = [
+    actions.refreshPrices,
+    actions.addToCollection,
+    actions.addToWishlist,
     {
       key: 'delete',
-      label: "Retirer de l'historique",
+      label: 'Retirer tous les scans',
       destructive: true,
       // A set still owned only loses its "scanned" flag — say so, rather than implying the set is
       // deleted outright.
@@ -63,6 +62,7 @@ export default function HistoryPage() {
   }
 
   return (
+    <>
     <SetListScreen
       title="Historique"
       screenId="history"
@@ -75,7 +75,7 @@ export default function HistoryPage() {
           .filter(Boolean)
           .join(' · ')
       }
-      bulkActions={actions}
+      bulkActions={bulkActions}
       onOpenSet={(row, visible) =>
         navigate(`/set/${encodeURIComponent(row.setNum)}`, {
           state: { siblings: visible.map((item) => item.setNum) },
@@ -100,5 +100,11 @@ export default function HistoryPage() {
         />
       }
     />
+    <ListPickerSheet
+      open={actions.listPicker.open}
+      onClose={actions.listPicker.cancel}
+      onPick={actions.listPicker.pick}
+    />
+    </>
   )
 }

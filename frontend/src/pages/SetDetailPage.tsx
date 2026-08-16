@@ -133,6 +133,10 @@ export default function SetDetailPage() {
     mutationFn: (quantity: number) => api.patch(`/collection/${encodeURIComponent(setNum)}`, { quantity }),
     onSuccess: () => queryClient.invalidateQueries(),
   })
+  const deleteScan = useMutation({
+    mutationFn: (eventId: number) => api.delete(`/history/events/${eventId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+  })
   const savePaidPrice = useMutation({
     mutationFn: (value: number | null) =>
       api.put(`/sets/${encodeURIComponent(setNum)}/paid-price`, { paidPriceEur: value }),
@@ -338,19 +342,53 @@ export default function SetDetailPage() {
                   <span className="block text-ink">{formatDateTime(event.scannedAt)}</span>
                   {event.placeName && <span className="block text-xs text-ink-faint">{event.placeName}</span>}
                 </span>
-                {event.priceSeenEur !== null && (
-                  <span className="shrink-0 text-right">
-                    <span className="font-semibold text-ink">{formatEUR(event.priceSeenEur)}</span>
-                    {bestScan?.id === event.id && (
-                      <span className="block text-xs text-[rgb(var(--positive))]">meilleur prix vu</span>
-                    )}
-                  </span>
-                )}
+                <span className="flex shrink-0 items-center gap-2">
+                  {event.priceSeenEur !== null && (
+                    <span className="text-right">
+                      <span className="font-semibold text-ink">{formatEUR(event.priceSeenEur)}</span>
+                      {bestScan?.id === event.id && (
+                        <span className="block text-[11px] text-[rgb(var(--positive))]">meilleur prix vu</span>
+                      )}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="px-1 text-[rgb(var(--negative))]"
+                    onClick={() => deleteScan.mutate(event.id)}
+                    aria-label="Supprimer ce scan"
+                  >
+                    <Icon name="close" className="h-4 w-4" />
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
         </section>
       )}
+
+      <section className="card space-y-1">
+        <h2 className="section-title">Liens</h2>
+        {data.set.setUrl && (
+          <a className="btn-ghost w-full" href={data.set.setUrl} target="_blank" rel="noreferrer noopener">
+            Voir sur Rebrickable
+          </a>
+        )}
+        {data.storeUrl && (
+          <a className="btn-ghost w-full" href={data.storeUrl} target="_blank" rel="noreferrer noopener">
+            Voir sur lego.com
+          </a>
+        )}
+        {data.instructionsUrl && (
+          <a
+            className="btn-ghost w-full"
+            href={data.instructionsUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Notice de montage
+          </a>
+        )}
+      </section>
 
       {!data.isMinifig && (minifigs.data?.results.length ?? 0) > 0 && (
         <Gallery

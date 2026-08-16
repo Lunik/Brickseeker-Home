@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { SetRow } from '../api/types'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
+import { useSetActions } from '../hooks/useSetActions'
 import Icon from '../components/Icon'
+import ListPickerSheet from '../components/ListPickerSheet'
 import { EmptyState, ErrorLabel, Sheet, Spinner } from '../components/ui'
 
 interface WishlistPayload {
@@ -31,6 +33,7 @@ export default function WishlistPage() {
   const queryClient = useQueryClient()
   const [showImport, setShowImport] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const setActions = useSetActions()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['wishlist'],
@@ -60,13 +63,8 @@ export default function WishlistPage() {
   })
 
   const actions: BulkAction[] = [
-    {
-      key: 'prices',
-      label: 'Rafraîchir les prix',
-      run: async (setNums) => {
-        await api.post('/prices/batch/start', { setNums })
-      },
-    },
+    setActions.refreshPrices,
+    setActions.addToCollection,
     {
       key: 'remove',
       label: 'Retirer de la liste',
@@ -129,6 +127,12 @@ export default function WishlistPage() {
             />
           )
         }
+      />
+
+      <ListPickerSheet
+        open={setActions.listPicker.open}
+        onClose={setActions.listPicker.cancel}
+        onPick={setActions.listPicker.pick}
       />
 
       <Sheet open={showImport} title="Importer une liste" onClose={() => setShowImport(false)}>

@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, query } from '../api/client'
 import type { CatalogStatus, SetRow } from '../api/types'
+import ListPickerSheet from '../components/ListPickerSheet'
 import SetListScreen from '../components/SetListScreen'
+import { useSetActions } from '../hooks/useSetActions'
 import Icon from '../components/Icon'
 import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
 import { formatDate } from '../lib/format'
@@ -29,6 +31,7 @@ export default function NewSetsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
+  const actions = useSetActions()
   const pageSize = 60
 
   const status = useQuery({
@@ -116,12 +119,16 @@ export default function NewSetsPage() {
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
 
   return (
+    <>
     <SetListScreen
       title="Nouveaux sets"
       screenId="new-sets"
       defaultSort="dateAdded"
       // A catalogue entry was never scanned, so that sort would mean nothing here.
       excludedSorts={['dateScanned']}
+      bulkActions={[actions.refreshPrices, actions.addToCollection, actions.addToWishlist]}
+      onRefresh={() => download.mutate()}
+      isRefreshing={downloading}
       showOwnedFilter
       rows={rows}
       isLoading={isLoading}
@@ -165,5 +172,11 @@ export default function NewSetsPage() {
         ) : undefined
       }
     />
+    <ListPickerSheet
+      open={actions.listPicker.open}
+      onClose={actions.listPicker.cancel}
+      onPick={actions.listPicker.pick}
+    />
+    </>
   )
 }

@@ -92,9 +92,9 @@ async def themes(session: SessionDep) -> dict[str, object]:
 async def new_sets(
     session: SessionDep,
     search: str | None = None,
-    theme_name: str | None = None,
+    theme_name: str | None = Query(default=None, alias="themeName"),
     year: int | None = None,
-    owned_only: bool | None = None,
+    owned_only: bool | None = Query(default=None, alias="ownedOnly"),
     availability: str | None = None,
     sort: str = "dateAdded",
     ascending: bool = False,
@@ -182,9 +182,9 @@ def _sort_key(sort: str):  # noqa: ANN202 - a key function per sort option
 async def minifigs(
     session: SessionDep,
     search: str | None = None,
-    theme_name: str | None = None,
+    theme_name: str | None = Query(default=None, alias="themeName"),
     year: int | None = None,
-    owned_only: bool = True,
+    owned_only: bool = Query(default=True, alias="ownedOnly"),
     sort: str = "name",
     ascending: bool = True,
     offset: int = 0,

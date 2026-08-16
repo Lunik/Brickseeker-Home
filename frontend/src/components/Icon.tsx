@@ -48,6 +48,7 @@ export type IconName =
   | 'inbox'
   | 'viewfinder'
   | 'checklist'
+  | 'layers'
 
 /** Path data only — the shared stroke attributes live on the `<svg>` below. */
 const PATHS: Record<IconName, string> = {
@@ -93,6 +94,8 @@ const PATHS: Record<IconName, string> = {
   viewfinder: 'M3.5 8.5V5A1.5 1.5 0 0 1 5 3.5h3.5M15.5 3.5H19A1.5 1.5 0 0 1 20.5 5v3.5M20.5 15.5V19a1.5 1.5 0 0 1-1.5 1.5h-3.5M8.5 20.5H5A1.5 1.5 0 0 1 3.5 19v-3.5',
   // The multi-select affordance: two rows, the first ticked.
   checklist: 'M12 7h8M12 17h8M4 7l2 2 3.5-3.5M4 17l2 2 3.5-3.5',
+  // Mode lot — stacked sheets, matching the iOS `square.stack` symbol.
+  layers: 'm12 3 9 4.5-9 4.5-9-4.5L12 3ZM3 12l9 4.5L21 12M3 16.5 12 21l9-4.5',
   inbox:
     'M3.5 13.5h4l1.5 3h6l1.5-3h4M3.5 13.5 6 5h12l2.5 8.5v5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-5Z',
 }
