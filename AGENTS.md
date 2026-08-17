@@ -134,6 +134,92 @@ L'état de filtre survit à la navigation (magasin module-level, pas du `useStat
 réinitialise qu'au rechargement complet — un filtre qui se perd chaque fois qu'on ferme un set est
 insupportable à l'usage.
 
+## L'ordre de déclaration des routes est une règle, pas un détail
+
+Starlette teste les routes **dans l'ordre de déclaration**, sans préférence pour les chemins
+littéraux. `POST /collection/bulk` déclaré après `POST /collection/{set_num}` part donc dans
+`add_to_collection(set_num="bulk")` : 200, aucune erreur levée, et chaque action groupée fait
+silencieusement autre chose que ce qu'elle annonce. Ni l'UI, ni les types, ni le build ne peuvent
+attraper ça.
+
+Toute route littérale se déclare **avant** les routes paramétrées de son préfixe.
+`backend/tests/test_routes.py` le vérifie sur toute la surface, lue depuis le schéma OpenAPI — et
+non depuis `app.routes` : FastAPI enveloppe les routeurs inclus dans un objet dont les enfants ne
+sont pas exposés et dont les chemins n'ont pas le préfixe `/api`.
+
+## Caméra et pipeline de scan
+
+Tout ce qui recouvre la caméra doit l'arrêter. `isCovered`, dans `pages/ScannerPage.tsx`, est la
+seule source de vérité et alimente `useCamera`. Une feuille de plus, un champ de saisie de plus :
+ajoute son état à `isCovered`, pas un `useEffect` de plus.
+
+La boucle OCR envoie une image toutes les ~800 ms et **compte les apparitions de chaque numéro**.
+Elle ne se fie jamais au premier candidat d'une image : l'OCR en renvoie un différent à chaque prise
+(un nombre de pièces, un âge, le vrai numéro), si bien qu'exiger deux fois de suite le même premier
+candidat ne déclenchait jamais rien — la caméra détectait et il ne se passait rien. Gagne celui qui
+accumule deux apparitions ; un candidat non revu depuis 6 s est oublié ; un numéro résolu est
+verrouillé 30 s, faute de quoi garder une boîte dans le cadre réécrit un `ScanEvent` toutes les deux
+secondes.
+
+Le retour sonore et haptique (`lib/feedback.ts`) n'appartient qu'au chemin caméra. Une saisie
+manuelle ou une relecture depuis l'Historique passent par le même `resolve()` et ne doivent rien
+émettre : l'utilisateur a déjà les yeux sur l'écran. C'est la règle `playsFeedbackSounds` de l'app
+iOS, portée telle quelle.
+
+La session du mode lot vit **hors du composant** (`lib/batch-session.ts` : magasin de module doublé
+de `sessionStorage`). Le scanner est une route, donc ouvrir un set scanné le démonte : tant que la
+session était un `useState`, regarder la liste qu'on venait de scanner était précisément ce qui la
+détruisait.
+
+## Ce qui vit en mémoire doit savoir se relire au démarrage
+
+`price_updater` garde l'état du lot en mémoire et n'écrit en base que la date de fin. Rien ne la
+relisait au démarrage : chaque redémarrage du conteneur affirmait donc que les prix n'avaient jamais
+été actualisés, alors que la base le savait. `PriceUpdater.restore()` est appelé dans le `lifespan`
+de `main.py` et `backend/tests/test_price_updater_state.py` le garde.
+
+Règle générale : un singleton en mémoire qui persiste quelque chose doit aussi savoir le relire,
+sinon la persistance n'est qu'une écriture.
+
+## Vérifie la forme d'une réponse avant d'écrire le code qui la lit
+
+Rebrickable et BrickLink renvoient des formes qui ne correspondent pas toujours à leur
+documentation, et un champ absent se lit `None` sans bruit jusqu'à l'écran. Les compétences
+`check-rebrickable-endpoint` et `check-bricklink-endpoint` donnent la sonde à lancer avant
+d'ajouter un décodage. Une seule requête suffit — ce sont des API tierces, pas un banc d'essai.
+
+## Un écran ne prétend jamais montrer plus qu'il n'a reçu
+
+La galerie de minifigs demandait 200 lignes à un endpoint plafonné à 200, puis affichait
+« 200 minifigs » : elle en montrait un tiers en prétendant les montrer toutes, pendant que l'accueil
+— qui lit le `count` du même endpoint — en annonçait 601.
+
+Quand une réponse est paginée, l'écran affiche le total (`count`, calculé **avant** la découpe) et
+dit explicitement combien de lignes sont affichées. `results.length` n'est pas un total, c'est la
+taille d'une page.
+
+## Ce qui n'est volontairement pas construit
+
+- **Pas de conformité App Store.** L'app iOS a une compétence entière là-dessus (revue Apple, log de
+  rejets, divulgation de confidentialité) ; ici il n'y a pas de magasin, et le scraping headless —
+  qu'Apple interdit — est précisément ce qui fait marcher les prix. Ne porte pas ces règles.
+- **Pas de compte, pas de multi-utilisateur.** Un mot de passe facultatif garde le LAN, rien de plus.
+- **Pas de reconciliation des champs catalogue sur un cache chaud** : seul le statut de collection
+  est re-vérifié en direct. Un nom ou un nombre de pièces ne bouge plus après la sortie du set.
+- **Pas de reprise d'un lot de prix interrompu** : l'app iOS sait reprendre une file mise en pause,
+  la version web relance. Le sujet est ouvert, pas tranché.
+
+## Vérifier avant de dire que c'est fini
+
+La compétence `web-build-test` donne la boucle exacte (TypeScript, build Vite, ruff, pytest) et
+rappelle le piège du conteneur : l'image embarque le bundle, donc un changement de frontend reste
+invisible sur `:8000` tant que l'image n'est pas reconstruite.
+
+Pour un changement visible à l'écran, `ui-parity-check` explique comment piloter l'app en Playwright
+et la comparer aux captures iOS de `docs/ui-parity/`. Le volet Browser intégré suffit pour regarder,
+mais ses captures peuvent rester en retard sur le DOM après une mise à jour sans navigation : lis le
+DOM pour affirmer, prends les images avec Playwright.
+
 ## Portée d'un changement
 
 Si tu repères un problème adjacent en travaillant sur autre chose : signale-le, ne le corrige pas
