@@ -3,27 +3,23 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, imageUrl, query } from '../api/client'
-import type { CatalogStatus, MinifigRow } from '../api/types'
+import type { CatalogStatus, MinifigRow, SetRow } from '../api/types'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
+import SetListScreen from '../components/SetListScreen'
+import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
 
 /**
- * The owned-minifig gallery: the same browse screen as the lists, but a grid of cards.
+ * The owned-minifig gallery — the same browse screen as the lists, with a grid of cards instead of
+ * rows. Built on `SetListScreen` rather than hand-rolled so it inherits the navigation bar, the
+ * filter sheet, the persistent filter state and the lazy rendering the lists already have; the
+ * hand-rolled version had drifted into a different screen with inline dropdowns and no way back.
  *
- * No availability filter here, deliberately — a minifig has no lego.com page, so the concept
- * doesn't apply to it.
+ * No availability filter: a minifig has no lego.com page, so the concept doesn't apply.
  */
 export default function MinifigsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState('name')
-  const [ownedOnly, setOwnedOnly] = useState(true)
-  const [themeName, setThemeName] = useState('')
-  const [year, setYear] = useState('')
-  // iOS defaults year to newest-first; the endpoint's own default is ascending.
-  const [ascending, setAscending] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const status = useQuery({
@@ -34,11 +30,12 @@ export default function MinifigsPage() {
 
   const hasCatalog = (status.data?.minifigs.rowCount ?? 0) > 0
 
+  // Everything owned in one fetch; the shared screen then filters and sorts it like any list.
   const { data, isLoading, error } = useQuery({
-    queryKey: ['minifigs', search, sort, ownedOnly, themeName, year, ascending],
+    queryKey: ['minifigs'],
     queryFn: () =>
       api.get<{ count: number; results: MinifigRow[] }>(
-        `/catalog/minifigs${query({ search, sort, ownedOnly, themeName, year, ascending, limit: 200 })}`,
+        `/catalog/minifigs${query({ ownedOnly: true, limit: 200 })}`,
       ),
     enabled: hasCatalog,
   })
@@ -51,14 +48,31 @@ export default function MinifigsPage() {
   const downloading = status.data?.minifigs.status?.state === 'running'
   const progress = status.data?.minifigs.status?.progress ?? 0
 
-  const themes = useMemo(
-    () => [...new Set((data?.results ?? []).map((row) => row.themeName).filter(Boolean))].sort(),
-    [data],
-  )
-  const years = useMemo(
+  /** A minifig wears the `SetRow` shape so the shared screen can filter and sort it unchanged. */
+  const rows: SetRow[] = useMemo(
     () =>
-      [...new Set((data?.results ?? []).map((row) => row.year).filter((value): value is number => !!value))]
-        .sort((a, b) => b - a),
+      (data?.results ?? []).map((minifig) => ({
+        setNum: minifig.figNum,
+        name: minifig.name,
+        year: minifig.year ?? 0,
+        themeId: minifig.themeId ?? 0,
+        themeName: minifig.themeName ?? '',
+        numParts: minifig.numParts,
+        setImgUrl: minifig.imgUrl,
+        quantity: minifig.ownedQuantity,
+        isInCollection: minifig.ownedQuantity > 0,
+        isInWishlist: false,
+        hasPriceAlert: false,
+        wasScanned: false,
+        lastScannedAt: null,
+        currentListId: null,
+        currentListName: null,
+        storePriceEur: minifig.resolvedPrice,
+        availability: 'unknown',
+        resolvedPrice: minifig.resolvedPrice,
+        priceCondition: null,
+        priceLabel: null,
+      })),
     [data],
   )
 
@@ -70,11 +84,10 @@ export default function MinifigsPage() {
   if (!hasCatalog) {
     return (
       <div className="space-y-4">
-        <NavBar title="Mes minifigs" />
         <EmptyState
           icon={<Icon name="user" className="h-9 w-9" />}
-          title="Catalogue des minifigs non téléchargé"
-          message="La galerie croise le catalogue Rebrickable avec votre collection pour savoir quelles minifigs vous possédez. Le téléchargement se fait une fois, puis tout est local."
+          title="Catalogue minifigs non téléchargé"
+          message="Téléchargez le catalogue Rebrickable (~15 000 minifigs) pour parcourir votre collection. Peut aussi se faire depuis les Paramètres."
           action={
             downloading ? (
               <span className="flex items-center gap-2 text-sm text-ink-muted">
@@ -99,146 +112,69 @@ export default function MinifigsPage() {
     )
   }
 
+  function toggle(figNum: string) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(figNum)) next.delete(figNum)
+      else next.add(figNum)
+      return next
+    })
+  }
+
   return (
-    <div className="space-y-3">
-      <NavBar
-        title="Mes minifigs"
-        actions={<span className="px-1 text-[13px] text-ink-faint">{totalOwned} ex.</span>}
-      />
-
-      <div className="flex gap-2">
-        <input
-          type="search"
-          className="input flex-1"
-          placeholder="Nom ou identifiant"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Rechercher"
-        />
-        <select
-          className="input w-auto"
-          value={sort}
-          onChange={(event) => setSort(event.target.value)}
-          aria-label="Trier"
-        >
-          <option value="name">Nom</option>
-          <option value="year">Année</option>
-          <option value="partCount">Pièces</option>
-          <option value="price">Prix</option>
-        </select>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <select
-          className="input w-auto flex-1"
-          value={themeName}
-          onChange={(event) => setThemeName(event.target.value)}
-          aria-label="Thème"
-        >
-          <option value="">Tous les thèmes</option>
-          {themes.map((theme) => (
-            <option key={theme} value={theme as string}>
-              {theme}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input w-auto flex-1"
-          value={year}
-          onChange={(event) => setYear(event.target.value)}
-          aria-label="Année"
-        >
-          <option value="">Toutes les années</option>
-          {years.map((value) => (
-            <option key={value} value={String(value)}>
-              {value}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="btn-secondary px-3"
-          onClick={() => setAscending((value) => !value)}
-          aria-label={ascending ? 'Tri croissant' : 'Tri décroissant'}
-        >
-          {ascending ? '↑' : '↓'}
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 text-[15px] text-ink">
-          <input
-            type="checkbox"
-            checked={ownedOnly}
-            onChange={(event) => setOwnedOnly(event.target.checked)}
-          />
-          Possédées seulement
-        </label>
-        {(themeName || year || !ascending) && (
-          <button
-            type="button"
-            className="btn-ghost px-2 py-1 text-[13px]"
-            onClick={() => {
-              setThemeName('')
-              setYear('')
-              setAscending(true)
-            }}
-          >
-            Réinitialiser les filtres
-          </button>
-        )}
-        {selected.size > 0 && (
-          <button
-            type="button"
-            className="btn-ghost ml-auto px-2 py-1 text-[13px]"
-            onClick={async () => {
-              await api.post('/prices/batch/start', { setNums: [...selected] })
-              setSelected(new Set())
-            }}
-          >
-            Actualiser les prix ({selected.size})
-          </button>
-        )}
-      </div>
-
-      {isLoading ? (
-        <LoadingBlock />
-      ) : error ? (
-        <ErrorLabel message={(error as Error).message} />
-      ) : !data?.results.length ? (
-        <EmptyState
-          icon={<Icon name="user" className="h-9 w-9" />}
-          title="Aucune minifig"
-          message="Aucune minifig ne correspond, ou aucun set de votre collection n'en contient."
-        />
-      ) : (
-        <>
-          <p className="text-xs text-ink-faint">{data.count} minifig(s)</p>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {data.results.map((minifig) => (
-              <li
-                key={minifig.figNum}
-                className={`card space-y-2 ${selected.has(minifig.figNum) ? 'ring-2 ring-brand' : ''}`}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  setSelected((current) => {
-                    const next = new Set(current)
-                    if (next.has(minifig.figNum)) next.delete(minifig.figNum)
-                    else next.add(minifig.figNum)
-                    return next
-                  })
-                }}
+    <SetListScreen
+      title="Mes minifigs"
+      screenId="minifigs"
+      defaultSort="name"
+      // A minifig was never scanned, and never appeared in the sets catalogue snapshot.
+      excludedSorts={['dateScanned', 'dateAdded']}
+      showAvailabilityFilter={false}
+      searchPlaceholder="Nom ou identifiant"
+      rows={rows}
+      isLoading={isLoading}
+      error={error ? (error as Error).message : null}
+      bulkActions={[
+        {
+          key: 'prices',
+          label: 'Actualiser les prix',
+          run: async (figNums) => {
+            const { status: batchStatus } = await api.post<{ status: string }>('/prices/batch/start', {
+              setNums: figNums,
+            })
+            if (batchStatus === 'busy') {
+              throw new Error('Une actualisation des prix est déjà en cours — réessayez ensuite.')
+            }
+          },
+        },
+      ]}
+      header={
+        <p className="px-1 text-[13px] text-ink-faint">
+          {rows.length} minifig{rows.length > 1 ? 's' : ''} · {totalOwned} exemplaire
+          {totalOwned > 1 ? 's' : ''}
+        </p>
+      }
+      renderItems={(visible) => (
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {visible.map((row) => (
+            <li
+              key={row.setNum}
+              className={`card space-y-2 ${selected.has(row.setNum) ? 'ring-2 ring-brand' : ''}`}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                toggle(row.setNum)
+              }}
+            >
+              <button
+                type="button"
+                className="block w-full text-left"
+                onClick={() => navigate(`/set/${encodeURIComponent(row.setNum)}`)}
               >
-                <button
-                  type="button"
-                  className="block w-full text-left"
-                  onClick={() => navigate(`/set/${encodeURIComponent(minifig.figNum)}`)}
-                >
-                <div className="flex h-28 items-center justify-center rounded-lg bg-surface-sunken">
-                  {minifig.imgUrl ? (
+                {/* Fixed box, as on the detail screen: the grid must not reflow as images land. */}
+                <div className="flex h-28 items-center justify-center overflow-hidden rounded-lg bg-white">
+                  {row.setImgUrl ? (
                     <img
-                      src={imageUrl(minifig.imgUrl)}
-                      alt={minifig.name}
+                      src={imageUrl(row.setImgUrl)}
+                      alt={row.name}
                       loading="lazy"
                       className="h-full w-full object-contain p-1"
                     />
@@ -246,24 +182,30 @@ export default function MinifigsPage() {
                     <Icon name="user" className="h-8 w-8 text-ink-faint" />
                   )}
                 </div>
-                <div className="space-y-0.5">
-                  <p className="truncate text-sm font-semibold text-ink" title={minifig.name}>
-                    {minifig.name}
+                <div className="mt-2 space-y-0.5">
+                  <p className="truncate text-[15px] font-semibold text-ink" title={row.name}>
+                    {row.name}
                   </p>
-                  <p className="text-xs text-ink-faint">
-                    {minifig.figNum}
-                    {minifig.ownedQuantity > 1 ? ` · ×${minifig.ownedQuantity}` : ''}
+                  <p className="text-[13px] text-ink-faint">
+                    {row.setNum}
+                    {row.quantity > 1 ? ` · ×${row.quantity}` : ''}
                   </p>
-                  {minifig.resolvedPrice !== null && (
-                    <p className="text-sm font-bold text-ink">{formatEUR(minifig.resolvedPrice)}</p>
+                  {row.resolvedPrice !== null && (
+                    <p className="text-[15px] font-bold text-ink">{formatEUR(row.resolvedPrice)}</p>
                   )}
                 </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+      emptyState={
+        <EmptyState
+          icon={<Icon name="user" className="h-9 w-9" />}
+          title="Aucune minifig"
+          message="Aucun set de votre collection ne contient de minifig répertoriée."
+        />
+      }
+    />
   )
 }

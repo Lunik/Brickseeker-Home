@@ -146,6 +146,8 @@ export interface ResolveResult {
   set: LegoSet | null
   candidates: LegoSet[]
   isFromCache: boolean
+  /** The `ScanEvent` just recorded, when the lookup counted as a scan. */
+  scanEventId?: number | null
 }
 
 export interface SetListInfo {

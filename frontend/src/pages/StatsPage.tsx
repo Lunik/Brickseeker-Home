@@ -98,6 +98,17 @@ export default function StatsPage() {
   // `setCount - setsWithKnownPrice` included sets already tried against every source.
   const missing = data.completablePriceCount
 
+  // Recharts' defaults are a white tooltip and a light-grey hover band — both hardcoded, and both
+  // glaring on a black page. Themed here once and reused by every chart on the screen.
+  const tooltipStyle = {
+    backgroundColor: 'rgb(var(--surface-raised))',
+    border: '1px solid rgb(var(--line))',
+    borderRadius: 12,
+    color: 'rgb(var(--ink))',
+    fontSize: 12,
+  }
+  const tooltipCursor = { fill: 'rgb(var(--ink) / 0.08)' }
+
   return (
     <div className="space-y-6 pb-10">
       <NavBar
@@ -135,7 +146,7 @@ export default function StatsPage() {
               tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }}
               allowDecimals={false}
             />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "rgb(var(--ink))" }} cursor={tooltipCursor} />
             <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" />
           </BarChart>
         </ResponsiveContainer>
@@ -155,7 +166,7 @@ export default function StatsPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }} allowDecimals={false} />
             <YAxis type="category" dataKey="themeName" hide />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "rgb(var(--ink))" }} cursor={tooltipCursor} />
             <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" barSize={12} radius={[0, 3, 3, 0]}>
               {/* The theme name sits above its own bar, as on iOS — a category axis would squeeze
                   every label into a truncated left gutter at phone width. */}
@@ -223,7 +234,12 @@ export default function StatsPage() {
                 width={64}
                 tickFormatter={(value) => formatEURCompact(value)}
               />
-              <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value: number) => formatEUR(value)} />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                itemStyle={{ color: "rgb(var(--ink))" }}
+                cursor={{ stroke: "rgb(var(--line))" }}
+                formatter={(value: number) => formatEUR(value)}
+              />
               <Line
                 type="monotone"
                 dataKey="value"

@@ -20,6 +20,10 @@ const DEBOUNCE_MS = 1200
  * fills with duplicates of a single scan. Mirrors the iOS lock.
  */
 const REPEAT_LOCK_MS = 30_000
+/** A candidate must appear in this many frames before it is worth a lookup. */
+const MIN_SIGHTINGS = 2
+/** How long a candidate keeps accumulating credit after it was last seen. */
+const CANDIDATE_TTL_MS = 6_000
 
 export default function ScannerPage() {
   const navigate = useNavigate()
@@ -44,14 +48,26 @@ export default function ScannerPage() {
   const isCovered = paused || showManual || showBatch || ambiguous !== null
   const camera = useCamera(!isCovered)
 
-  const lastCandidateRef = useRef<{ setNum: string; at: number } | null>(null)
+  /**
+   * Every set number seen recently, with how many frames saw it and when it first appeared.
+   *
+   * Keyed on the whole candidate list rather than `setNums[0]`: OCR returns a different *first*
+   * candidate from frame to frame (a parts count, an age rating, the real number), so requiring
+   * two consecutive identical firsts meant the debounce never elapsed and a detected set was
+   * never resolved. Counting every candidate makes the real number win by persistence.
+   */
+  const sightingsRef = useRef<Map<string, { count: number; firstSeen: number; lastSeen: number }>>(new Map())
   const resolvedAtRef = useRef<Map<string, number>>(new Map())
   const inFlightRef = useRef(false)
+  // Read inside the interval without making it a dependency: putting it in the deps tore the
+  // timer down and rebuilt it on every resolve, restarting the cadence each time.
+  const resolvingRef = useRef(false)
 
   const captureLocation = Boolean(preferences?.scan_location_enabled)
 
   const resolve = useCallback(
     async (setNum: string, source: string) => {
+      resolvingRef.current = true
       setResolving(true)
       setMessage(null)
       try {
@@ -84,12 +100,11 @@ export default function ScannerPage() {
             return
           }
           navigate(`/set/${encodeURIComponent(result.set.setNum)}`, {
-            state: { fromScan: true, offline: result.status === 'offline' },
+            state: { fromScan: true, offline: result.status === 'offline', scanEventId: result.scanEventId },
           })
           return
         }
         if (result.status === 'ambiguous' && result.candidates.length) {
-          setPaused(true)
           setAmbiguous(result.candidates)
           return
         }
@@ -97,6 +112,7 @@ export default function ScannerPage() {
       } catch (caught) {
         setMessage(caught instanceof Error ? caught.message : 'Recherche impossible')
       } finally {
+        resolvingRef.current = false
         setResolving(false)
         setCandidate(null)
       }
@@ -108,7 +124,7 @@ export default function ScannerPage() {
     if (isCovered || !camera.isActive) return
 
     const timer = window.setInterval(async () => {
-      if (inFlightRef.current || resolving) return
+      if (inFlightRef.current || resolvingRef.current) return
       inFlightRef.current = true
       try {
         const blob = await camera.captureFrame()
@@ -116,23 +132,43 @@ export default function ScannerPage() {
         const form = new FormData()
         form.append('file', blob, 'frame.jpg')
         const { setNums } = await api.upload<{ setNums: string[] }>('/scan/ocr', form)
-        const found = setNums[0]
-        if (!found) return
-
-        const resolvedAt = resolvedAtRef.current.get(found)
-        if (resolvedAt && Date.now() - resolvedAt < REPEAT_LOCK_MS) return
-
-        // The pulse fires the moment a candidate is seen, before the lookup — the user needs to
-        // know something happened before the network call starts.
-        setCandidate(found)
-        const previous = lastCandidateRef.current
         const now = Date.now()
-        if (previous?.setNum === found && now - previous.at >= DEBOUNCE_MS) {
-          lastCandidateRef.current = null
-          resolvedAtRef.current.set(found, now)
-          await resolve(found, 'camera')
-        } else if (previous?.setNum !== found) {
-          lastCandidateRef.current = { setNum: found, at: now }
+
+        // Forget anything not seen for a while, so a number glimpsed on a neighbouring box
+        // doesn't keep accumulating credit while the camera looks elsewhere.
+        for (const [key, seen] of sightingsRef.current) {
+          if (now - seen.lastSeen > CANDIDATE_TTL_MS) sightingsRef.current.delete(key)
+        }
+
+        for (const setNum of setNums) {
+          const seen = sightingsRef.current.get(setNum)
+          if (seen) {
+            seen.count += 1
+            seen.lastSeen = now
+          } else {
+            sightingsRef.current.set(setNum, { count: 1, firstSeen: now, lastSeen: now })
+          }
+        }
+        if (!setNums.length) return
+
+        // The strongest current candidate drives the pulse, so the user sees a detection landing
+        // before any network call starts.
+        const ranked = [...sightingsRef.current.entries()]
+          .filter(([setNum]) => {
+            const resolvedAt = resolvedAtRef.current.get(setNum)
+            return !resolvedAt || now - resolvedAt >= REPEAT_LOCK_MS
+          })
+          .sort((a, b) => b[1].count - a[1].count || a[1].firstSeen - b[1].firstSeen)
+
+        const best = ranked[0]
+        if (!best) return
+        setCandidate(best[0])
+
+        const [setNum, seen] = best
+        if (seen.count >= MIN_SIGHTINGS && now - seen.firstSeen >= DEBOUNCE_MS) {
+          resolvedAtRef.current.set(setNum, now)
+          sightingsRef.current.delete(setNum)
+          await resolve(setNum, 'camera')
         }
       } catch {
         /* a blurry or challenged frame is normal; the next tick tries again */
@@ -142,7 +178,7 @@ export default function ScannerPage() {
     }, CAPTURE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [camera, isCovered, resolve, resolving])
+  }, [camera, isCovered, resolve])
 
   return (
     <div className="relative min-h-[100dvh] bg-black">

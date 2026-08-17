@@ -8,7 +8,7 @@ import ListPickerSheet from '../components/ListPickerSheet'
 import ScanMap from '../components/ScanMap'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import Icon from '../components/Icon'
-import { EmptyState } from '../components/ui'
+import { EmptyState, NavBar } from '../components/ui'
 import { useSetActions } from '../hooks/useSetActions'
 import { formatRelative } from '../lib/format'
 
@@ -50,12 +50,16 @@ export default function HistoryPage() {
   if (showMap) {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-[34px] font-bold leading-tight text-ink">Carte des scans</h1>
-          <button type="button" className="btn-secondary" onClick={() => setShowMap(false)}>
-            Liste
-          </button>
-        </div>
+        <NavBar
+          title="Carte des scans"
+          onBack={() => setShowMap(false)}
+          backLabel="Retour à la liste"
+          actions={
+            <button type="button" className="nav-pill" onClick={() => setShowMap(false)}>
+              Liste
+            </button>
+          }
+        />
         <ScanMap />
       </div>
     )

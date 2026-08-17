@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import type { FilterState, SetRow as SetRowData, SortOption, StoreAvailability } from '../api/types'
 import { filterAndSort, useFilterState } from '../hooks/useFilterState'
@@ -16,6 +16,9 @@ import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Sheet, Spi
  * select button, the per-row context menu reusing the bulk code path — exists for a reason paid
  * for once in the iOS app. Copy this screen rather than assembling a new one.
  */
+
+/** Rows mounted per page as the list is scrolled. */
+const PAGE = 40
 
 export interface BulkAction {
   key: string
@@ -146,6 +149,33 @@ export default function SetListScreen({
     else void run(action, targets)
   }
 
+  // Rows are mounted in pages as the user reaches the bottom. A 499-set collection otherwise
+  // mounts 499 rows and 499 <img> in one go, which is what makes the first paint crawl.
+  const [renderLimit, setRenderLimit] = useState(PAGE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setRenderLimit(PAGE)
+  }, [rows, filter])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setRenderLimit((current) => Math.min(current + PAGE, visible.length))
+        }
+      },
+      // Start the next page before the sentinel is actually on screen, so scrolling stays smooth.
+      { rootMargin: '600px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [visible.length])
+
+  const rendered = useMemo(() => visible.slice(0, renderLimit), [visible, renderLimit])
+
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selected.has(row.setNum))
 
   return (
@@ -217,12 +247,12 @@ export default function SetListScreen({
           />
         )
       ) : renderItems ? (
-        renderItems(visible)
+        renderItems(rendered)
       ) : (
         <>
           {/* One grouped card holding every row, dividers inset past the thumbnail. */}
           <ul className="list-card">
-            {visible.map((row, index) => (
+            {rendered.map((row, index) => (
               <li
                 key={row.setNum}
                 className={index > 0 ? 'border-t border-line ml-[76px] pl-0' : ''}
@@ -247,9 +277,12 @@ export default function SetListScreen({
               </li>
             ))}
           </ul>
+          {/* The observer target: reaching it mounts the next page. */}
+          <div ref={sentinelRef} aria-hidden="true" />
           <p className="px-1 text-[13px] text-ink-faint">
             {visible.length} set{visible.length > 1 ? 's' : ''}
             {visible.length !== rows.length ? ` sur ${rows.length}` : ''}
+            {renderLimit < visible.length ? ` · ${renderLimit} affichés` : ''}
           </p>
         </>
       )}

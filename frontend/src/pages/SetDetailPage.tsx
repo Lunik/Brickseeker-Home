@@ -59,7 +59,8 @@ export default function SetDetailPage() {
   const queryClient = useQueryClient()
   const { preferences } = useSettings()
 
-  const siblings = (location.state as { siblings?: string[] } | null)?.siblings ?? []
+  const navState = location.state as { siblings?: string[]; scanEventId?: number | null } | null
+  const siblings = navState?.siblings ?? []
   const index = siblings.indexOf(setNum)
 
   const [alertCondition, setAlertCondition] = useState<'newSet' | 'used' | null>(null)
@@ -208,13 +209,19 @@ export default function SetDetailPage() {
       </div>
 
       <section className="space-y-3">
-        {data.set.setImgUrl && (
-          <img
-            src={imageUrl(data.set.setImgUrl)}
-            alt={data.set.name}
-            className="mx-auto max-h-64 w-full object-contain"
-          />
-        )}
+        {/* A fixed box reserved before the image loads: without it the whole page shifted down
+            the moment the artwork arrived, moving whatever the user was about to tap. */}
+        <div className="flex h-64 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/5">
+          {data.set.setImgUrl ? (
+            <img
+              src={imageUrl(data.set.setImgUrl)}
+              alt={data.set.name}
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <Icon name="brick" className="h-12 w-12 text-ink-faint" />
+          )}
+        </div>
 
         <div className="space-y-1 text-center">
           <h1 className="text-[34px] font-bold leading-tight text-ink">{baseSetNum(data.set.setNum)}</h1>
@@ -262,34 +269,49 @@ export default function SetDetailPage() {
           </div>
         )}
 
-        {/* Centred tinted text actions, as on iOS — not a row of filled buttons. */}
-        <div className="space-y-1 pt-1">
-          {data.isInCollection ? (
-            <button type="button" className="btn-ghost w-full" onClick={() => setShowLists(true)}>
-              Changer de liste
-            </button>
-          ) : (
-            <button type="button" className="btn-ghost w-full" onClick={() => setShowLists(true)}>
+        {/* Grouped by what they act on: the two that change where the set lives, then the two
+            that watch its price. Five identical full-width rows gave equal weight to everything. */}
+        <div className="space-y-3 pt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={data.isInCollection ? 'btn-secondary' : 'btn-primary'}
+              onClick={() => setShowLists(true)}
+            >
               <Icon name="box" className="h-5 w-5" />
-              Ajouter à ma collection
+              {data.isInCollection ? 'Changer de liste' : 'Ajouter'}
             </button>
-          )}
-          <button
-            type="button"
-            className="btn-ghost w-full"
-            onClick={() => setWishlist.mutate(!data.isInWishlist)}
-          >
-            <Icon name="heart" filled={data.isInWishlist} className="h-5 w-5" />
-            {data.isInWishlist ? 'Retirer de votre liste cadeaux' : 'Ajouter à votre liste cadeaux'}
-          </button>
-          <button type="button" className="btn-ghost w-full" onClick={() => setAlertCondition('newSet')}>
-            <Icon name="bell" className="h-5 w-5" />
-            Alerte de prix
-          </button>
-          <button type="button" className="btn-ghost w-full" onClick={() => setShowScanPrice(true)}>
-            <Icon name="tag" className="h-5 w-5" />
-            Prix vu en magasin
-          </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setWishlist.mutate(!data.isInWishlist)}
+            >
+              <Icon name="heart" filled={data.isInWishlist} className="h-5 w-5" />
+              {data.isInWishlist ? 'Retirer' : 'Cadeaux'}
+            </button>
+          </div>
+
+          <div className="list-card">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left active:bg-surface-sunken"
+              onClick={() => setAlertCondition('newSet')}
+            >
+              <Icon name="bell" className="h-5 w-5 text-brand" />
+              <span className="flex-1 text-[17px] text-ink">Alerte de prix</span>
+              <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-sunken"
+              onClick={() => setShowScanPrice(true)}
+            >
+              <Icon name="tag" className="h-5 w-5 text-brand" />
+              <span className="flex-1 text-[17px] text-ink">Prix vu en magasin</span>
+              <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />
+            </button>
+          </div>
+
           {data.isInCollection && (
             <button
               type="button"
@@ -488,6 +510,8 @@ export default function SetDetailPage() {
         open={showScanPrice}
         onClose={() => setShowScanPrice(false)}
         setNum={setNum}
+        // Patches the scan the lookup just recorded rather than creating a second one.
+        scanEventId={navState?.scanEventId ?? null}
         onSaved={() => queryClient.invalidateQueries({ queryKey: key })}
       />
 
