@@ -496,7 +496,7 @@ set Brickset doesn't catalogue.
 ### prices
 | GET | `/prices/{setNum}` | cached quotes + store price + history + sold listings |
 | POST | `/prices/{setNum}/refresh` | live refresh → same shape |
-| POST | `/prices/{setNum}/store-refresh` | lego.com only |
+| POST | `/prices/{setNum}/store-refresh` | lego.com only — no screen calls it since the set sheet dropped its second refresh button |
 | GET | `/prices/batch/status` | updater state |
 | POST | `/prices/batch/start` | `{setNums?, onlyMissing?}` → `{status}` |
 | POST | `/prices/batch/cancel` | `{ok}` |
@@ -551,6 +551,7 @@ carry no "I was standing in a store" meaning.
 |---|---|---|
 | `/` | Accueil — stats tiles, scan cluster, sync state | `HomeView` |
 | `/scan` | Camera scanner with reticle + OCR polling | `ScannerView` |
+| `/scan/session` | Mode lot: everything scanned this session, best deal first, multi-select bulk actions | `BatchSessionSummaryView` |
 | `/collection` | Owned sets: search, filters, sort, multi-select bulk actions | `CollectionView` |
 | `/history` | Scanned sets + scan map | `HistoryView` / `ScanMapView` |
 | `/wishlist` | Liste cadeaux + CSV import | `WishlistView` |

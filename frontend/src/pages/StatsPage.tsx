@@ -114,20 +114,7 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <NavBar
-        title="Statistiques"
-        actions={
-          <button
-            type="button"
-            className="nav-circle"
-            onClick={() => refreshValue.mutate()}
-            disabled={isFetching || batch.data?.isRunning}
-            aria-label="Actualiser la valeur estimée"
-          >
-            <Icon name="refresh" />
-          </button>
-        }
-      />
+      <NavBar title="Statistiques" />
 
       <section className="space-y-3">
         <h2 className="text-[22px] font-bold text-ink">Totaux</h2>
@@ -194,8 +181,29 @@ export default function StatsPage() {
       </section>
 
       <section className="card space-y-2">
-        <div className="flex items-start justify-between gap-3">
+        {/* The refresh belongs to this card, not to the navigation bar: it re-reads the prices the
+            total is made of, which is a different promise from "reload the page". While a batch
+            runs the button gives way to its progress, as on iOS — a spinning icon that can't be
+            pressed says less than "12 / 499". */}
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-[20px] font-bold text-ink">Valeur estimée</h2>
+          {batch.data?.isRunning ? (
+            <span className="flex shrink-0 items-center gap-2 text-[13px] tabular-nums text-ink-muted">
+              <Spinner className="h-3.5 w-3.5" />
+              {batch.data.done} / {batch.data.total}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="nav-circle h-9 w-9 shrink-0"
+              onClick={() => refreshValue.mutate()}
+              disabled={isFetching || refreshValue.isPending}
+              aria-label="Actualiser tous les prix de la collection"
+              title="Actualiser tous les prix de la collection"
+            >
+              <Icon name="refresh" className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <p className="text-[28px] font-bold text-ink">{formatEUR(data.totalValueEur)}</p>
         {/* An estimated total is only honest next to its coverage. */}
@@ -203,11 +211,6 @@ export default function StatsPage() {
           Basée sur {data.setsWithKnownPrice} / {data.setCount} sets ({data.pricedUnitCount} /{' '}
           {data.unitCount} exemplaires) dont le prix est connu
         </p>
-        {batch.data?.isRunning && (
-          <p className="flex items-center gap-2 text-[13px] text-ink-muted">
-            <Spinner className="h-3 w-3" /> Actualisation : {batch.data.done} / {batch.data.total}
-          </p>
-        )}
         {(completeMissing.isError || refreshValue.isError) && (
           <ErrorLabel
             message={((completeMissing.error ?? refreshValue.error) as Error).message}

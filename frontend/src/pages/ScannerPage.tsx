@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { LegoSet, ResolveResult } from '../api/types'
 import { useCamera } from '../hooks/useCamera'
+import { batchSession, useBatchSession } from '../lib/batch-session'
 import {
   playCandidateDetected,
   playResolutionFailed,
@@ -44,14 +45,15 @@ export default function ScannerPage() {
   const [manual, setManual] = useState('')
   const [showManual, setShowManual] = useState(false)
   // Mode lot: scans accumulate into a session instead of opening each set's sheet, so a shelf can
-  // be swept in one pass and reviewed afterwards.
+  // be swept in one pass and reviewed afterwards. The session itself lives outside this component
+  // (see `lib/batch-session`) — it has to outlive the camera, since looking at any set in it
+  // navigates away from here.
   const [batchMode, setBatchMode] = useState(false)
-  const [batchItems, setBatchItems] = useState<LegoSet[]>([])
-  const [showBatch, setShowBatch] = useState(false)
+  const batchItems = useBatchSession()
 
   // Any sheet covering the camera stops it — the iOS scanner treats this as a hard rule, and
   // it is also what keeps a background resolve from yanking the user off a form they are typing.
-  const isCovered = paused || showManual || showBatch || ambiguous !== null
+  const isCovered = paused || showManual || ambiguous !== null
   const camera = useCamera(!isCovered)
 
   /**
@@ -111,9 +113,7 @@ export default function ScannerPage() {
           if (batchMode) {
             // Stay on the camera: the whole point of the session is not to interrupt the sweep.
             const found = result.set
-            setBatchItems((current) =>
-              current.some((item) => item.setNum === found.setNum) ? current : [...current, found],
-            )
+            batchSession.add(found)
             setMessage(`${found.setNum} ajouté à la session`)
             return
           }
@@ -272,6 +272,8 @@ export default function ScannerPage() {
         )}
         {message && <p className="text-sm font-semibold text-amber-300">{message}</p>}
 
+        {/* Stays visible once the session has items even after mode lot is switched off: turning
+            the toggle off doesn't discard the session, and hiding this would strand it. */}
         {(batchMode || batchItems.length > 0) && (
           <div className="space-y-1">
             <p className="text-sm text-white/80">
@@ -280,7 +282,11 @@ export default function ScannerPage() {
                 : 'Les prochains scans seront ajoutés à la session, sans ouvrir la fiche du set.'}
             </p>
             {batchItems.length > 0 && (
-              <button type="button" className="btn-primary" onClick={() => setShowBatch(true)}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => navigate('/scan/session')}
+              >
                 Voir la session ({batchItems.length})
               </button>
             )}
@@ -348,43 +354,6 @@ export default function ScannerPage() {
                     {set.year} · {set.numParts} pièces
                   </span>
                 </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Sheet>
-
-      <Sheet
-        open={showBatch}
-        title={`Session de scan (${batchItems.length})`}
-        onClose={() => setShowBatch(false)}
-        footer={
-          <button
-            type="button"
-            className="btn-secondary w-full"
-            onClick={() => {
-              setBatchItems([])
-              setShowBatch(false)
-            }}
-          >
-            Vider la session
-          </button>
-        }
-      >
-        <ul className="list-card">
-          {batchItems.map((item) => (
-            <li key={item.setNum} className="border-b border-line last:border-0">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                onClick={() => navigate(`/set/${encodeURIComponent(item.setNum)}`)}
-              >
-                <SetThumbnail url={item.setImgUrl} alt={item.name} size="sm" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-ink">{item.setNum}</span>
-                  <span className="block truncate text-[15px] text-ink-muted">{item.name}</span>
-                </span>
-                <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />
               </button>
             </li>
           ))}

@@ -18,7 +18,6 @@ interface PriceCardProps {
   pricePerPartTarget: number
   isRefreshing: boolean
   onRefresh: () => void
-  onRefreshStore: () => void
 }
 
 function percentVsStore(amount: number, storePrice: number | null): number | null {
@@ -94,7 +93,6 @@ export default function PriceCard({
   pricePerPartTarget,
   isRefreshing,
   onRefresh,
-  onRefreshStore,
 }: PriceCardProps) {
   const bySource = new Map(detail.quotes.map((quote) => [quote.source, quote]))
   const storePrice = detail.storePriceEur
@@ -106,28 +104,19 @@ export default function PriceCard({
     <section className="card space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h2 className="section-title">Prix</h2>
-        {/* An icon, as in the iOS price header: the label was the widest thing in the card and
-            pulled the eye away from the prices, which are what the card is for. */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="btn-ghost px-2 py-1 text-xs"
-            onClick={onRefreshStore}
-            disabled={isRefreshing}
-          >
-            lego.com
-          </button>
-          <button
-            type="button"
-            className="nav-circle h-9 w-9"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            aria-label="Tout rafraîchir"
-            title="Tout rafraîchir"
-          >
-            {isRefreshing ? <Spinner className="h-4 w-4" /> : <Icon name="refresh" className="h-4 w-4" />}
-          </button>
-        </div>
+        {/* One icon, as in the iOS price header. The separate "lego.com" button that re-read only
+            the store price is gone: a second control for a subset of what this one does was more
+            explaining than it was worth, and this refresh covers it. */}
+        <button
+          type="button"
+          className="nav-circle h-9 w-9"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          aria-label="Rafraîchir les prix"
+          title="Rafraîchir les prix"
+        >
+          {isRefreshing ? <Spinner className="h-4 w-4" /> : <Icon name="refresh" className="h-4 w-4" />}
+        </button>
       </div>
 
       <ul className="divide-y divide-line">

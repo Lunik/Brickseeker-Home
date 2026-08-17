@@ -246,6 +246,23 @@ export interface CatalogStatus {
   initialSyncAt: string | null
 }
 
+/**
+ * `GET /prices/{setNum}` — the cached prices for one set, without triggering any scraping.
+ *
+ * `percentVsStore` is the ±% against the lego.com price, per source, computed server-side so that
+ * every screen shows the same number instead of each re-deriving it.
+ */
+export interface SetPrices {
+  setNum: string
+  quotes: PriceQuote[]
+  storePriceEur: number | null
+  storeCurrency: string | null
+  availability: StoreAvailability
+  storePriceFetchedAt: string | null
+  valuation: Valuation
+  percentVsStore: Partial<Record<PriceSourceKey, number>>
+}
+
 export interface BatchStatus {
   isRunning: boolean
   done: number

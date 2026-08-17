@@ -44,7 +44,14 @@ export default function PriceHistoryChart({
   history: PriceHistoryPoint[]
   soldListings: SoldSale[]
 }) {
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  /**
+   * The one series shown alone, or `null` for "show everything".
+   *
+   * Isolating beats hiding one at a time: with six series on a phone, reading one of them means
+   * getting the other five out of the way, and that was five taps. One tap in, one tap out.
+   */
+  const [soloed, setSoloed] = useState<string | null>(null)
+  const isHidden = (key: string) => soloed !== null && soloed !== key
 
   const { rows, sources, pointCounts, saleCount } = useMemo(() => {
     // One row per day for the lines, one row per sale for the scatter, merged on a numeric time
@@ -91,21 +98,11 @@ export default function PriceHistoryChart({
   // Hiding a series has to take its rows with it, or the time axis keeps spanning six months of
   // sales that are no longer drawn and squeezes what is left into the last pixel column.
   const visibleRows = rows.filter((row) =>
-    Object.keys(row).some((key) => key !== 'time' && !hidden.has(key)),
+    Object.keys(row).some((key) => key !== 'time' && !isHidden(key)),
   )
 
   // Below two points there is no trend to draw — an axis with a single dot reads as a bug.
   if (rows.length < 2) return null
-
-  function toggle(key: string) {
-    setHidden((current) => {
-      const next = new Set(current)
-      // Hiding the last visible series would leave an empty frame; that reads as a broken chart.
-      if (next.has(key)) next.delete(key)
-      else if (next.size < series.length - 1) next.add(key)
-      return next
-    })
-  }
 
   return (
     <section className="card space-y-3">
@@ -155,7 +152,7 @@ export default function PriceHistoryChart({
               dot={(pointCounts[source] ?? 0) < 4 ? { r: 3 } : false}
               // The sale rows carry no reading, so without this every line breaks at each sale.
               connectNulls
-              hide={hidden.has(source)}
+              hide={isHidden(source)}
             />
           ))}
           {saleCount > 0 && (
@@ -163,29 +160,32 @@ export default function PriceHistoryChart({
               dataKey={SALES_KEY}
               name={SALES_LABEL}
               fill={SALES_COLOR}
-              hide={hidden.has(SALES_KEY)}
+              hide={isHidden(SALES_KEY)}
             />
           )}
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* The legend is the filter: tapping an entry takes that series off the chart. */}
+      {/* The legend is the filter: tapping an entry leaves that series alone on the chart, and
+          tapping it again brings the others back. */}
       <ul className="flex flex-wrap gap-x-3 gap-y-1.5">
         {series.map((item) => {
-          const isHidden = hidden.has(item.key)
+          const dimmed = isHidden(item.key)
+          const isSoloed = soloed === item.key
           return (
             <li key={item.key}>
               <button
                 type="button"
                 className={`flex items-center gap-1.5 text-[11px] ${
-                  isHidden ? 'text-ink-faint line-through' : 'text-ink-muted'
+                  dimmed ? 'text-ink-faint line-through' : isSoloed ? 'font-semibold text-ink' : 'text-ink-muted'
                 }`}
-                onClick={() => toggle(item.key)}
-                aria-pressed={!isHidden}
+                onClick={() => setSoloed((current) => (current === item.key ? null : item.key))}
+                aria-pressed={isSoloed}
+                title={isSoloed ? 'Afficher toutes les séries' : `Afficher seulement ${item.label}`}
               >
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: isHidden ? 'rgb(var(--ink-faint))' : item.color }}
+                  style={{ backgroundColor: dimmed ? 'rgb(var(--ink-faint))' : item.color }}
                 />
                 {item.label}
               </button>
@@ -193,6 +193,12 @@ export default function PriceHistoryChart({
           )
         })}
       </ul>
+
+      {soloed !== null && (
+        <p className="text-[11px] text-ink-faint">
+          Une seule série affichée — touchez-la de nouveau pour toutes les revoir.
+        </p>
+      )}
 
       {saleCount > 0 && (
         <p className="text-[11px] text-ink-faint">

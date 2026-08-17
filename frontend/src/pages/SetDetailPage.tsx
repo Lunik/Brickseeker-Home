@@ -108,10 +108,6 @@ export default function SetDetailPage() {
     mutationFn: () => api.post(`/prices/${encodeURIComponent(setNum)}/refresh`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
   })
-  const refreshStore = useMutation({
-    mutationFn: () => api.post(`/prices/${encodeURIComponent(setNum)}/store-refresh`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
-  })
   const setWishlist = useMutation({
     mutationFn: (wanted: boolean) =>
       wanted
@@ -190,7 +186,13 @@ export default function SetDetailPage() {
               className="flex h-11 w-12 items-center justify-center text-brand disabled:opacity-30"
               disabled={index <= 0}
               onClick={() =>
-                navigate(`/set/${encodeURIComponent(siblings[index - 1])}`, { state: { siblings } })
+                // `replace`: paging is movement *inside* one screen, as it is in the iOS pager, not
+                // a stack of screens. Pushing left a trail — after three taps on "suivant",
+                // "Fermer" walked back through the three sets instead of returning to the list.
+                navigate(`/set/${encodeURIComponent(siblings[index - 1])}`, {
+                  state: { siblings },
+                  replace: true,
+                })
               }
               aria-label="Set précédent"
             >
@@ -201,7 +203,10 @@ export default function SetDetailPage() {
               className="flex h-11 w-12 items-center justify-center text-brand disabled:opacity-30"
               disabled={index >= siblings.length - 1}
               onClick={() =>
-                navigate(`/set/${encodeURIComponent(siblings[index + 1])}`, { state: { siblings } })
+                navigate(`/set/${encodeURIComponent(siblings[index + 1])}`, {
+                  state: { siblings },
+                  replace: true,
+                })
               }
               aria-label="Set suivant"
             >
@@ -352,9 +357,8 @@ export default function SetDetailPage() {
       <PriceCard
         detail={data}
         pricePerPartTarget={Number(preferences?.['appTheme.preferredPricePerPart'] ?? 0.12)}
-        isRefreshing={refresh.isPending || refreshStore.isPending}
+        isRefreshing={refresh.isPending}
         onRefresh={() => refresh.mutate()}
-        onRefreshStore={() => refreshStore.mutate()}
       />
 
       <PriceHistoryChart history={data.priceHistory} soldListings={data.soldListings} />
@@ -392,30 +396,6 @@ export default function SetDetailPage() {
           </ul>
         </section>
       )}
-
-      <section className="card space-y-1">
-        <h2 className="section-title">Liens</h2>
-        {data.set.setUrl && (
-          <a className="btn-ghost w-full" href={data.set.setUrl} target="_blank" rel="noreferrer noopener">
-            Voir sur Rebrickable
-          </a>
-        )}
-        {data.storeUrl && (
-          <a className="btn-ghost w-full" href={data.storeUrl} target="_blank" rel="noreferrer noopener">
-            Voir sur lego.com
-          </a>
-        )}
-        {data.instructionsUrl && (
-          <a
-            className="btn-ghost w-full"
-            href={data.instructionsUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            Notice de montage
-          </a>
-        )}
-      </section>
 
       {!data.isMinifig && (minifigs.data?.results.length ?? 0) > 0 && (
         <Gallery
@@ -455,6 +435,43 @@ export default function SetDetailPage() {
           onOpen={(target) => navigate(`/set/${encodeURIComponent(target)}`)}
         />
       )}
+
+      {/* Last on the page, as on iOS: everything here leaves the app, so nothing that belongs to
+          the set should sit underneath it. Left-aligned like every other row in the app —
+          centred links read as a call to action, and these are a footer. */}
+      <section className="card space-y-1">
+        <h2 className="section-title">Liens</h2>
+        {data.set.setUrl && (
+          <a
+            className="btn-ghost w-full justify-start px-0 text-left"
+            href={data.set.setUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Voir sur Rebrickable
+          </a>
+        )}
+        {data.storeUrl && (
+          <a
+            className="btn-ghost w-full justify-start px-0 text-left"
+            href={data.storeUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Voir sur lego.com
+          </a>
+        )}
+        {data.instructionsUrl && (
+          <a
+            className="btn-ghost w-full justify-start px-0 text-left"
+            href={data.instructionsUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Notice de montage
+          </a>
+        )}
+      </section>
 
       <Sheet open={showLists} title="Choisir une liste" onClose={() => setShowLists(false)}>
         <div className="space-y-2">

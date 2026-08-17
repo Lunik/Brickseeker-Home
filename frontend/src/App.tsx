@@ -20,6 +20,7 @@ import { LoadingBlock } from './components/ui'
 import LoginGate from './pages/LoginGate'
 import HomePage from './pages/HomePage'
 import ScannerPage from './pages/ScannerPage'
+import BatchSessionPage from './pages/BatchSessionPage'
 import CollectionPage from './pages/CollectionPage'
 import HistoryPage from './pages/HistoryPage'
 import WishlistPage from './pages/WishlistPage'
@@ -55,6 +56,9 @@ function Chrome() {
           <Route path="/" element={<HomePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/scan" element={<ScannerPage />} />
+          {/* A route, not a sheet inside the scanner: opening a scanned set unmounts the camera,
+              so a sheet could never be come back to — which was the whole complaint. */}
+          <Route path="/scan/session" element={<BatchSessionPage />} />
           <Route path="/collection" element={<CollectionPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
