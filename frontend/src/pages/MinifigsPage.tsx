@@ -7,7 +7,7 @@ import type { CatalogStatus, MinifigRow, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import SetListScreen from '../components/SetListScreen'
 import { useFilterState } from '../hooks/useFilterState'
-import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
+import { EmptyState, ErrorLabel, MinifigPlaceholder, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
 
 /**
@@ -39,7 +39,7 @@ function MinifigTile({ row }: { row: SetRow }) {
           onError={() => setFailed(true)}
         />
       ) : (
-        <Icon name="minifig" className="h-10 w-10 text-ink-faint/50" />
+        <MinifigPlaceholder className="h-full w-full object-contain p-2" />
       )}
     </div>
   )

@@ -10,6 +10,7 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { imageUrl } from '../api/client'
+import minifigPlaceholder from '../assets/minifig-placeholder.png'
 import Icon from './Icon'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -191,6 +192,15 @@ export function Badge({
     brand: 'bg-brand/15 text-brand',
   }
   return <span className={`chip ${tones[tone]}`}>{children}</span>
+}
+
+/**
+ * The stand-in for a minifig with no usable artwork — the same idea as the iOS `MinifigPlaceholder`
+ * asset. Bundled (Vite hashes it into the build) rather than fetched, so the fallback can't itself
+ * fail to load, and trimmed and palette-reduced to 13 KB from the 1 MB original.
+ */
+export function MinifigPlaceholder({ className = 'h-full w-full object-contain' }: { className?: string }) {
+  return <img src={minifigPlaceholder} alt="" aria-hidden="true" className={className} />
 }
 
 /**
