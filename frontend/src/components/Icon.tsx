@@ -52,6 +52,7 @@ export type IconName =
   | 'folder'
   | 'trash'
   | 'ellipsis'
+  | 'minifig'
 
 /** Path data only — the shared stroke attributes live on the `<svg>` below. */
 const PATHS: Record<IconName, string> = {
@@ -103,6 +104,10 @@ const PATHS: Record<IconName, string> = {
   folder: 'M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18V6.5Z',
   trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L18 7M10 11v6M14 11v6',
   ellipsis: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12v.01M12 12v.01M16 12v.01',
+  // The stand-in for a minifig with no artwork — Rebrickable has plenty. A recognisable figure
+  // beats the generic person glyph, which read as "user account" in a grid of minifigures.
+  minifig:
+    'M10.2 2.5h3.6v1.4M8.9 3.9h6.2v4.2H8.9zM7.2 8.1h9.6v6H7.2zM4.6 9.2h2.6v4.6M16.8 9.2h2.6v4.6M9.4 14.1v7.4h2.1v-7.4M12.5 14.1v7.4h2.1v-7.4',
   inbox:
     'M3.5 13.5h4l1.5 3h6l1.5-3h4M3.5 13.5 6 5h12l2.5 8.5v5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-5Z',
 }

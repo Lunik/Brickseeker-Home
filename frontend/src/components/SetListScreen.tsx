@@ -24,6 +24,22 @@ const PAGE = 40
 /** The actions a screen offers on a selection — and, unchanged, on one row's context menu. */
 export type BulkAction = SelectionAction
 
+/**
+ * What a custom renderer needs to behave like the rows it replaces.
+ *
+ * `activate` exists so no caller has to re-derive "tap toggles while selecting, opens otherwise":
+ * the minifig grid did re-derive it, got it wrong, and opened a minifig instead of ticking it —
+ * while keeping a private selection set the "Actions (N)" count knew nothing about.
+ */
+export interface RenderSelection {
+  selecting: boolean
+  isSelected: (setNum: string) => boolean
+  /** The row's own tap. */
+  activate: (row: SetRowData) => void
+  /** Long-press / right-click, which opens that row's action menu. */
+  openMenu: (row: SetRowData) => void
+}
+
 export interface SetListScreenProps {
   title: string
   rows: SetRowData[]
@@ -46,7 +62,7 @@ export interface SetListScreenProps {
   header?: ReactNode
   onRefresh?: () => void
   isRefreshing?: boolean
-  renderItems?: (rows: SetRowData[]) => ReactNode
+  renderItems?: (rows: SetRowData[], selection: RenderSelection) => ReactNode
   /** The caller already applied `filter` server-side; skip the client-side pass. */
   serverFiltered?: boolean
 }
@@ -242,7 +258,14 @@ export default function SetListScreen({
           />
         )
       ) : renderItems ? (
-        renderItems(rendered)
+        renderItems(rendered, {
+          selecting,
+          isSelected: (setNum) => selected.has(setNum),
+          activate: (row) => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible)),
+          openMenu: (row) => {
+            if (!selecting && bulkActions.length > 0) setMenuFor(row)
+          },
+        })
       ) : (
         <>
           {/* One grouped card holding every row, dividers inset past the thumbnail. */}

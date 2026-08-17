@@ -10,15 +10,45 @@ import { useFilterState } from '../hooks/useFilterState'
 import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
 
+/**
+ * A minifig's artwork, or the stand-in for it.
+ *
+ * Rebrickable's catalogue has plenty of entries whose image 404s, and a broken `<img>` renders the
+ * browser's own torn-page glyph — which is what the grid was showing. `onError` is the only way to
+ * learn that: a failed load fires no other signal.
+ */
+function MinifigTile({ row }: { row: SetRow }) {
+  const [failed, setFailed] = useState(false)
+  const src = row.setImgUrl ? imageUrl(row.setImgUrl) : null
+
+  return (
+    // Fixed box, as on the detail screen: the grid must not reflow as images land. Desaturated
+    // when the minifig isn't owned — while browsing the whole catalogue that is the only thing
+    // telling "mine" from "exists", as on iOS.
+    <div
+      className={`flex h-24 items-center justify-center overflow-hidden rounded-lg bg-white ${
+        row.isInCollection ? '' : 'opacity-60 grayscale'
+      }`}
+    >
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={row.name}
+          loading="lazy"
+          className="h-full w-full object-contain p-1"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Icon name="minifig" className="h-10 w-10 text-ink-faint/50" />
+      )}
+    </div>
+  )
+}
+
 /** How many rows one request may bring back, per mode. */
 const OWNED_LIMIT = 5000
 const BROWSE_LIMIT = 300
 
-/**
- * Survives leaving the gallery, as the iOS filter singleton does — coming back to a screen that
- * silently forgot you were browsing the whole catalogue is the same annoyance as a reset filter.
- */
-let ownedOnlyPreference = true
 
 /**
  * The minifig gallery — the same browse screen as the lists, with a grid of cards instead of rows.
@@ -36,16 +66,12 @@ let ownedOnlyPreference = true
 export default function MinifigsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [ownedOnly, setOwnedOnlyState] = useState(ownedOnlyPreference)
+  // The screen is "Mes minifigs": it opens on the collection every time, and browsing the whole
+  // catalogue is a deliberate detour rather than a state to come back to.
+  const [ownedOnly, setOwnedOnly] = useState(true)
   // The same store instance `SetListScreen` uses for this screen id, so the search field and the
   // filter sheet drive the query without a second copy of that state.
   const { filter } = useFilterState('minifigs', 'name')
-
-  function setOwnedOnly(value: boolean) {
-    ownedOnlyPreference = value
-    setOwnedOnlyState(value)
-  }
 
   const status = useQuery({
     queryKey: ['catalog-status'],
@@ -150,15 +176,6 @@ export default function MinifigsPage() {
     )
   }
 
-  function toggle(figNum: string) {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(figNum)) next.delete(figNum)
-      else next.add(figNum)
-      return next
-    })
-  }
-
   return (
     <SetListScreen
       title="Mes minifigs"
@@ -174,6 +191,12 @@ export default function MinifigsPage() {
       serverFiltered
       isLoading={isLoading}
       error={error ? (error as Error).message : null}
+      // Opening a tile pages through the rest of the grid, exactly as a list row does.
+      onOpenSet={(row, visible) =>
+        navigate(`/set/${encodeURIComponent(row.setNum)}`, {
+          state: { siblings: visible.map((item) => item.setNum) },
+        })
+      }
       navActions={
         // The iOS `shippingbox` toolbar toggle: "Possédées seulement". Off, the screen browses the
         // whole Rebrickable catalogue.
@@ -226,51 +249,39 @@ export default function MinifigsPage() {
           )}
         </div>
       }
-      renderItems={(visible) => (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      // Three across, as the iOS `.adaptive(minimum: 110)` grid lays out at phone width.
+      renderItems={(visible, selection) => (
+        <ul className="grid grid-cols-3 gap-2">
           {visible.map((row) => (
             <li
               key={row.setNum}
-              className={`card space-y-2 ${selected.has(row.setNum) ? 'ring-2 ring-brand' : ''}`}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                toggle(row.setNum)
-              }}
+              className={`card space-y-2 p-2 ${
+                selection.isSelected(row.setNum) ? 'ring-2 ring-brand' : ''
+              }`}
             >
               <button
                 type="button"
                 className="block w-full text-left"
-                onClick={() => navigate(`/set/${encodeURIComponent(row.setNum)}`)}
+                // The shared screen decides what a tap means. This tile used to decide for itself
+                // and always opened the minifig, so selection mode did nothing here.
+                onClick={() => selection.activate(row)}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  selection.openMenu(row)
+                }}
+                aria-pressed={selection.selecting ? selection.isSelected(row.setNum) : undefined}
               >
-                {/* Fixed box, as on the detail screen: the grid must not reflow as images land.
-                    Desaturated when the minifig isn't owned — while browsing the whole catalogue
-                    that is the only thing telling "mine" from "exists", as on iOS. */}
-                <div
-                  className={`flex h-28 items-center justify-center overflow-hidden rounded-lg bg-white ${
-                    row.isInCollection ? '' : 'opacity-60 grayscale'
-                  }`}
-                >
-                  {row.setImgUrl ? (
-                    <img
-                      src={imageUrl(row.setImgUrl)}
-                      alt={row.name}
-                      loading="lazy"
-                      className="h-full w-full object-contain p-1"
-                    />
-                  ) : (
-                    <Icon name="user" className="h-8 w-8 text-ink-faint" />
-                  )}
-                </div>
+                <MinifigTile row={row} />
                 <div className="mt-2 space-y-0.5">
-                  <p className="truncate text-[15px] font-semibold text-ink" title={row.name}>
+                  <p className="truncate text-[13px] font-semibold text-ink" title={row.name}>
                     {row.name}
                   </p>
-                  <p className="text-[13px] text-ink-faint">
+                  <p className="truncate text-[11px] text-ink-faint">
                     {row.setNum}
                     {row.quantity > 1 ? ` · ×${row.quantity}` : ''}
                   </p>
                   {row.resolvedPrice !== null && (
-                    <p className="text-[15px] font-bold text-ink">{formatEUR(row.resolvedPrice)}</p>
+                    <p className="text-[13px] font-bold text-ink">{formatEUR(row.resolvedPrice)}</p>
                   )}
                 </div>
               </button>
@@ -280,7 +291,7 @@ export default function MinifigsPage() {
       )}
       emptyState={
         <EmptyState
-          icon={<Icon name="user" className="h-9 w-9" />}
+          icon={<Icon name="minifig" className="h-9 w-9" />}
           title="Aucune minifig"
           message="Aucun set de votre collection ne contient de minifig répertoriée."
         />

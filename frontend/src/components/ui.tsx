@@ -6,7 +6,7 @@
  * one slightly differently.
  */
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { imageUrl } from '../api/client'
@@ -206,12 +206,22 @@ export function SetThumbnail({
   alt: string
   size?: 'sm' | 'md' | 'lg'
 }) {
+  // Rebrickable serves plenty of URLs that 404, and a failed <img> falls back to the browser's own
+  // torn-page glyph — which looks like the app is broken rather than the artwork missing. `onError`
+  // is the only signal a load failure gives.
+  const [failed, setFailed] = useState(false)
   const dimensions = { sm: 'h-12 w-12', md: 'h-[60px] w-[60px]', lg: 'h-24 w-24' }[size]
   const src = imageUrl(url)
   return (
     <div className={`${dimensions} shrink-0 overflow-hidden rounded-xl bg-white flex items-center justify-center`}>
-      {src ? (
-        <img src={src} alt={alt} loading="lazy" className="h-full w-full object-contain p-0.5" />
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          className="h-full w-full object-contain p-0.5"
+          onError={() => setFailed(true)}
+        />
       ) : (
         <Icon name="brick" className="h-6 w-6 text-ink-faint" />
       )}
