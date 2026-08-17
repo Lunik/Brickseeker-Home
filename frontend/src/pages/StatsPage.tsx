@@ -334,12 +334,15 @@ export default function StatsPage() {
 /**
  * A theme name in the chart's left gutter, truncated with an ellipsis rather than left to run off
  * the edge of the gutter — SVG text has no `text-overflow`, so an over-long name simply spilled
- * out of the card ("Speed Champions" rendered as "eed Champions"). Fourteen characters is what
- * fits at this width, and it is enough to keep "Series 29 minifigures" apart from "Series 24".
+ * out of the card ("Speed Champions" rendered as "eed Champions").
+ *
+ * Twelve characters, not the ~15 the gutter looks wide enough for: the budget has to hold for the
+ * widest glyphs, and "Speed Champion…" still overflowed where "Series 29 Mini…" fitted. It stays
+ * long enough to keep "Series 29 minifigures" apart from "Series 24 minifigures".
  */
 function ThemeTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
   const full = String(payload?.value ?? '')
-  const label = full.length > 14 ? `${full.slice(0, 14)}…` : full
+  const label = full.length > 12 ? `${full.slice(0, 12)}…` : full
   return (
     <text
       x={x}
