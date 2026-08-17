@@ -81,6 +81,9 @@ export default function SettingsPage() {
     tokenSecret: '',
   })
   const [confirmClear, setConfirmClear] = useState(false)
+  const [pendingDestructive, setPendingDestructive] = useState<
+    { title: string; message: string; label: string; run: () => void } | null
+  >(null)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   const catalog = useQuery({
@@ -215,8 +218,8 @@ export default function SettingsPage() {
 
         <div className="space-y-2 border-t border-line pt-3">
           <p className="text-xs text-ink-faint">
-            Lier ton compte permet de synchroniser ta collection. Ton mot de passe sert une seule
-            fois à obtenir un jeton et n'est jamais enregistré.
+            Lier votre compte permet de synchroniser votre collection. Votre mot de passe sert une
+            seule fois à obtenir un jeton et n'est jamais enregistré.
           </p>
           <input
             className="input"
@@ -249,7 +252,15 @@ export default function SettingsPage() {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={run(() => api.post('/settings/unlink/rebrickable'), 'Compte délié.')}
+                onClick={() =>
+                  setPendingDestructive({
+                    title: 'Délier le compte Rebrickable ?',
+                    message:
+                      'La synchronisation de la collection sera interrompue. Votre clé API est conservée.',
+                    label: 'Délier',
+                    run: run(() => api.post('/settings/unlink/rebrickable'), 'Compte délié.'),
+                  })
+                }
               >
                 Délier
               </button>
@@ -301,7 +312,14 @@ export default function SettingsPage() {
             <button
               type="button"
               className="btn-secondary"
-              onClick={run(() => api.post('/settings/unlink/brickset'), 'Compte Brickset délié.')}
+              onClick={() =>
+                setPendingDestructive({
+                  title: 'Délier le compte Brickset ?',
+                  message: 'La liste cadeaux ne sera plus synchronisée. Votre clé API est conservée.',
+                  label: 'Délier',
+                  run: run(() => api.post('/settings/unlink/brickset'), 'Compte Brickset délié.'),
+                })
+              }
             >
               Délier
             </button>
@@ -314,7 +332,7 @@ export default function SettingsPage() {
           {credentials.bricklink ? 'Identifiants configurés' : 'Non configuré'}
         </Badge>
         <p className="text-xs text-ink-faint">
-          Génère les 4 valeurs OAuth sur{' '}
+          Générez les 4 valeurs OAuth sur{' '}
           <a
             className="underline"
             href="https://www.bricklink.com/v3/api.page"
@@ -361,7 +379,17 @@ export default function SettingsPage() {
             <button
               type="button"
               className="btn-secondary"
-              onClick={run(() => api.delete('/settings/credentials/bricklink'), 'Identifiants supprimés.')}
+              onClick={() =>
+                setPendingDestructive({
+                  title: 'Supprimer les identifiants BrickLink ?',
+                  message: 'Les prix BrickLink ne seront plus récupérés tant qu\'ils ne sont pas ressaisis.',
+                  label: 'Supprimer',
+                  run: run(
+                    () => api.delete('/settings/credentials/bricklink'),
+                    'Identifiants supprimés.',
+                  ),
+                })
+              }
             >
               Supprimer
             </button>
@@ -429,7 +457,7 @@ export default function SettingsPage() {
         <p className="text-xs text-ink-faint">
           La mise à jour traite les sets un par un, avec une pause entre chacun. C'est lent
           volontairement : enchaîner des dizaines de navigateurs en parallèle sur les mêmes sites
-          ferait passer ton IP pour du trafic abusif.
+          ferait passer votre IP pour du trafic abusif.
         </p>
         {batch.data?.isRunning ? (
           <div className="space-y-2">
@@ -507,7 +535,7 @@ export default function SettingsPage() {
             Masquer les non-sets
             <span className="block text-xs text-ink-faint">
               Produits dérivés, livres et exclusivités internes sont masqués des écrans qui
-              *suggèrent* des sets. Rien de ce que tu possèdes ne disparaît.
+              *suggèrent* des sets. Rien de ce que vous possédez ne disparaît.
             </span>
           </span>
           <input
@@ -524,7 +552,7 @@ export default function SettingsPage() {
             Enregistrer où j'ai scanné
             <span className="block text-xs text-ink-faint">
               Désactivé par défaut. La position n'est enregistrée que pour les sets absents de ta
-              collection, et elle est effacée dès que tu ajoutes le set — son seul intérêt est
+              collection, et elle est effacée dès que vous ajoutez le set — son seul intérêt est
               « dans quel magasin l'ai-je vu ».
             </span>
           </span>
@@ -542,25 +570,38 @@ export default function SettingsPage() {
         </button>
         <p className="text-xs text-ink-faint">
           Supprime les sets en cache, les listes, les prix courants et les ventes BrickLink.
-          <strong className="text-ink"> Conserve</strong> tes scans, tes prix payés, tes alertes,
-          l'historique des prix et la valeur quotidienne de ta collection — rien de tout cela ne se
+          <strong className="text-ink"> Conserve</strong> vos scans, vos prix payés, vos alertes,
+          l'historique des prix et la valeur quotidienne de votre collection — rien de tout cela ne se
           re-télécharge.
         </p>
       </Section>
 
       <Section title="Confidentialité">
         <ul className="space-y-1.5 text-xs text-ink-muted">
-          <li>• Tes identifiants tiers sont chiffrés dans la base : le fichier seul ne suffit pas à les lire.</li>
-          <li>• Tes mots de passe Rebrickable et Brickset ne sont jamais enregistrés.</li>
-          <li>• Aucune analytique, aucun envoi vers un service que tu n'as pas configuré.</li>
-          <li>• Tout reste dans ton conteneur, sur ta machine.</li>
+          <li>• Vos identifiants tiers sont chiffrés dans la base : le fichier seul ne suffit pas à les lire.</li>
+          <li>• Vos mots de passe Rebrickable et Brickset ne sont jamais enregistrés.</li>
+          <li>• Aucune analytique, aucun envoi vers un service que vous n'avez pas configuré.</li>
+          <li>• Tout reste dans votre conteneur, sur votre machine.</li>
         </ul>
       </Section>
 
       <ConfirmDialog
+        open={pendingDestructive !== null}
+        title={pendingDestructive?.title ?? ''}
+        message={pendingDestructive?.message}
+        confirmLabel={pendingDestructive?.label}
+        destructive
+        onConfirm={() => {
+          pendingDestructive?.run()
+          setPendingDestructive(null)
+        }}
+        onCancel={() => setPendingDestructive(null)}
+      />
+
+      <ConfirmDialog
         open={confirmClear}
         title="Vider le cache"
-        message="Les sets en cache, listes, prix courants et ventes BrickLink seront supprimés. Tes scans, prix payés, alertes et historiques sont conservés."
+        message="Les sets en cache, listes, prix courants et ventes BrickLink seront supprimés. Vos scans, prix payés, alertes et historiques sont conservés."
         confirmLabel="Vider"
         destructive
         onConfirm={() => clearCache.mutate()}

@@ -7,23 +7,23 @@ import { useSettings } from '../lib/settings-context'
 const STEPS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: 'camera',
-    title: 'Scanne un set',
-    body: "Vise le numéro imprimé sur la boîte. Tu peux aussi le taper à la main ou importer une photo — la caméra n'est jamais un passage obligé.",
+    title: 'Scannez un set',
+    body: "Visez le numéro imprimé sur la boîte. Vous pouvez aussi le taper à la main ou importer une photo — la caméra n'est jamais un passage obligé.",
   },
   {
     icon: 'box',
-    title: 'Retrouve ta collection',
-    body: "Lie ton compte Rebrickable pour savoir si un set est déjà chez toi, dans quelle liste, et combien tu en as.",
+    title: 'Retrouvez votre collection',
+    body: "Liez votre compte Rebrickable pour savoir si un set est déjà chez vous, dans quelle liste, et combien vous en avez.",
   },
   {
     icon: 'tag',
-    title: 'Compare les prix',
+    title: 'Comparez les prix',
     body: "lego.com, BrickLink neuf et occasion, Amazon et Cdiscount côte à côte, avec l'écart face au prix officiel.",
   },
   {
     icon: 'settings',
-    title: 'Configure tes accès',
-    body: "Une clé API Rebrickable suffit pour commencer. Brickset (liste cadeaux) et BrickLink (cote) sont optionnels et s'ajoutent quand tu veux.",
+    title: 'Configurez vos accès',
+    body: "Une clé API Rebrickable suffit pour commencer. Brickset (liste cadeaux) et BrickLink (cote) sont optionnels et s'ajoutent quand vous voulez.",
   },
 ]
 

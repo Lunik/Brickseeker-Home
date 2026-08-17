@@ -67,22 +67,8 @@ async def sync_wishlist(session: SessionDep) -> dict[str, int]:
     return {"count": len(wanted), "enriched": enriched}
 
 
-@router.post("/{set_num}", response_model=OkOut)
-async def add_to_wishlist(set_num: str, session: SessionDep) -> OkOut:
-    client = await brickset.client_for(session)
-    await client.add_to_wishlist(set_num)
-    await collection_repo.set_wishlist_status(session, set_num, True)
-    return OkOut()
-
-
-@router.delete("/{set_num}", response_model=OkOut)
-async def remove_from_wishlist(set_num: str, session: SessionDep) -> OkOut:
-    client = await brickset.client_for(session)
-    await client.remove_from_wishlist(set_num)
-    await collection_repo.set_wishlist_status(session, set_num, False)
-    return OkOut()
-
-
+# Above `/{set_num}` for the same reason as `/collection/bulk`: otherwise an import POST is
+# dispatched to `add_to_wishlist(set_num="import")`.
 @router.post("/import")
 async def import_wishlist(
     background: BackgroundTasks, file: UploadFile = File(...)
@@ -100,6 +86,22 @@ async def import_wishlist(
 
     background.add_task(run)
     return {"started": True, "total": len(wishlist_sync.parse_set_numbers(payload))}
+
+
+@router.post("/{set_num}", response_model=OkOut)
+async def add_to_wishlist(set_num: str, session: SessionDep) -> OkOut:
+    client = await brickset.client_for(session)
+    await client.add_to_wishlist(set_num)
+    await collection_repo.set_wishlist_status(session, set_num, True)
+    return OkOut()
+
+
+@router.delete("/{set_num}", response_model=OkOut)
+async def remove_from_wishlist(set_num: str, session: SessionDep) -> OkOut:
+    client = await brickset.client_for(session)
+    await client.remove_from_wishlist(set_num)
+    await collection_repo.set_wishlist_status(session, set_num, False)
+    return OkOut()
 
 
 @router.get("/import/status")

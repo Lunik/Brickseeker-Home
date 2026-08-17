@@ -31,19 +31,38 @@ export default function CollectionPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection'] }),
   })
 
+  interface BulkResult {
+    succeeded: string[]
+    failed: { setNum: string; error: string }[]
+  }
+
+  /** A 200 with a non-empty `failed` list is a partial failure, not a success. */
+  function assertNoFailures(result: BulkResult) {
+    if (result.failed?.length) {
+      throw new Error(
+        `${result.failed.length} set(s) n'ont pas pu être traités. Vérifiez votre connexion.`,
+      )
+    }
+  }
+
   async function bulkRemove(setNums: string[]) {
-    await api.post('/collection/bulk', { setNums, action: 'remove' })
+    const result = await api.post<BulkResult>('/collection/bulk', { setNums, action: 'remove' })
     await queryClient.invalidateQueries()
+    assertNoFailures(result)
   }
 
   async function bulkMove(setNums: string[], listId: number) {
-    await api.post('/collection/bulk', { setNums, action: 'move', listId })
+    const result = await api.post<BulkResult>('/collection/bulk', { setNums, action: 'move', listId })
     await queryClient.invalidateQueries()
+    assertNoFailures(result)
   }
 
   async function refreshPrices(setNums: string[]) {
-    await api.post('/prices/batch/start', { setNums })
+    const { status } = await api.post<{ status: string }>('/prices/batch/start', { setNums })
     await queryClient.invalidateQueries({ queryKey: ['priceBatch'] })
+    if (status === 'busy') {
+      throw new Error('Une actualisation des prix est déjà en cours — réessayez ensuite.')
+    }
   }
 
   const actions: BulkAction[] = [
@@ -58,7 +77,7 @@ export default function CollectionPage() {
       label: 'Retirer de la collection',
       destructive: true,
       confirm: (count) =>
-        `${count} set(s) seront retirés de ta collection Rebrickable. Les scans, prix payés et alertes sont conservés.`,
+        `${count} set(s) seront retirés de votre collection Rebrickable. Les scans, prix payés et alertes sont conservés.`,
       run: bulkRemove,
     },
   ]
@@ -85,33 +104,42 @@ export default function CollectionPage() {
         }
         onRefresh={() => (data?.isLinked ? sync.mutate() : refetch())}
         isRefreshing={sync.isPending || isFetching}
+        navActions={
+          lists.length > 0 ? (
+            <button
+              type="button"
+              className="nav-circle"
+              onClick={() => setShowLists(true)}
+              aria-label="Types de listes (neuf/occasion)"
+            >
+              <Icon name="tag" />
+            </button>
+          ) : undefined
+        }
         header={
-          <div className="flex flex-wrap items-center gap-2 text-xs text-ink-faint">
-            {data?.lastSyncedAt && <span>Synchronisé {formatDateTime(data.lastSyncedAt)}</span>}
-            {lists.length > 0 && (
-              <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => setShowLists(true)}>
-                Conditions des listes
-              </button>
-            )}
-          </div>
+          data?.lastSyncedAt ? (
+            <p className="px-1 text-[13px] text-ink-faint">
+              Synchronisé {formatDateTime(data.lastSyncedAt)}
+            </p>
+          ) : undefined
         }
         emptyState={
           !data?.isLinked ? (
             <EmptyState
               icon={<Icon name="link" className="h-9 w-9" />}
               title="Compte Rebrickable non lié"
-              message="Lie ton compte dans les Réglages pour retrouver ta collection ici."
+              message="Liez votre compte dans les Paramètres pour retrouver votre collection ici."
               action={
                 <button type="button" className="btn-primary" onClick={() => navigate('/settings')}>
-                  Ouvrir les Réglages
+                  Ouvrir les Paramètres
                 </button>
               }
             />
           ) : (
             <EmptyState
               icon={<Icon name="box" className="h-9 w-9" />}
-              title="Aucun set dans ta collection"
-              message="Synchronise pour récupérer ce que tu possèdes sur Rebrickable."
+              title="Aucun set dans votre collection"
+              message="Synchronisez pour récupérer ce que vous possédez sur Rebrickable."
               action={
                 <button type="button" className="btn-primary" onClick={() => sync.mutate()}>
                   Synchroniser

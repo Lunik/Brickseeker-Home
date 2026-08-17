@@ -142,6 +142,57 @@ async def update_list_condition(list_id: int, payload: ListConditionIn, session:
     raise ApiError("Liste introuvable", 404)
 
 
+# Declared before the `/{set_num}` routes: Starlette matches in declaration order with no
+# preference for literal paths, so a `/bulk` declared after them is dispatched to
+# `add_to_collection(set_num="bulk")` — every bulk action then silently did the wrong thing.
+@router.post("/bulk")
+async def bulk_action(payload: BulkIn, session: SessionDep) -> dict[str, object]:
+    """Bulk work reuses the single-set paths so the two can't drift. A per-set failure is reported
+    rather than aborting the batch — a network blip on set 40 of 60 shouldn't undo the first 39."""
+    client = await rebrickable.client_for(session)
+    succeeded: list[str] = []
+    failed: list[dict[str, str]] = []
+
+    for set_num in payload.set_nums:
+        try:
+            if payload.action == "remove":
+                await client.remove_set_from_collection(set_num)
+                await collection_repo.set_collection_status(
+                    session, set_num, is_in_collection=False, list_id=None, list_name=None
+                )
+            elif payload.action == "move":
+                if payload.list_id is None:
+                    raise ApiError("Choisis une liste de destination")
+                cached = await collection_repo.cached_set(session, set_num)
+                if cached and cached.current_list_id:
+                    await client.move_set_to_list(set_num, cached.current_list_id, payload.list_id)
+                else:
+                    await client.add_set_to_list(set_num, payload.list_id)
+                list_name = next(
+                    (
+                        row.name
+                        for row in await collection_repo.cached_set_lists(session)
+                        if row.list_id == payload.list_id
+                    ),
+                    None,
+                )
+                await collection_repo.set_collection_status(
+                    session,
+                    set_num,
+                    is_in_collection=True,
+                    list_id=payload.list_id,
+                    list_name=list_name,
+                )
+            else:
+                raise ApiError(f"Action inconnue : {payload.action}")
+        except ApiError as error:
+            failed.append({"setNum": set_num, "error": error.detail})
+        else:
+            succeeded.append(set_num)
+
+    return {"succeeded": succeeded, "failed": failed}
+
+
 @router.post("/{set_num}")
 async def add_to_collection(set_num: str, payload: AddToCollectionIn, session: SessionDep) -> dict:
     client = await rebrickable.client_for(session)
@@ -226,49 +277,3 @@ async def update_collection_entry(
     }
 
 
-@router.post("/bulk")
-async def bulk_action(payload: BulkIn, session: SessionDep) -> dict[str, object]:
-    """Bulk work reuses the single-set paths so the two can't drift. A per-set failure is reported
-    rather than aborting the batch — a network blip on set 40 of 60 shouldn't undo the first 39."""
-    client = await rebrickable.client_for(session)
-    succeeded: list[str] = []
-    failed: list[dict[str, str]] = []
-
-    for set_num in payload.set_nums:
-        try:
-            if payload.action == "remove":
-                await client.remove_set_from_collection(set_num)
-                await collection_repo.set_collection_status(
-                    session, set_num, is_in_collection=False, list_id=None, list_name=None
-                )
-            elif payload.action == "move":
-                if payload.list_id is None:
-                    raise ApiError("Choisis une liste de destination")
-                cached = await collection_repo.cached_set(session, set_num)
-                if cached and cached.current_list_id:
-                    await client.move_set_to_list(set_num, cached.current_list_id, payload.list_id)
-                else:
-                    await client.add_set_to_list(set_num, payload.list_id)
-                list_name = next(
-                    (
-                        row.name
-                        for row in await collection_repo.cached_set_lists(session)
-                        if row.list_id == payload.list_id
-                    ),
-                    None,
-                )
-                await collection_repo.set_collection_status(
-                    session,
-                    set_num,
-                    is_in_collection=True,
-                    list_id=payload.list_id,
-                    list_name=list_name,
-                )
-            else:
-                raise ApiError(f"Action inconnue : {payload.action}")
-        except ApiError as error:
-            failed.append({"setNum": set_num, "error": error.detail})
-        else:
-            succeeded.append(set_num)
-
-    return {"succeeded": succeeded, "failed": failed}

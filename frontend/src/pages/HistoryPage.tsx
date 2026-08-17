@@ -40,7 +40,7 @@ export default function HistoryPage() {
       // A set still owned only loses its "scanned" flag — say so, rather than implying the set is
       // deleted outright.
       confirm: (count) =>
-        `${count} set(s) quitteront l'historique. Ceux que tu possèdes restent dans ta collection.`,
+        `${count} set(s) quitteront l'historique. Ceux que vous possédez restent dans votre collection.`,
       run: async (setNums) => {
         await remove.mutateAsync(setNums)
       },
@@ -81,17 +81,21 @@ export default function HistoryPage() {
           state: { siblings: visible.map((item) => item.setNum) },
         })
       }
-      header={
-        <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => setShowMap(true)}>
-          <Icon name="map" className="mr-1 inline h-4 w-4 align-text-bottom" />
-          Voir la carte des scans
+      navActions={
+        <button
+          type="button"
+          className="nav-circle"
+          onClick={() => setShowMap(true)}
+          aria-label="Carte des scans"
+        >
+          <Icon name="map" />
         </button>
       }
       emptyState={
         <EmptyState
           icon={<Icon name="clock" className="h-9 w-9" />}
           title="Aucun scan pour l'instant"
-          message="Les sets que tu scannes apparaîtront ici, avec l'endroit où tu les as vus si tu actives la localisation."
+          message="Les sets que vous scannez apparaîtront ici, avec l'endroit où vous les avez vus si vous activez la localisation."
           action={
             <button type="button" className="btn-primary" onClick={() => navigate('/scan')}>
               Scanner un set

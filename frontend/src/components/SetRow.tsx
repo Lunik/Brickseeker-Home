@@ -63,7 +63,7 @@ export default function SetRow({
             </span>
           )}
           {row.isInWishlist && (
-            <Icon name="heart" filled className="h-3.5 w-3.5 text-pink-500" label="Dans ta liste cadeaux" />
+            <Icon name="heart" filled className="h-3.5 w-3.5 text-pink-500" label="Dans votre liste cadeaux" />
           )}
           {row.hasPriceAlert && (
             <Icon name="bell" filled className="h-3.5 w-3.5 text-[rgb(var(--warning))]" label="Alerte de prix active" />

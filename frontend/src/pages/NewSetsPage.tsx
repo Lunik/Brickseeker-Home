@@ -66,7 +66,7 @@ export default function NewSetsPage() {
         <EmptyState
           icon={<Icon name="sparkles" className="h-9 w-9" />}
           title="Catalogue non téléchargé"
-          message="Télécharge l'instantané du catalogue Rebrickable (~28 000 sets) pour parcourir les nouveautés et scanner même sans réseau."
+          message="Téléchargez le catalogue Rebrickable (~28 000 sets) pour découvrir les nouveautés. Peut aussi se faire depuis les Paramètres."
           action={
             downloading ? (
               <span className="flex items-center gap-2 text-sm text-ink-muted">

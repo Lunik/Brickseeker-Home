@@ -148,7 +148,7 @@ export default function HomePage() {
           </button>
         )}
         <NotificationsBell />
-        <Link to="/settings" className="nav-circle" aria-label="Réglages">
+        <Link to="/settings" className="nav-circle" aria-label="Paramètres">
           <Icon name="settings" className="h-6 w-6" />
         </Link>
       </div>

@@ -189,7 +189,9 @@ export default function SetListScreen({
       ) : error ? (
         <ErrorLabel message={error} />
       ) : visible.length === 0 ? (
-        (emptyState ?? (
+        // The caller's empty state answers "there is nothing here"; once a search or filter is
+        // active the honest answer is "nothing matches", with a way to clear it.
+        (rows.length > 0 || isActive || filter.search ? null : emptyState) ?? (
           <EmptyState
             icon={<Icon name="search" className="h-10 w-10" />}
             title={rows.length === 0 ? 'Rien à afficher' : 'Aucun résultat'}
@@ -204,7 +206,7 @@ export default function SetListScreen({
               ) : undefined
             }
           />
-        ))
+        )
       ) : renderItems ? (
         renderItems(visible)
       ) : (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, imageUrl, query } from '../api/client'
@@ -14,6 +15,7 @@ import { formatEUR } from '../lib/format'
  * doesn't apply to it.
  */
 export default function MinifigsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('name')
@@ -57,7 +59,7 @@ export default function MinifigsPage() {
         <EmptyState
           icon={<Icon name="user" className="h-9 w-9" />}
           title="Catalogue des minifigs non téléchargé"
-          message="La galerie croise le catalogue Rebrickable avec ta collection pour savoir quelles minifigs tu possèdes. Le téléchargement se fait une fois, puis tout est local."
+          message="La galerie croise le catalogue Rebrickable avec votre collection pour savoir quelles minifigs vous possédez. Le téléchargement se fait une fois, puis tout est local."
           action={
             downloading ? (
               <span className="flex items-center gap-2 text-sm text-ink-muted">
@@ -84,16 +86,16 @@ export default function MinifigsPage() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-ink">Mes minifigs</h1>
-        <span className="text-xs text-ink-faint">{totalOwned} exemplaire(s)</span>
-      </div>
+      <NavBar
+        title="Mes minifigs"
+        actions={<span className="px-1 text-[13px] text-ink-faint">{totalOwned} ex.</span>}
+      />
 
       <div className="flex gap-2">
         <input
           type="search"
           className="input flex-1"
-          placeholder="Rechercher une minifig…"
+          placeholder="Nom ou identifiant"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           aria-label="Rechercher"
@@ -142,7 +144,7 @@ export default function MinifigsPage() {
         <EmptyState
           icon={<Icon name="user" className="h-9 w-9" />}
           title="Aucune minifig"
-          message="Aucune minifig ne correspond, ou aucun set de ta collection n'en contient."
+          message="Aucune minifig ne correspond, ou aucun set de votre collection n'en contient."
         />
       ) : (
         <>
@@ -162,6 +164,11 @@ export default function MinifigsPage() {
                   })
                 }}
               >
+                <button
+                  type="button"
+                  className="block w-full text-left"
+                  onClick={() => navigate(`/set/${encodeURIComponent(minifig.figNum)}`)}
+                >
                 <div className="flex h-28 items-center justify-center rounded-lg bg-surface-sunken">
                   {minifig.imgUrl ? (
                     <img
@@ -186,6 +193,7 @@ export default function MinifigsPage() {
                     <p className="text-sm font-bold text-ink">{formatEUR(minifig.resolvedPrice)}</p>
                   )}
                 </div>
+                </button>
               </li>
             ))}
           </ul>

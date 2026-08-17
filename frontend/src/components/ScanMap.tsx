@@ -43,7 +43,7 @@ export default function ScanMap() {
       <EmptyState
         icon={<Icon name="map" className="h-9 w-9" />}
         title="Aucun scan localisé"
-        message="Active la localisation des scans dans les Réglages. La position n'est enregistrée que pour les sets absents de ta collection, et elle est effacée dès que tu les ajoutes."
+        message="Activez la localisation des scans dans les Paramètres. La position n'est enregistrée que pour les sets absents de votre collection, et elle est effacée dès que vous les ajoutez."
       />
     )
   }

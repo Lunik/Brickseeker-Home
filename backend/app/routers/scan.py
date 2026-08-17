@@ -17,6 +17,11 @@ class OcrOut(CamelModel):
     set_nums: list[str]
 
 
+#: Sources that count as a scan. `listReopen` is deliberately absent — reopening a row from a
+#: list is browsing, and it must not bump the set to the top of Historique.
+RECORDED_SOURCES = {"camera", "manualEntry", "photoImport"}
+
+
 class LookupIn(CamelModel):
     set_num: str
     #: camera | manualEntry | photoImport | listReopen — only "camera" records a ScanEvent.
@@ -39,15 +44,17 @@ async def run_ocr(file: UploadFile = File(...)) -> OcrOut:
 
 @router.post("/lookup", response_model=LookupOut)
 async def lookup(payload: LookupIn, session: SessionDep) -> LookupOut:
-    """Resolves a set number and, for a camera scan only, records the visit.
+    """Resolves a set number and records the visit for every deliberate lookup.
 
-    Manual entry, photo import and re-opening a row from Historique carry no "I was standing in a
-    shop" meaning, so they deliberately record nothing.
+    A camera scan, a typed number and an imported photo all count as "I looked this set up" and all
+    land in Historique (iOS #133). Only re-opening a row from a list is exempt — that is browsing,
+    not scanning. The *location* is narrower still: only a camera scan carries the "I was standing
+    in a shop" meaning, so only it stores coordinates.
     """
     resolved = await _resolve(session, payload.set_num.strip())
 
     event_id: int | None = None
-    if payload.source == "camera" and resolved.set is not None:
+    if payload.source in RECORDED_SOURCES and resolved.set is not None:
         set_num = resolved.set.set_num
         # Cache first: a scan event with no cached row would leave History showing a bare number.
         cached = await collection_repo.cached_set(session, set_num)
@@ -84,7 +91,8 @@ async def lookup(payload: LookupIn, session: SessionDep) -> LookupOut:
             session, set_num, price_seen_eur=payload.price_seen_eur
         )
         event_id = event.id
-        if payload.latitude is not None and payload.longitude is not None:
+        # Location only for a real camera scan: a typed number says nothing about where you were.
+        if payload.source == "camera" and payload.latitude is not None and payload.longitude is not None:
             await collection_repo.attach_location(
                 session, event.id, payload.latitude, payload.longitude, None
             )

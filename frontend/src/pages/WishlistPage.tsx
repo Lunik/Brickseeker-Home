@@ -69,7 +69,7 @@ export default function WishlistPage() {
       key: 'remove',
       label: 'Retirer de la liste',
       destructive: true,
-      confirm: (count) => `${count} set(s) seront retirés de ta liste cadeaux Brickset.`,
+      confirm: (count) => `${count} set(s) seront retirés de votre liste cadeaux Brickset.`,
       run: async (setNums) => {
         await Promise.all(setNums.map((setNum) => api.delete(`/wishlist/${encodeURIComponent(setNum)}`)))
         await queryClient.invalidateQueries({ queryKey: ['wishlist'] })
@@ -94,11 +94,15 @@ export default function WishlistPage() {
         }
         onRefresh={() => sync.mutate()}
         isRefreshing={sync.isPending}
-        header={
+        navActions={
           data?.isLinked ? (
-            <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => setShowImport(true)}>
-              <Icon name="upload" className="mr-1 inline h-4 w-4 align-text-bottom" />
-              Importer depuis un CSV Rebrickable
+            <button
+              type="button"
+              className="nav-circle"
+              onClick={() => setShowImport(true)}
+              aria-label="Importer depuis Rebrickable"
+            >
+              <Icon name="upload" />
             </button>
           ) : undefined
         }
@@ -107,10 +111,10 @@ export default function WishlistPage() {
             <EmptyState
               icon={<Icon name="link" className="h-9 w-9" />}
               title="Compte Brickset non lié"
-              message="La liste cadeaux est stockée sur Brickset — un compte séparé de Rebrickable. Lie-le dans les Réglages."
+              message="La liste cadeaux est stockée sur Brickset — un compte séparé de Rebrickable. Liez-le dans les Paramètres."
               action={
                 <button type="button" className="btn-primary" onClick={() => navigate('/settings')}>
-                  Ouvrir les Réglages
+                  Ouvrir les Paramètres
                 </button>
               }
             />
@@ -118,7 +122,7 @@ export default function WishlistPage() {
             <EmptyState
               icon={<Icon name="gift" className="h-9 w-9" />}
               title="Liste cadeaux vide"
-              message="Marque des sets comme « voulus » depuis leur fiche, ou importe une liste Rebrickable."
+              message="Ajoutez un set à votre liste cadeaux depuis sa fiche, ou importez le CSV d'une liste Rebrickable."
               action={
                 <button type="button" className="btn-primary" onClick={() => setShowImport(true)}>
                   Importer un CSV
@@ -138,9 +142,9 @@ export default function WishlistPage() {
       <Sheet open={showImport} title="Importer une liste" onClose={() => setShowImport(false)}>
         <div className="space-y-4">
           <p className="text-sm text-ink-muted">
-            Exporte une liste personnalisée depuis Rebrickable au format CSV, puis dépose-la ici.
-            Chaque set est ajouté à ta liste « wanted » Brickset, un par un — compte environ une
-            seconde par set.
+            Exportez une liste personnalisée depuis Rebrickable au format CSV, puis déposez-la ici.
+            Chaque set est ajouté à votre liste « wanted » Brickset, un par un — comptez environ
+            une seconde par set.
           </p>
 
           <input

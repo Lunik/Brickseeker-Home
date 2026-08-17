@@ -11,7 +11,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 
-from ..deps import ApiError, SessionDep, require_auth
+from ..deps import ApiError, SessionDep, not_found, require_auth
 from ..schemas import (
     CamelModel,
     LegoSetOut,
@@ -174,14 +174,20 @@ async def set_detail(set_num: str, session: SessionDep) -> SetDetailOut:
     if cached is not None:
         lego_set = collection_repo.to_lego_set(cached)
     else:
-        try:
-            client = await rebrickable.client_for(session)
-            lego_set = await client.fetch_set(set_num)
-        except ApiError:
-            lego_set = await catalog.lookup_catalog_set(session, set_num)
-            is_offline = lego_set is not None
+        if is_minifig(set_num):
+            # Rebrickable has no `/lego/sets/fig-…/`, so a minifig only ever resolves locally.
+            lego_set = await catalog.lookup_catalog_minifig(session, set_num)
             if lego_set is None:
-                raise
+                raise not_found("Minifig introuvable — téléchargez le catalogue des minifigs.")
+        else:
+            try:
+                client = await rebrickable.client_for(session)
+                lego_set = await client.fetch_set(set_num)
+            except ApiError:
+                lego_set = await catalog.lookup_catalog_set(session, set_num)
+                is_offline = lego_set is not None
+                if lego_set is None:
+                    raise
         # Cache the row so prices, alerts and scans have something to attach to. Not marked as
         # scanned: opening a set is not scanning it.
         cached = await collection_repo.cache_set(

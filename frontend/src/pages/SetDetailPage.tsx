@@ -62,7 +62,7 @@ export default function SetDetailPage() {
   const siblings = (location.state as { siblings?: string[] } | null)?.siblings ?? []
   const index = siblings.indexOf(setNum)
 
-  const [showAlertEditor, setShowAlertEditor] = useState(false)
+  const [alertCondition, setAlertCondition] = useState<'newSet' | 'used' | null>(null)
   const [showPaidPrice, setShowPaidPrice] = useState(false)
   const [showScanPrice, setShowScanPrice] = useState(false)
   const [showLists, setShowLists] = useState(false)
@@ -119,7 +119,12 @@ export default function SetDetailPage() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
   const addToCollection = useMutation({
-    mutationFn: (listId: number) => api.post(`/collection/${encodeURIComponent(setNum)}`, { listId }),
+    // Adding and moving are different endpoints: POST only adds, so using it on a set already in
+    // a list left the set in both. PATCH performs the delete-then-add Rebrickable requires.
+    mutationFn: (listId: number) =>
+      data?.isInCollection
+        ? api.patch(`/collection/${encodeURIComponent(setNum)}`, { listId })
+        : api.post(`/collection/${encodeURIComponent(setNum)}`, { listId }),
     onSuccess: () => {
       setShowLists(false)
       return queryClient.invalidateQueries()
@@ -277,7 +282,7 @@ export default function SetDetailPage() {
             <Icon name="heart" filled={data.isInWishlist} className="h-5 w-5" />
             {data.isInWishlist ? 'Retirer de votre liste cadeaux' : 'Ajouter à votre liste cadeaux'}
           </button>
-          <button type="button" className="btn-ghost w-full" onClick={() => setShowAlertEditor(true)}>
+          <button type="button" className="btn-ghost w-full" onClick={() => setAlertCondition('newSet')}>
             <Icon name="bell" className="h-5 w-5" />
             Alerte de prix
           </button>
@@ -324,7 +329,11 @@ export default function SetDetailPage() {
                   </span>
                 )}
               </span>
-              <button type="button" className="btn-ghost px-2 py-1 text-xs" onClick={() => setShowAlertEditor(true)}>
+              <button
+                type="button"
+                className="btn-ghost px-2 py-1 text-xs"
+                onClick={() => setAlertCondition(condition)}
+              >
                 {alert ? 'Modifier' : 'Créer'}
               </button>
             </div>
@@ -431,7 +440,9 @@ export default function SetDetailPage() {
 
       <Sheet open={showLists} title="Choisir une liste" onClose={() => setShowLists(false)}>
         <div className="space-y-2">
-          {(collection.data?.lists ?? []).map((list) => (
+          {(collection.data?.lists ?? [])
+            .filter((list) => list.id !== data.currentListId)
+            .map((list) => (
             <button
               key={list.id}
               type="button"
@@ -443,7 +454,7 @@ export default function SetDetailPage() {
           ))}
           {!collection.data?.lists.length && (
             <p className="text-sm text-ink-muted">
-              Aucune liste Rebrickable. Synchronise ta collection ou crée une liste sur rebrickable.com.
+              Aucune liste Rebrickable. Synchronisez votre collection ou créez une liste sur rebrickable.com.
             </p>
           )}
         </div>
@@ -452,8 +463,8 @@ export default function SetDetailPage() {
       <Sheet open={showPaidPrice} title="Prix payé" onClose={() => setShowPaidPrice(false)}>
         <div className="space-y-3">
           <p className="text-sm text-ink-muted">
-            Le prix que tu as réellement payé sert de référence à l'évolution. Il est conservé même
-            si tu vides le cache.
+            Le prix que vous avez réellement payé sert de référence à l'évolution. Il est conservé même
+            si vous videz le cache.
           </p>
           <input
             className="input"
@@ -481,11 +492,15 @@ export default function SetDetailPage() {
       />
 
       <PriceAlertEditor
-        open={showAlertEditor}
-        onClose={() => setShowAlertEditor(false)}
+        // Keyed on the condition so the editor remounts with that condition's own alert — without
+        // it, opening "occasion" showed the "neuf" threshold and saving wrote it to the wrong one.
+        key={alertCondition ?? 'none'}
+        open={alertCondition !== null}
+        onClose={() => setAlertCondition(null)}
         setNum={setNum}
         setName={data.set.name}
-        existing={data.alerts[0] ?? null}
+        condition={alertCondition ?? 'newSet'}
+        existing={data.alerts.find((item) => item.condition === alertCondition) ?? null}
         referenceHint={
           data.storePriceEur
             ? { amount: data.storePriceEur, sourceName: 'lego.com (officiel)' }
@@ -498,7 +513,7 @@ export default function SetDetailPage() {
       <ConfirmDialog
         open={confirmRemove}
         title="Retirer de la collection"
-        message="Le set sera retiré de ta collection Rebrickable. Les scans, le prix payé et les alertes sont conservés."
+        message="Le set sera retiré de votre collection Rebrickable. Les scans, le prix payé et les alertes sont conservés."
         confirmLabel="Retirer"
         destructive
         onConfirm={() => {

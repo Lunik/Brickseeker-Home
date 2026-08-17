@@ -4,6 +4,20 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { BulkAction } from '../components/SetListScreen'
 
+interface BulkResult {
+  succeeded: string[]
+  failed: { setNum: string; error: string }[]
+}
+
+/** The endpoint answers 200 with a per-set breakdown; a partial failure must not read as success. */
+function reportFailures(result: BulkResult): void {
+  if (result.failed?.length) {
+    throw new Error(
+      `${result.failed.length} set(s) n'ont pas pu être traités. Vérifiez votre connexion.`,
+    )
+  }
+}
+
 /**
  * The bulk actions shared by every list screen.
  *
@@ -33,8 +47,13 @@ export function useSetActions() {
     key: 'prices',
     label: 'Actualiser les prix',
     run: async (setNums) => {
-      await api.post('/prices/batch/start', { setNums })
+      // The updater refuses when a run is already in flight; reporting that as success left the
+      // user believing a refresh had been queued when nothing had.
+      const { status } = await api.post<{ status: string }>('/prices/batch/start', { setNums })
       await queryClient.invalidateQueries({ queryKey: ['priceBatch'] })
+      if (status === 'busy') {
+        throw new Error('Une actualisation des prix est déjà en cours — réessayez ensuite.')
+      }
     },
   }
 
@@ -44,8 +63,9 @@ export function useSetActions() {
     run: async (setNums) => {
       const listId = await askForList()
       if (listId === null) return
-      await api.post('/collection/bulk', { setNums, action: 'move', listId })
+      const result = await api.post<BulkResult>('/collection/bulk', { setNums, action: 'move', listId })
       await queryClient.invalidateQueries()
+      reportFailures(result)
     },
   }
 

@@ -188,7 +188,7 @@ export default function ScannerPage() {
         ) : candidate ? (
           <p className="text-sm font-semibold text-green-300">Numéro détecté : {candidate}</p>
         ) : (
-          <p className="text-sm text-white/80">Vise le numéro imprimé sur la boîte</p>
+          <p className="text-sm text-white/80">Visez le numéro imprimé sur la boîte</p>
         )}
         {message && <p className="text-sm font-semibold text-amber-300">{message}</p>}
 
@@ -213,7 +213,7 @@ export default function ScannerPage() {
             Saisie manuelle
           </button>
           <button type="button" className="btn-secondary" onClick={() => navigate('/settings')}>
-            Réglages
+            Paramètres
           </button>
         </div>
       </div>

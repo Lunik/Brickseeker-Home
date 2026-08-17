@@ -815,6 +815,27 @@ async def _themes(session: AsyncSession) -> _ThemeCache:
     return cache
 
 
+async def lookup_catalog_minifig(session: AsyncSession, fig_num: str) -> LegoSet | None:
+    """A minifig from the downloaded catalogue, shaped as a `LegoSet`.
+
+    `GET /lego/sets/fig-…/` does not exist on Rebrickable, so a minifig opened from a gallery has
+    no live lookup to fall back on — without this it 404s. Year and theme come from the first
+    containing set, which is how the catalogue join derives them in the first place.
+    """
+    row = await session.get(CatalogMinifig, fig_num)
+    if row is None:
+        return None
+    return LegoSet(
+        set_num=row.fig_num,
+        name=row.name,
+        year=row.year or 0,
+        theme_id=row.theme_id or 0,
+        num_parts=row.num_parts,
+        set_img_url=row.img_url,
+        set_url=None,
+    )
+
+
 async def theme_name(session: AsyncSession, theme_id: int) -> str:
     """The single definition of the "no table yet" fallback — it used to exist at four call sites."""
     return (await _themes(session)).names.get(theme_id) or f"Thème #{theme_id}"

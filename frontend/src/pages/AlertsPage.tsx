@@ -40,7 +40,7 @@ export default function AlertsPage() {
         <EmptyState
           icon={<Icon name="bell" className="h-9 w-9" />}
           title="Aucune alerte"
-          message="Ouvre la fiche d'un set et crée une alerte pour être prévenu quand son prix descend."
+          message="Ouvrez la fiche d'un set et touchez « Alerte de prix » pour être prévenu quand il descend sous un seuil."
           action={
             <button type="button" className="btn-primary" onClick={() => navigate('/collection')}>
               Parcourir ma collection
@@ -122,8 +122,8 @@ export default function AlertsPage() {
       <p className="text-xs text-ink-faint">
         Le rafraîchissement en arrière-plan ne peut interroger que BrickLink : une alerte
         « occasion » est entièrement surveillée, une alerte « neuf » l'est jusqu'à BrickLink neuf.
-        Les autres sources (lego.com, Amazon, Cdiscount) sont relevées quand tu ouvres la fiche du
-        set ou lances une mise à jour des prix.
+        Les autres sources (lego.com, Amazon, Cdiscount) sont relevées quand vous ouvrez la fiche du
+        set ou lancez une mise à jour des prix.
       </p>
     </div>
   )

@@ -47,7 +47,7 @@ export function useCamera(enabled: boolean): CameraHandle {
     async function start() {
       if (!navigator.mediaDevices?.getUserMedia) {
         setError(
-          "Ce navigateur ne donne pas accès à la caméra. Utilise la saisie manuelle ou l'import de photo.",
+          "Ce navigateur ne donne pas accès à la caméra. Utilisez la saisie manuelle ou l'import de photo.",
         )
         return
       }
@@ -76,7 +76,7 @@ export function useCamera(enabled: boolean): CameraHandle {
         const name = (caught as DOMException)?.name
         setError(
           name === 'NotAllowedError'
-            ? "Accès à la caméra refusé. Autorise-le dans ton navigateur, ou utilise la saisie manuelle."
+            ? "Accès à la caméra refusé. Autorisez-le dans votre navigateur, ou utilisez la saisie manuelle."
             : name === 'NotFoundError'
               ? "Aucune caméra détectée sur cet appareil."
               : // getUserMedia is https-only outside localhost, and that is by far the most common

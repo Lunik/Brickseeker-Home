@@ -11,6 +11,8 @@ interface PriceAlertEditorProps {
   onClose: () => void
   setNum: string
   setName: string
+  /** Which condition is being edited — the two alerts are independent. */
+  condition: ListCondition
   existing?: PriceAlert | null
   /** Only used to preview the resulting amount while typing a percentage; the authoritative
    *  reference is resolved and frozen server-side at save time. */
@@ -22,11 +24,12 @@ export default function PriceAlertEditor({
   onClose,
   setNum,
   setName,
+  condition: initialCondition,
   existing,
   referenceHint,
 }: PriceAlertEditorProps) {
   const queryClient = useQueryClient()
-  const [condition, setCondition] = useState<ListCondition>(existing?.condition ?? 'newSet')
+  const [condition, setCondition] = useState<ListCondition>(existing?.condition ?? initialCondition)
   const [mode, setMode] = useState<'amount' | 'percent'>(
     existing?.discountPercent != null ? 'percent' : 'amount',
   )

@@ -59,7 +59,7 @@ export default function NotificationsBell() {
 
       <Sheet open={open} title="Notifications" onClose={() => setOpen(false)}>
         {!data?.notifications.length ? (
-          <EmptyState icon={<Icon name="bell-off" className="h-9 w-9" />} title="Aucune notification" message="Les baisses de prix que tu surveilles apparaîtront ici." />
+          <EmptyState icon={<Icon name="bell-off" className="h-9 w-9" />} title="Aucune notification" message="Les baisses de prix que vous surveillez apparaîtront ici." />
         ) : (
           <ul className="divide-y divide-line">
             {data.notifications.map((notification) => (
