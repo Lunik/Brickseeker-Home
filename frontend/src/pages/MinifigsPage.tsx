@@ -20,6 +20,10 @@ export default function MinifigsPage() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('name')
   const [ownedOnly, setOwnedOnly] = useState(true)
+  const [themeName, setThemeName] = useState('')
+  const [year, setYear] = useState('')
+  // iOS defaults year to newest-first; the endpoint's own default is ascending.
+  const [ascending, setAscending] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const status = useQuery({
@@ -31,10 +35,10 @@ export default function MinifigsPage() {
   const hasCatalog = (status.data?.minifigs.rowCount ?? 0) > 0
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['minifigs', search, sort, ownedOnly],
+    queryKey: ['minifigs', search, sort, ownedOnly, themeName, year, ascending],
     queryFn: () =>
       api.get<{ count: number; results: MinifigRow[] }>(
-        `/catalog/minifigs${query({ search, sort, ownedOnly, limit: 200 })}`,
+        `/catalog/minifigs${query({ search, sort, ownedOnly, themeName, year, ascending, limit: 200 })}`,
       ),
     enabled: hasCatalog,
   })
@@ -46,6 +50,17 @@ export default function MinifigsPage() {
 
   const downloading = status.data?.minifigs.status?.state === 'running'
   const progress = status.data?.minifigs.status?.progress ?? 0
+
+  const themes = useMemo(
+    () => [...new Set((data?.results ?? []).map((row) => row.themeName).filter(Boolean))].sort(),
+    [data],
+  )
+  const years = useMemo(
+    () =>
+      [...new Set((data?.results ?? []).map((row) => row.year).filter((value): value is number => !!value))]
+        .sort((a, b) => b - a),
+    [data],
+  )
 
   const totalOwned = useMemo(
     () => (data?.results ?? []).reduce((total, row) => total + row.ownedQuantity, 0),
@@ -113,6 +128,43 @@ export default function MinifigsPage() {
         </select>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        <select
+          className="input w-auto flex-1"
+          value={themeName}
+          onChange={(event) => setThemeName(event.target.value)}
+          aria-label="Thème"
+        >
+          <option value="">Tous les thèmes</option>
+          {themes.map((theme) => (
+            <option key={theme} value={theme as string}>
+              {theme}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input w-auto flex-1"
+          value={year}
+          onChange={(event) => setYear(event.target.value)}
+          aria-label="Année"
+        >
+          <option value="">Toutes les années</option>
+          {years.map((value) => (
+            <option key={value} value={String(value)}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="btn-secondary px-3"
+          onClick={() => setAscending((value) => !value)}
+          aria-label={ascending ? 'Tri croissant' : 'Tri décroissant'}
+        >
+          {ascending ? '↑' : '↓'}
+        </button>
+      </div>
+
       <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 text-[15px] text-ink">
           <input
@@ -122,6 +174,19 @@ export default function MinifigsPage() {
           />
           Possédées seulement
         </label>
+        {(themeName || year || !ascending) && (
+          <button
+            type="button"
+            className="btn-ghost px-2 py-1 text-[13px]"
+            onClick={() => {
+              setThemeName('')
+              setYear('')
+              setAscending(true)
+            }}
+          >
+            Réinitialiser les filtres
+          </button>
+        )}
         {selected.size > 0 && (
           <button
             type="button"

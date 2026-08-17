@@ -204,17 +204,35 @@ export default function SettingsPage() {
           </Badge>
         </div>
         <SecretField label="Clé API" value={apiKey} onChange={setApiKey} placeholder="rebrickable.com/profile" />
-        <button
-          type="button"
-          className="btn-secondary w-full"
-          disabled={!apiKey}
-          onClick={run(
-            () => api.put('/settings/credentials/rebrickable-key', { apiKey }),
-            'Clé API enregistrée.',
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-secondary flex-1"
+            disabled={!apiKey}
+            onClick={run(async () => {
+              await api.put('/settings/credentials/rebrickable-key', { apiKey })
+              setApiKey('')
+            }, 'Clé API enregistrée.')}
+          >
+            Enregistrer la clé
+          </button>
+          {credentials.rebrickableApiKey && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() =>
+                setPendingDestructive({
+                  title: 'Supprimer la clé API Rebrickable ?',
+                  message: "L'identification des sets et la synchronisation cesseront de fonctionner.",
+                  label: 'Supprimer',
+                  run: run(() => api.delete('/settings/credentials/rebrickable-key'), 'Clé supprimée.'),
+                })
+              }
+            >
+              Effacer
+            </button>
           )}
-        >
-          Enregistrer la clé
-        </button>
+        </div>
 
         <div className="space-y-2 border-t border-line pt-3">
           <p className="text-xs text-ink-faint">
@@ -283,6 +301,35 @@ export default function SettingsPage() {
           « Liste cadeaux » reste simplement vide.
         </p>
         <SecretField label="Clé API Brickset" value={bricksetKey} onChange={setBricksetKey} />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn-secondary flex-1"
+            disabled={!bricksetKey}
+            onClick={run(async () => {
+              await api.put('/settings/credentials/brickset-key', { apiKey: bricksetKey })
+              setBricksetKey('')
+            }, 'Clé Brickset enregistrée.')}
+          >
+            Enregistrer la clé
+          </button>
+          {credentials.bricksetApiKey && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() =>
+                setPendingDestructive({
+                  title: 'Supprimer la clé API Brickset ?',
+                  message: 'La liste cadeaux ne sera plus accessible tant qu\'une clé n\'est pas ressaisie.',
+                  label: 'Supprimer',
+                  run: run(() => api.delete('/settings/credentials/brickset-key'), 'Clé supprimée.'),
+                })
+              }
+            >
+              Effacer
+            </button>
+          )}
+        </div>
         <input
           className="input"
           placeholder="Nom d'utilisateur"

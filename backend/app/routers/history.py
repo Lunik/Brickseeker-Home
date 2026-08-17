@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 
 from ..deps import ApiError, SessionDep, require_auth
 from ..schemas import CamelModel, OkOut, ScanEventOut, SetRowOut
-from ..services import catalog, collection_repo
+from ..services import catalog, collection_repo, geocoding
 from ..services.pricing import StoreAvailability, resolve_new_price
 
 router = APIRouter(prefix="/history", tags=["historique"], dependencies=[Depends(require_auth)])
@@ -82,8 +82,9 @@ async def create_event(payload: ScanEventIn, session: SessionDep) -> ScanEventOu
         session, payload.set_num, price_seen_eur=payload.price_seen_eur
     )
     if payload.latitude is not None and payload.longitude is not None:
+        place = payload.place_name or await geocoding.reverse_geocode(payload.latitude, payload.longitude)
         await collection_repo.attach_location(
-            session, event.id, payload.latitude, payload.longitude, payload.place_name
+            session, event.id, payload.latitude, payload.longitude, place
         )
         await session.refresh(event)
     return ScanEventOut.of(event)

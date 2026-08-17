@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 
 from ..deps import SessionDep, require_auth
 from ..schemas import CamelModel
-from ..services import collection_repo, ocr
+from ..services import collection_repo, geocoding, ocr
 from .sets import ResolveOut, _resolve
 
 router = APIRouter(prefix="/scan", tags=["scan"], dependencies=[Depends(require_auth)])
@@ -93,8 +93,9 @@ async def lookup(payload: LookupIn, session: SessionDep) -> LookupOut:
         event_id = event.id
         # Location only for a real camera scan: a typed number says nothing about where you were.
         if payload.source == "camera" and payload.latitude is not None and payload.longitude is not None:
+            place = await geocoding.reverse_geocode(payload.latitude, payload.longitude)
             await collection_repo.attach_location(
-                session, event.id, payload.latitude, payload.longitude, None
+                session, event.id, payload.latitude, payload.longitude, place
             )
 
     return LookupOut(

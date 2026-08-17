@@ -86,6 +86,14 @@ async def set_rebrickable_key(payload: ApiKeyIn, session: SessionDep) -> OkOut:
     return OkOut()
 
 
+@router.delete("/credentials/rebrickable-key", response_model=OkOut)
+async def clear_rebrickable_key(session: SessionDep) -> OkOut:
+    """Clearing the key is the only way to correct one entered wrong — iOS deletes the Keychain
+    item when the field is emptied and saved (#146)."""
+    await set_credential(session, CredentialKey.REBRICKABLE_API_KEY, None)
+    return OkOut()
+
+
 @router.post("/link/rebrickable", response_model=OkOut)
 async def link_rebrickable(payload: LinkAccountIn, session: SessionDep) -> OkOut:
     if payload.api_key:
@@ -111,6 +119,12 @@ async def unlink_rebrickable(session: SessionDep) -> OkOut:
 @router.put("/credentials/brickset-key", response_model=OkOut)
 async def set_brickset_key(payload: ApiKeyIn, session: SessionDep) -> OkOut:
     await set_credential(session, CredentialKey.BRICKSET_API_KEY, payload.api_key.strip())
+    return OkOut()
+
+
+@router.delete("/credentials/brickset-key", response_model=OkOut)
+async def clear_brickset_key(session: SessionDep) -> OkOut:
+    await set_credential(session, CredentialKey.BRICKSET_API_KEY, None)
     return OkOut()
 
 

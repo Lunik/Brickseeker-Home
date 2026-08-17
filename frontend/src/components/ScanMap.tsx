@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import L from 'leaflet'
@@ -29,10 +30,15 @@ const markerIcon = L.divIcon({
 })
 
 export default function ScanMap() {
+  const navigate = useNavigate()
   const { data, isLoading, error } = useQuery({
     queryKey: ['scan-map'],
     queryFn: () => api.get<{ points: MapPoint[] }>('/history/map'),
   })
+
+  function openSet(setNum: string) {
+    navigate(`/set/${encodeURIComponent(setNum)}`)
+  }
 
   if (isLoading) return <LoadingBlock />
   if (error) return <EmptyState icon={<Icon name="warning" className="h-9 w-9" />} title="Carte indisponible" message={(error as Error).message} />
@@ -44,6 +50,11 @@ export default function ScanMap() {
         icon={<Icon name="map" className="h-9 w-9" />}
         title="Aucun scan localisé"
         message="Activez la localisation des scans dans les Paramètres. La position n'est enregistrée que pour les sets absents de votre collection, et elle est effacée dès que vous les ajoutez."
+        action={
+          <button type="button" className="btn-primary" onClick={() => navigate('/settings')}>
+            Ouvrir les Paramètres
+          </button>
+        }
       />
     )
   }
@@ -78,6 +89,10 @@ export default function ScanMap() {
                     Vu à {formatEUR(point.priceSeenEur)}
                   </>
                 )}
+                <br />
+                <button type="button" className="text-brand underline" onClick={() => openSet(point.setNum)}>
+                  Voir le set
+                </button>
               </Popup>
             </Marker>
           ))}
@@ -87,14 +102,20 @@ export default function ScanMap() {
       {/* The same data as a list: if the tile host is blocked, the page still says something. */}
       <ul className="divide-y divide-line">
         {points.map((point) => (
-          <li key={point.id} className="py-2 text-sm">
-            <span className="font-semibold text-ink">{point.setNum}</span>{' '}
-            <span className="text-ink-muted">{point.setName}</span>
-            <span className="block text-xs text-ink-faint">
-              {formatDateTime(point.scannedAt)}
-              {point.placeName ? ` · ${point.placeName}` : ''}
-              {point.priceSeenEur !== null ? ` · vu à ${formatEUR(point.priceSeenEur)}` : ''}
-            </span>
+          <li key={point.id}>
+            <button
+              type="button"
+              className="w-full py-2 text-left text-sm active:opacity-60"
+              onClick={() => openSet(point.setNum)}
+            >
+              <span className="font-semibold text-ink">{point.setNum}</span>{' '}
+              <span className="text-ink-muted">{point.setName}</span>
+              <span className="block text-xs text-ink-faint">
+                {formatDateTime(point.scannedAt)}
+                {point.placeName ? ` · ${point.placeName}` : ''}
+                {point.priceSeenEur !== null ? ` · vu à ${formatEUR(point.priceSeenEur)}` : ''}
+              </span>
+            </button>
           </li>
         ))}
       </ul>
