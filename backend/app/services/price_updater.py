@@ -199,6 +199,13 @@ class PriceUpdater:
         if self._watch_running or self._state.is_running:
             return 0
 
+        async with session_scope() as session:
+            # The Réglages switch is a real kill switch, not a stored preference nobody reads: the
+            # env var decides whether the job is scheduled at all, this decides whether a granted
+            # tick does any work.
+            if not await app_settings.get_setting(session, "backgroundRefresh.enabled"):
+                return 0
+
         self._watch_running = True
         processed = 0
         try:

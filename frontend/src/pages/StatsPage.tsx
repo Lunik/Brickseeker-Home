@@ -16,7 +16,7 @@ import {
 import { api } from '../api/client'
 import type { CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock, NavBar } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
 import { formatEUR, formatEURCompact, formatNumber } from '../lib/format'
 
 /** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
@@ -32,8 +32,28 @@ export default function StatsPage() {
   })
 
   const completeMissing = useMutation({
-    mutationFn: () => api.post('/prices/batch/start', { onlyMissing: true }),
+    mutationFn: async () => {
+      const { status } = await api.post<{ status: string }>('/prices/batch/start', { onlyMissing: true })
+      if (status === 'busy') throw new Error('Une actualisation des prix est déjà en cours.')
+      if (status === 'empty') throw new Error('Aucun prix à compléter — toutes les sources ont déjà été interrogées.')
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['priceBatch'] }),
+  })
+
+  // The iOS button of the same name runs a real refresh over the collection; re-reading cached
+  // figures would leave the value unchanged and the button looking broken.
+  const refreshValue = useMutation({
+    mutationFn: async () => {
+      const { status } = await api.post<{ status: string }>('/prices/batch/start', {})
+      if (status === 'busy') throw new Error('Une actualisation des prix est déjà en cours.')
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['priceBatch'] }),
+  })
+
+  const batch = useQuery({
+    queryKey: ['priceBatch'],
+    queryFn: () => api.get<{ isRunning: boolean; done: number; total: number }>('/prices/batch/status'),
+    refetchInterval: (q) => (q.state.data?.isRunning ? 2000 : false),
   })
 
   if (isLoading) return <LoadingBlock />
@@ -74,7 +94,9 @@ export default function StatsPage() {
     reliable: snapshot.isReliable,
   }))
 
-  const missing = data.setCount - data.setsWithKnownPrice
+  // The server's count of sets a run would actually process — the naive
+  // `setCount - setsWithKnownPrice` included sets already tried against every source.
+  const missing = data.completablePriceCount
 
   return (
     <div className="space-y-6 pb-10">
@@ -84,8 +106,8 @@ export default function StatsPage() {
           <button
             type="button"
             className="nav-circle"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['stats'] })}
-            disabled={isFetching}
+            onClick={() => refreshValue.mutate()}
+            disabled={isFetching || batch.data?.isRunning}
             aria-label="Actualiser la valeur estimée"
           >
             <Icon name="refresh" />
@@ -158,6 +180,17 @@ export default function StatsPage() {
           Basée sur {data.setsWithKnownPrice} / {data.setCount} sets ({data.pricedUnitCount} /{' '}
           {data.unitCount} exemplaires) dont le prix est connu
         </p>
+        {batch.data?.isRunning && (
+          <p className="flex items-center gap-2 text-[13px] text-ink-muted">
+            <Spinner className="h-3 w-3" /> Actualisation : {batch.data.done} / {batch.data.total}
+          </p>
+        )}
+        {(completeMissing.isError || refreshValue.isError) && (
+          <ErrorLabel
+            message={((completeMissing.error ?? refreshValue.error) as Error).message}
+            className="text-[13px]"
+          />
+        )}
         {missing > 0 && (
           <button
             type="button"

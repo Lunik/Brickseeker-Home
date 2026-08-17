@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, query } from '../api/client'
-import type { CatalogStatus, SetRow } from '../api/types'
+import type { CatalogStatus, SetRow, StoreAvailability } from '../api/types'
+import Icon from '../components/Icon'
 import ListPickerSheet from '../components/ListPickerSheet'
 import SetListScreen from '../components/SetListScreen'
-import { useSetActions } from '../hooks/useSetActions'
-import Icon from '../components/Icon'
 import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
+import { useSetActions } from '../hooks/useSetActions'
+import { useFilterState } from '../hooks/useFilterState'
 import { formatDate } from '../lib/format'
 
 interface CatalogSetRow {
@@ -21,18 +22,33 @@ interface CatalogSetRow {
   setImgUrl: string | null
   firstSeenAt: string | null
   isOwned: boolean
-  availability: SetRow['availability']
+  availability: StoreAvailability
   resolvedPrice: number | null
 }
 
-/** The catalogue browser. Its default sort is "date d'ajout" — when *this* install first saw the
- *  set — which is a truer "new" signal than the release year. */
+const PAGE_SIZE = 60
+
+/**
+ * The catalogue browser.
+ *
+ * Two things make this screen different from the other lists, and both are server-side:
+ * it shows only entries that appeared *after* the first catalogue import (otherwise "new" would
+ * mean all 28 000 rows), and it filters/sorts on the server — filtering one 60-row page client-side
+ * made searching a set that wasn't on that page report "no results".
+ */
 export default function NewSetsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(0)
   const actions = useSetActions()
-  const pageSize = 60
+  const [page, setPage] = useState(0)
+  const [includeAll, setIncludeAll] = useState(false)
+
+  // The shared filter state drives the *request* here rather than a client-side pass.
+  const { filter } = useFilterState('new-sets', 'dateAdded')
+
+  useEffect(() => {
+    setPage(0)
+  }, [filter.search, filter.themeName, filter.year, filter.ownedOnly, filter.availability, filter.sort, filter.ascending, includeAll])
 
   const status = useQuery({
     queryKey: ['catalog-status'],
@@ -43,10 +59,21 @@ export default function NewSetsPage() {
   const hasCatalog = (status.data?.sets.rowCount ?? 0) > 0
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['new-sets', page],
+    queryKey: ['new-sets', page, includeAll, filter],
     queryFn: () =>
-      api.get<{ count: number; results: CatalogSetRow[] }>(
-        `/catalog/new-sets${query({ sort: 'dateAdded', ascending: false, offset: page * pageSize, limit: pageSize })}`,
+      api.get<{ count: number; results: CatalogSetRow[]; isFiltered: boolean }>(
+        `/catalog/new-sets${query({
+          search: filter.search,
+          themeName: filter.themeName,
+          year: filter.year,
+          ownedOnly: filter.ownedOnly === null ? null : String(filter.ownedOnly),
+          availability: filter.availability,
+          sort: filter.sort,
+          ascending: filter.ascending,
+          includeAll,
+          offset: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        })}`,
       ),
     enabled: hasCatalog,
   })
@@ -62,7 +89,6 @@ export default function NewSetsPage() {
   if (!hasCatalog) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-ink">Nouveaux sets</h1>
         <EmptyState
           icon={<Icon name="sparkles" className="h-9 w-9" />}
           title="Catalogue non téléchargé"
@@ -91,7 +117,7 @@ export default function NewSetsPage() {
     )
   }
 
-  // The catalogue rows are shaped for the shared list screen, which speaks `SetRow`.
+  // Shaped for the shared list screen, which speaks `SetRow`.
   const rows: SetRow[] = (data?.results ?? []).map((row) => ({
     setNum: row.setNum,
     name: row.name,
@@ -116,67 +142,89 @@ export default function NewSetsPage() {
   }))
 
   const total = data?.count ?? 0
-  const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
+  const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1)
 
   return (
     <>
-    <SetListScreen
-      title="Nouveaux sets"
-      screenId="new-sets"
-      defaultSort="dateAdded"
-      // A catalogue entry was never scanned, so that sort would mean nothing here.
-      excludedSorts={['dateScanned']}
-      bulkActions={[actions.refreshPrices, actions.addToCollection, actions.addToWishlist]}
-      onRefresh={() => download.mutate()}
-      isRefreshing={downloading}
-      showOwnedFilter
-      rows={rows}
-      isLoading={isLoading}
-      error={error ? (error as Error).message : null}
-      subtitleFor={(row) =>
-        [row.themeName, row.year || null, row.lastScannedAt ? `vu le ${formatDate(row.lastScannedAt)}` : null]
-          .filter(Boolean)
-          .join(' · ')
-      }
-      onOpenSet={(row, visible) =>
-        navigate(`/set/${encodeURIComponent(row.setNum)}`, {
-          state: { siblings: visible.map((item) => item.setNum) },
-        })
-      }
-      header={
-        // The catalogue is ~28 000 rows: paginated server-side rather than held in memory.
-        total > pageSize ? (
-          <div className="flex items-center gap-2 text-xs text-ink-faint">
-            <button
-              type="button"
-              className="btn-ghost px-2 py-1 text-xs"
-              onClick={() => setPage((value) => Math.max(0, value - 1))}
-              disabled={page === 0}
-            >
-              <Icon name="chevron-left" className="mr-0.5 inline h-3.5 w-3.5" />
-              Précédent
-            </button>
+      <SetListScreen
+        title="Nouveaux sets"
+        screenId="new-sets"
+        defaultSort="dateAdded"
+        // A catalogue entry was never scanned, so that sort would mean nothing here.
+        excludedSorts={['dateScanned']}
+        showOwnedFilter
+        // The rows are already the server's answer; filtering them again would re-filter one page.
+        serverFiltered
+        rows={rows}
+        isLoading={isLoading}
+        error={error ? (error as Error).message : null}
+        bulkActions={[actions.refreshPrices, actions.addToCollection, actions.addToWishlist]}
+        onRefresh={() => download.mutate()}
+        isRefreshing={downloading}
+        subtitleFor={(row) =>
+          [row.themeName, row.year || null, row.lastScannedAt ? `vu le ${formatDate(row.lastScannedAt)}` : null]
+            .filter(Boolean)
+            .join(' · ')
+        }
+        onOpenSet={(row, visible) =>
+          navigate(`/set/${encodeURIComponent(row.setNum)}`, {
+            state: { siblings: visible.map((item) => item.setNum) },
+          })
+        }
+        emptyState={
+          <EmptyState
+            icon={<Icon name="sparkles" className="h-9 w-9" />}
+            title="Aucun nouveau set pour l'instant"
+            message="Les sets ajoutés au catalogue Rebrickable depuis votre dernière synchronisation apparaîtront ici."
+            action={
+              <button type="button" className="btn-secondary" onClick={() => setIncludeAll(true)}>
+                Parcourir tout le catalogue
+              </button>
+            }
+          />
+        }
+        header={
+          <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] text-ink-faint">
             <span>
-              Page {page + 1} / {lastPage + 1}
+              {total} set{total > 1 ? 's' : ''}
+              {data?.isFiltered ? ' depuis la première synchronisation' : ' au catalogue'}
             </span>
             <button
               type="button"
-              className="btn-ghost px-2 py-1 text-xs"
-              onClick={() => setPage((value) => Math.min(lastPage, value + 1))}
-              disabled={page >= lastPage}
+              className="btn-ghost px-1 py-0 text-[13px]"
+              onClick={() => setIncludeAll((value) => !value)}
             >
-              Suivant
-              <Icon name="chevron-right" className="ml-0.5 inline h-3.5 w-3.5" />
+              {includeAll ? 'Nouveautés seulement' : 'Tout le catalogue'}
             </button>
+            {total > PAGE_SIZE && (
+              <span className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  className="btn-ghost px-1 py-0 text-[13px]"
+                  onClick={() => setPage((value) => Math.max(0, value - 1))}
+                  disabled={page === 0}
+                >
+                  ‹
+                </button>
+                {page + 1} / {lastPage + 1}
+                <button
+                  type="button"
+                  className="btn-ghost px-1 py-0 text-[13px]"
+                  onClick={() => setPage((value) => Math.min(lastPage, value + 1))}
+                  disabled={page >= lastPage}
+                >
+                  ›
+                </button>
+              </span>
+            )}
           </div>
-        ) : undefined
-      }
-    />
-    <ListPickerSheet
-      open={actions.listPicker.open}
-      onClose={actions.listPicker.cancel}
-      onPick={actions.listPicker.pick}
-    />
+        }
+      />
+      <ListPickerSheet
+        open={actions.listPicker.open}
+        onClose={actions.listPicker.cancel}
+        onPick={actions.listPicker.pick}
+      />
     </>
   )
 }

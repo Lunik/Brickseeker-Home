@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..db import session_scope
 from ..deps import SessionDep, require_auth
@@ -100,17 +100,26 @@ async def new_sets(
     ascending: bool = False,
     offset: int = 0,
     limit: int = Query(default=60, le=200),
+    include_all: bool = Query(default=False, alias="includeAll"),
 ) -> dict[str, object]:
-    """Browse the downloaded catalogue.
+    """The sets that appeared in the catalogue *since the first download*.
 
-    Default sort is `dateAdded` — when *this* install first saw the set in a snapshot, which is a
-    truer "new" signal than the release year. `dateScanned` is meaningless here: a catalogue entry
-    was never scanned.
+    Not the whole catalogue: every row of the first-ever import shares one `first_seen_at`, so
+    without excluding that baseline this screen would list all ~28 000 entries and the word "new"
+    would mean nothing. `includeAll=true` opts back into the full catalogue for browsing.
+
+    Default sort is `dateAdded` — when *this* install first saw the set — which is a truer "new"
+    signal than the release year. `dateScanned` is meaningless here: a catalogue entry was never
+    scanned.
     """
     hide_enabled = bool(await app_settings.get_setting(session, "hide_wearables_enabled"))
     theme_names = await catalog.theme_names(session)
 
-    rows = (await session.execute(select(CatalogSet))).scalars().all()
+    query = select(CatalogSet)
+    baseline = (await session.execute(select(func.min(CatalogSet.first_seen_at)))).scalar_one_or_none()
+    if not include_all and baseline is not None:
+        query = query.where(CatalogSet.first_seen_at > baseline)
+    rows = (await session.execute(query)).scalars().all()
     owned = {cached.set_num: cached for cached in await collection_repo.owned_sets(session)}
     cached_by_num = {row.set_num: row for row in await collection_repo.scanned_sets(session)}
     cached_by_num.update(owned)
@@ -157,7 +166,11 @@ async def new_sets(
         )
 
     results.sort(key=_sort_key(sort), reverse=not ascending)
-    return {"count": len(results), "results": results[offset : offset + limit]}
+    return {
+        "count": len(results),
+        "results": results[offset : offset + limit],
+        "isFiltered": not include_all and baseline is not None,
+    }
 
 
 def _sort_key(sort: str):  # noqa: ANN202 - a key function per sort option

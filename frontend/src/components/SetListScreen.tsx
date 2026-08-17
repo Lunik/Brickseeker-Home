@@ -49,6 +49,8 @@ export interface SetListScreenProps {
   onRefresh?: () => void
   isRefreshing?: boolean
   renderItems?: (rows: SetRowData[]) => ReactNode
+  /** The caller already applied `filter` server-side; skip the client-side pass. */
+  serverFiltered?: boolean
 }
 
 export default function SetListScreen({
@@ -72,6 +74,7 @@ export default function SetListScreen({
   onRefresh,
   isRefreshing = false,
   renderItems,
+  serverFiltered = false,
 }: SetListScreenProps) {
   const { filter, setFilter, reset, isActive } = useFilterState(screenId, defaultSort)
   const [showFilters, setShowFilters] = useState(false)
@@ -82,9 +85,15 @@ export default function SetListScreen({
   const [menuFor, setMenuFor] = useState<SetRowData | null>(null)
   const [pending, setPending] = useState<{ action: BulkAction; targets: string[] } | null>(null)
 
-  const visible = useMemo(() => filterAndSort(rows, { filter: filter as FilterState }), [rows, filter])
+  const visible = useMemo(
+    () => (serverFiltered ? rows : filterAndSort(rows, { filter: filter as FilterState })),
+    [rows, filter, serverFiltered],
+  )
 
-  const themes = useMemo(() => [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(), [rows])
+  const themes = useMemo(
+    () => [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(),
+    [rows],
+  )
   const years = useMemo(
     () => [...new Set(rows.map((row) => row.year).filter((year) => year > 0))].sort((a, b) => b - a),
     [rows],

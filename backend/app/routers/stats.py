@@ -56,6 +56,11 @@ class StatsOut(CamelModel):
     total_value_eur: float
     sets_with_known_price: int
     priced_unit_count: int
+    #: Sets a "compléter les prix manquants" run would actually process — unpriced *and* never
+    #: fully processed. The naive `setCount - setsWithKnownPrice` includes sets already tried
+    #: against every source, which the queue skips, so the button did nothing and the number never
+    #: went down (#194).
+    completable_price_count: int
     most_expensive_set: SetRowOut | None
     most_expensive_set_price_eur: float | None
     oldest_set: SetRowOut | None
@@ -87,6 +92,7 @@ async def read_stats(session: SessionDep) -> StatsOut:
             total_value_eur=0.0,
             sets_with_known_price=0,
             priced_unit_count=0,
+            completable_price_count=0,
             most_expensive_set=None,
             most_expensive_set_price_eur=None,
             oldest_set=None,
@@ -151,6 +157,11 @@ async def read_stats(session: SessionDep) -> StatsOut:
         total_value_eur=total_value,
         sets_with_known_price=len(priced),
         priced_unit_count=sum(cached.quantity for cached, _ in priced),
+        completable_price_count=sum(
+            1
+            for cached in owned
+            if prices[cached.set_num] is None and cached.prices_fetched_at is None
+        ),
         most_expensive_set=row_of(most_expensive[0], most_expensive[1]) if most_expensive else None,
         most_expensive_set_price_eur=most_expensive[1] if most_expensive else None,
         oldest_set=row_of(min(owned, key=lambda cached: cached.year or 9999)),

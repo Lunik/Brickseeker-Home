@@ -197,6 +197,8 @@ export interface CollectionStats {
   totalValueEur: number
   setsWithKnownPrice: number
   pricedUnitCount: number
+  /** Sets a "compléter les prix manquants" run would actually process. */
+  completablePriceCount: number
   mostExpensiveSet: SetRow | null
   mostExpensiveSetPriceEur: number | null
   oldestSet: SetRow | null

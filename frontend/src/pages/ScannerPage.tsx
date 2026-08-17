@@ -14,6 +14,12 @@ import { EmptyState, Sheet, Spinner } from '../components/ui'
 const CAPTURE_INTERVAL_MS = 800
 /** A candidate must persist before it's worth resolving; the pulse fires immediately regardless. */
 const DEBOUNCE_MS = 1200
+/**
+ * How long the same set number stays locked out after being resolved. Without it, keeping one box
+ * in frame re-resolves it every ~2 s and each round-trip writes another ScanEvent — Historique
+ * fills with duplicates of a single scan. Mirrors the iOS lock.
+ */
+const REPEAT_LOCK_MS = 30_000
 
 export default function ScannerPage() {
   const navigate = useNavigate()
@@ -21,7 +27,6 @@ export default function ScannerPage() {
   const { preferences } = useSettings()
 
   const [paused, setPaused] = useState(false)
-  const camera = useCamera(!paused)
   const [candidate, setCandidate] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [ambiguous, setAmbiguous] = useState<LegoSet[] | null>(null)
@@ -34,7 +39,13 @@ export default function ScannerPage() {
   const [batchItems, setBatchItems] = useState<LegoSet[]>([])
   const [showBatch, setShowBatch] = useState(false)
 
+  // Any sheet covering the camera stops it — the iOS scanner treats this as a hard rule, and
+  // it is also what keeps a background resolve from yanking the user off a form they are typing.
+  const isCovered = paused || showManual || showBatch || ambiguous !== null
+  const camera = useCamera(!isCovered)
+
   const lastCandidateRef = useRef<{ setNum: string; at: number } | null>(null)
+  const resolvedAtRef = useRef<Map<string, number>>(new Map())
   const inFlightRef = useRef(false)
 
   const captureLocation = Boolean(preferences?.scan_location_enabled)
@@ -94,7 +105,7 @@ export default function ScannerPage() {
   )
 
   useEffect(() => {
-    if (paused || !camera.isActive) return
+    if (isCovered || !camera.isActive) return
 
     const timer = window.setInterval(async () => {
       if (inFlightRef.current || resolving) return
@@ -108,6 +119,9 @@ export default function ScannerPage() {
         const found = setNums[0]
         if (!found) return
 
+        const resolvedAt = resolvedAtRef.current.get(found)
+        if (resolvedAt && Date.now() - resolvedAt < REPEAT_LOCK_MS) return
+
         // The pulse fires the moment a candidate is seen, before the lookup — the user needs to
         // know something happened before the network call starts.
         setCandidate(found)
@@ -115,6 +129,7 @@ export default function ScannerPage() {
         const now = Date.now()
         if (previous?.setNum === found && now - previous.at >= DEBOUNCE_MS) {
           lastCandidateRef.current = null
+          resolvedAtRef.current.set(found, now)
           await resolve(found, 'camera')
         } else if (previous?.setNum !== found) {
           lastCandidateRef.current = { setNum: found, at: now }
@@ -127,7 +142,7 @@ export default function ScannerPage() {
     }, CAPTURE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [camera, paused, resolve, resolving])
+  }, [camera, isCovered, resolve, resolving])
 
   return (
     <div className="relative min-h-[100dvh] bg-black">
@@ -192,7 +207,7 @@ export default function ScannerPage() {
         )}
         {message && <p className="text-sm font-semibold text-amber-300">{message}</p>}
 
-        {batchMode && (
+        {(batchMode || batchItems.length > 0) && (
           <div className="space-y-1">
             <p className="text-sm text-white/80">
               {batchItems.length === 0
