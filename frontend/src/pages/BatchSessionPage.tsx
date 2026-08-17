@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import type { BatchStatus, SetPrices } from '../api/types'
 import Icon from '../components/Icon'
 import ListPickerSheet from '../components/ListPickerSheet'
+import SelectionBar from '../components/SelectionBar'
 import { ConfirmDialog, EmptyState, ErrorLabel, NavBar, SetThumbnail, Spinner } from '../components/ui'
 import { useSetActions } from '../hooks/useSetActions'
 import { batchSession, useBatchSession } from '../lib/batch-session'
@@ -298,38 +299,18 @@ export default function BatchSessionPage() {
       )}
 
       {selecting && (
-        <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-line bg-surface/95 px-4 pb-6 pt-3 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="btn-ghost px-0"
-              onClick={() =>
-                setSelected(allSelected ? new Set() : new Set(items.map((item) => item.setNum)))
-              }
-            >
-              {allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
-            </button>
-            <span className="text-[13px] text-ink-muted">{selected.size} sélectionné(s)</span>
-            <div className="flex-1" />
-            {busy && <Spinner className="h-4 w-4" />}
-            <button type="button" className="btn-ghost px-0" onClick={leaveSelection}>
-              Terminé
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {[actions.addToCollection, actions.addToWishlist, actions.refreshPrices].map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                className="btn-secondary px-2 text-[13px]"
-                disabled={busy || selected.size === 0}
-                onClick={() => run(action)}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SelectionBar
+          count={selected.size}
+          total={items.length}
+          allSelected={allSelected}
+          busy={busy}
+          actions={[actions.addToCollection, actions.addToWishlist, actions.refreshPrices]}
+          onToggleAll={() =>
+            setSelected(allSelected ? new Set() : new Set(items.map((item) => item.setNum)))
+          }
+          onDone={leaveSelection}
+          onRun={(action) => void run(action)}
+        />
       )}
 
       <ListPickerSheet

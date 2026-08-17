@@ -49,6 +49,9 @@ export type IconName =
   | 'viewfinder'
   | 'checklist'
   | 'layers'
+  | 'folder'
+  | 'trash'
+  | 'ellipsis'
 
 /** Path data only — the shared stroke attributes live on the `<svg>` below. */
 const PATHS: Record<IconName, string> = {
@@ -96,6 +99,10 @@ const PATHS: Record<IconName, string> = {
   checklist: 'M12 7h8M12 17h8M4 7l2 2 3.5-3.5M4 17l2 2 3.5-3.5',
   // Mode lot — stacked sheets, matching the iOS `square.stack` symbol.
   layers: 'm12 3 9 4.5-9 4.5-9-4.5L12 3ZM3 12l9 4.5L21 12M3 16.5 12 21l9-4.5',
+  // The three symbols the iOS bulk-action menus use: `folder`, `trash`, `ellipsis.circle`.
+  folder: 'M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18V6.5Z',
+  trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4L18 7M10 11v6M14 11v6',
+  ellipsis: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12v.01M12 12v.01M16 12v.01',
   inbox:
     'M3.5 13.5h4l1.5 3h6l1.5-3h4M3.5 13.5 6 5h12l2.5 8.5v5a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-5Z',
 }

@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .db import init_db
+from .db import init_db, session_scope
 from .routers import (
     alerts,
     auth,
@@ -35,6 +35,7 @@ from .routers import (
 from .routers import (
     settings as settings_router,
 )
+from .services.price_updater import price_updater
 from .services.scheduler import shutdown_scheduler, start_scheduler
 from .services.scraping.browser import shutdown_browser
 
@@ -51,6 +52,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 async def lifespan(_app: FastAPI):
     settings.ensure_dirs()
     await init_db()
+    # The batch updater's state is in memory; its last completion date is not, and Statistiques
+    # shows it. Reload it before serving, or a restart claims the prices were never refreshed.
+    async with session_scope() as session:
+        await price_updater.restore(session)
     logger.info("BrickSeeker démarré — données dans %s", settings.data_dir)
     if settings.background_refresh_enabled:
         start_scheduler()

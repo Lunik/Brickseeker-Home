@@ -46,6 +46,7 @@ export function useSetActions() {
   const refreshPrices: BulkAction = {
     key: 'prices',
     label: 'Actualiser les prix',
+    icon: 'refresh',
     run: async (setNums) => {
       // The updater refuses when a run is already in flight; reporting that as success left the
       // user believing a refresh had been queued when nothing had.
@@ -60,6 +61,7 @@ export function useSetActions() {
   const addToCollection: BulkAction = {
     key: 'add-collection',
     label: 'Ajouter à la collection',
+    icon: 'box',
     run: async (setNums) => {
       const listId = await askForList()
       if (listId === null) return
@@ -72,6 +74,7 @@ export function useSetActions() {
   const addToWishlist: BulkAction = {
     key: 'add-wishlist',
     label: 'Ajouter à ma liste de cadeaux',
+    icon: 'heart',
     run: async (setNums) => {
       // One call per set: Brickset resolves each set number separately and is throttled, so there
       // is no batch endpoint to be had.

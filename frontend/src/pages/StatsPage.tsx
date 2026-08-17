@@ -15,11 +15,11 @@ import {
 } from 'recharts'
 
 import { api } from '../api/client'
-import type { CollectionStats, SetRow } from '../api/types'
+import type { BatchStatus, CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import ListConditionsSheet from '../components/ListConditionsSheet'
 import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
-import { formatEUR, formatEURCompact, formatNumber } from '../lib/format'
+import { formatDate, formatEUR, formatEURCompact, formatNumber } from '../lib/format'
 
 /** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
 const MAX_THEME_BARS = 10
@@ -55,7 +55,7 @@ export default function StatsPage() {
 
   const batch = useQuery({
     queryKey: ['priceBatch'],
-    queryFn: () => api.get<{ isRunning: boolean; done: number; total: number }>('/prices/batch/status'),
+    queryFn: () => api.get<BatchStatus>('/prices/batch/status'),
     refetchInterval: (q) => (q.state.data?.isRunning ? 2000 : false),
   })
 
@@ -210,6 +210,14 @@ export default function StatsPage() {
         <p className="text-[13px] text-ink-muted">
           Basée sur {data.setsWithKnownPrice} / {data.setCount} sets ({data.pricedUnitCount} /{' '}
           {data.unitCount} exemplaires) dont le prix est connu
+        </p>
+        {/* When the figure was last actually re-read. A total with no date attached says nothing
+            about whether it is today's market or last month's — so the line is always there, with
+            the never-run case spelled out rather than hidden, exactly as on iOS. */}
+        <p className="text-[13px] text-ink-muted">
+          {batch.data?.lastCompletedAt
+            ? `Dernière actualisation : ${formatDate(batch.data.lastCompletedAt)}`
+            : 'Prix jamais actualisés'}
         </p>
         {(completeMissing.isError || refreshValue.isError) && (
           <ErrorLabel

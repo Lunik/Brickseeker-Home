@@ -22,6 +22,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..config import settings
 from ..db import session_scope
 from . import app_settings, collection_repo, notifications, prices
@@ -73,6 +75,24 @@ class PriceUpdater:
     @property
     def is_watch_running(self) -> bool:
         return self._watch_running
+
+    async def restore(self, session: AsyncSession) -> None:
+        """Reloads the last completion time from storage at startup.
+
+        `BatchState` lives in memory, but the completion time is what Statistiques prints under the
+        estimated value — so without this, every restart of the container told the user their prices
+        had never been refreshed, whatever the database said.
+        """
+        if self._state.last_completed_at is not None:
+            return
+        stored = await app_settings.get_setting(session, "collectionPriceUpdate.lastCompletedAt")
+        if not isinstance(stored, str):
+            return
+        try:
+            self._state.last_completed_at = datetime.fromisoformat(stored)
+        except ValueError:
+            # A hand-edited or pre-format value is not worth failing a boot over.
+            logger.warning("Date de dernière actualisation illisible : %r", stored)
 
     async def start(self, set_nums: list[str] | None = None, *, only_missing: bool = False) -> str:
         """Kicks off a run and returns immediately — the UI polls `state`.

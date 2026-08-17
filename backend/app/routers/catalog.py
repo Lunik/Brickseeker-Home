@@ -201,12 +201,19 @@ async def minifigs(
     sort: str = "name",
     ascending: bool = True,
     offset: int = 0,
-    limit: int = Query(default=60, le=200),
+    #: The ceiling is high because the gallery screen filters and sorts client-side and therefore
+    #: needs the whole owned set in one payload — capped at 200 it silently showed 200 of 601 while
+    #: Accueil, reading the same endpoint's `count`, said 601. The cost of a larger page is only
+    #: serialisation: this handler already walks every pivot and every catalogue row before slicing.
+    limit: int = Query(default=60, le=5000),
 ) -> dict[str, object]:
     """The owned-minifig gallery.
 
     A minifig is owned when any set containing it is owned, and the quantity multiplies through:
     two copies of a set with two of the same minifig is four.
+
+    `count` is the total **after filtering and before slicing** — the number a caller needs to know
+    whether what it received is everything.
     """
     owned_sets = {cached.set_num: cached for cached in await collection_repo.owned_sets(session)}
     conditions = await collection_repo.condition_by_list_id(session)

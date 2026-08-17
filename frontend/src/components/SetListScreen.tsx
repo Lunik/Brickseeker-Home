@@ -4,8 +4,9 @@ import type { FilterState, SetRow as SetRowData, SortOption, StoreAvailability }
 import { filterAndSort, useFilterState } from '../hooks/useFilterState'
 import FilterSheet from './FilterSheet'
 import Icon from './Icon'
+import SelectionBar, { ActionSheet, type SelectionAction } from './SelectionBar'
 import SetRow from './SetRow'
-import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Sheet, Spinner } from './ui'
+import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from './ui'
 
 /**
  * The one browse screen. Collection, Historique, Liste cadeaux and Nouveaux sets are this screen
@@ -20,14 +21,8 @@ import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Sheet, Spi
 /** Rows mounted per page as the list is scrolled. */
 const PAGE = 40
 
-export interface BulkAction {
-  key: string
-  label: string
-  destructive?: boolean
-  /** Shown in a confirmation dialog before running. Omit for actions that need no confirmation. */
-  confirm?: (count: number) => string
-  run: (setNums: string[]) => Promise<void>
-}
+/** The actions a screen offers on a selection — and, unchanged, on one row's context menu. */
+export type BulkAction = SelectionAction
 
 export interface SetListScreenProps {
   title: string
@@ -303,21 +298,20 @@ export default function SetListScreen({
       />
 
       {/* One row's context menu offers exactly the screen's bulk actions, applied to that row. */}
-      <Sheet open={menuFor !== null} title={menuFor?.name ?? ''} onClose={() => setMenuFor(null)}>
-        <div className="space-y-2">
-          {bulkActions.map((action) => (
-            <button
-              key={action.key}
-              type="button"
-              className={action.destructive ? 'btn-danger w-full' : 'btn-secondary w-full'}
-              disabled={busy}
-              onClick={() => menuFor && request(action, [menuFor.setNum])}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </Sheet>
+      {/* One row's actions and a selection's actions are the same list, rendered by the same
+          component — the iOS screens keep those two in lockstep for the same reason. */}
+      <ActionSheet
+        open={menuFor !== null}
+        title={menuFor?.name ?? ''}
+        actions={bulkActions}
+        busy={busy}
+        onClose={() => setMenuFor(null)}
+        onPick={(action) => {
+          const target = menuFor
+          setMenuFor(null)
+          if (target) request(action, [target.setNum])
+        }}
+      />
 
       {/* Selection is entered from a floating button, and its controls sit at the bottom — a
           top-bar control would be hidden by the keyboard while the search field is focused. */}
@@ -333,38 +327,18 @@ export default function SetListScreen({
       )}
 
       {selecting && (
-        <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-2xl border-t border-line bg-surface/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="btn-ghost px-1 py-0 text-[13px]"
-              onClick={() =>
-                setSelected(allVisibleSelected ? new Set() : new Set(visible.map((row) => row.setNum)))
-              }
-            >
-              {allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
-            </button>
-            <span className="text-[13px] text-ink-muted">{selected.size} sélectionné(s)</span>
-            <span className="flex-1" />
-            {busy && <Spinner className="h-4 w-4" />}
-            <button type="button" className="btn-ghost px-1 py-0 text-[15px] font-semibold" onClick={leaveSelection}>
-              Terminé
-            </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {bulkActions.map((action) => (
-              <button
-                key={action.key}
-                type="button"
-                className={`${action.destructive ? 'btn-danger' : 'btn-secondary'} flex-1 px-3 py-2 text-[13px]`}
-                disabled={busy || selected.size === 0}
-                onClick={() => request(action, [...selected])}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SelectionBar
+          count={selected.size}
+          total={visible.length}
+          allSelected={allVisibleSelected}
+          busy={busy}
+          actions={bulkActions}
+          onToggleAll={() =>
+            setSelected(allVisibleSelected ? new Set() : new Set(visible.map((row) => row.setNum)))
+          }
+          onDone={leaveSelection}
+          onRun={(action) => request(action, [...selected])}
+        />
       )}
 
       <ConfirmDialog

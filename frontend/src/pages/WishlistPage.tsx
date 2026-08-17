@@ -67,7 +67,8 @@ export default function WishlistPage() {
     setActions.addToCollection,
     {
       key: 'remove',
-      label: 'Retirer de la liste',
+      label: 'Retirer de la liste cadeaux',
+      icon: 'trash',
       destructive: true,
       confirm: (count) => `${count} set(s) seront retirés de votre liste cadeaux Brickset.`,
       run: async (setNums) => {

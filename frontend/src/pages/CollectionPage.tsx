@@ -61,15 +61,17 @@ export default function CollectionPage() {
   }
 
   const actions: BulkAction[] = [
-    { key: 'prices', label: 'Rafraîchir les prix', run: refreshPrices },
+    { key: 'prices', label: 'Actualiser les prix', icon: 'refresh', run: refreshPrices },
     {
       key: 'move',
-      label: 'Déplacer…',
+      label: 'Déplacer vers une liste',
+      icon: 'folder',
       run: async (setNums) => setMoveTarget(setNums),
     },
     {
       key: 'remove',
       label: 'Retirer de la collection',
+      icon: 'trash',
       destructive: true,
       confirm: (count) =>
         `${count} set(s) seront retirés de votre collection Rebrickable. Les scans, prix payés et alertes sont conservés.`,

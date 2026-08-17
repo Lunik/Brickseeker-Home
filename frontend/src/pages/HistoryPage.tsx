@@ -36,6 +36,7 @@ export default function HistoryPage() {
     {
       key: 'delete',
       label: 'Retirer tous les scans',
+      icon: 'trash',
       destructive: true,
       // A set still owned only loses its "scanned" flag — say so, rather than implying the set is
       // deleted outright.
