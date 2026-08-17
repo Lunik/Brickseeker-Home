@@ -11,9 +11,10 @@ interface PriceAlertEditorProps {
   onClose: () => void
   setNum: string
   setName: string
-  /** Which condition is being edited — the two alerts are independent. */
+  /** Which condition the editor opens on — the two alerts are independent. */
   condition: ListCondition
-  existing?: PriceAlert | null
+  /** Every alert stored for this set, so switching condition inside the sheet loads the right one. */
+  alerts?: PriceAlert[]
   /** Only used to preview the resulting amount while typing a percentage; the authoritative
    *  reference is resolved and frozen server-side at save time. */
   referenceHint?: { amount: number; sourceName: string } | null
@@ -25,17 +26,35 @@ export default function PriceAlertEditor({
   setNum,
   setName,
   condition: initialCondition,
-  existing,
+  alerts = [],
   referenceHint,
 }: PriceAlertEditorProps) {
   const queryClient = useQueryClient()
-  const [condition, setCondition] = useState<ListCondition>(existing?.condition ?? initialCondition)
+
+  const storedFor = (value: ListCondition) => alerts.find((alert) => alert.condition === value) ?? null
+
+  const [condition, setCondition] = useState<ListCondition>(initialCondition)
+  const initial = storedFor(initialCondition)
   const [mode, setMode] = useState<'amount' | 'percent'>(
-    existing?.discountPercent != null ? 'percent' : 'amount',
+    initial?.discountPercent != null ? 'percent' : 'amount',
   )
-  const [amount, setAmount] = useState(existing?.thresholdEur?.toString() ?? '')
-  const [percent, setPercent] = useState(existing?.discountPercent?.toString() ?? '')
-  const [enabled, setEnabled] = useState(existing?.isEnabled ?? true)
+  const [amount, setAmount] = useState(initial?.thresholdEur?.toString() ?? '')
+  const [percent, setPercent] = useState(initial?.discountPercent?.toString() ?? '')
+  const [enabled, setEnabled] = useState(initial?.isEnabled ?? true)
+
+  // Neuf and occasion hold two distinct alerts, so moving the picker has to reload the fields —
+  // without it, opening "occasion" kept the "neuf" threshold on screen and saving copied it over.
+  const [loadedCondition, setLoadedCondition] = useState(initialCondition)
+  if (loadedCondition !== condition) {
+    const stored = storedFor(condition)
+    setLoadedCondition(condition)
+    setMode(stored?.discountPercent != null ? 'percent' : 'amount')
+    setAmount(stored?.thresholdEur?.toString() ?? '')
+    setPercent(stored?.discountPercent?.toString() ?? '')
+    setEnabled(stored?.isEnabled ?? true)
+  }
+
+  const existing = storedFor(condition)
 
   const save = useMutation({
     mutationFn: () =>

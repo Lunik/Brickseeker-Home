@@ -1,5 +1,6 @@
 import type { PriceQuote, PriceSourceKey, SetDetail } from '../api/types'
 import { AVAILABILITY_LABEL, formatEUR, formatRelative, SOURCE_LABEL } from '../lib/format'
+import Icon from './Icon'
 import { Badge, Spinner } from './ui'
 
 /**
@@ -105,6 +106,8 @@ export default function PriceCard({
     <section className="card space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h2 className="section-title">Prix</h2>
+        {/* An icon, as in the iOS price header: the label was the widest thing in the card and
+            pulled the eye away from the prices, which are what the card is for. */}
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -116,11 +119,13 @@ export default function PriceCard({
           </button>
           <button
             type="button"
-            className="btn-secondary px-2 py-1 text-xs"
+            className="nav-circle h-9 w-9"
             onClick={onRefresh}
             disabled={isRefreshing}
+            aria-label="Tout rafraîchir"
+            title="Tout rafraîchir"
           >
-            {isRefreshing ? <Spinner className="h-3.5 w-3.5" /> : 'Tout rafraîchir'}
+            {isRefreshing ? <Spinner className="h-4 w-4" /> : <Icon name="refresh" className="h-4 w-4" />}
           </button>
         </div>
       </div>
@@ -153,15 +158,8 @@ export default function PriceCard({
           </span>
         </li>
 
-        {ROW_ORDER.map((source) => (
-          <QuoteRow
-            key={source}
-            label={SOURCE_LABEL[source]}
-            quote={bySource.get(source)}
-            storePrice={storePrice}
-          />
-        ))}
-
+        {/* Directly under the retail price it is derived from, as on iOS — at the bottom of the
+            list it read as a summary of every source, which it is not. */}
         {pricePerPart !== null && (
           <li className="flex items-center justify-between gap-3 py-2.5">
             <p className="text-sm font-medium text-ink">Prix par pièce</p>
@@ -179,25 +177,18 @@ export default function PriceCard({
             </span>
           </li>
         )}
-      </ul>
 
-      {detail.storeUrl && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <a className="btn-ghost px-2 py-1 text-xs" href={detail.storeUrl} target="_blank" rel="noreferrer noopener">
-            Voir sur lego.com
-          </a>
-          {detail.instructionsUrl && (
-            <a
-              className="btn-ghost px-2 py-1 text-xs"
-              href={detail.instructionsUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              Notices de montage
-            </a>
-          )}
-        </div>
-      )}
+        {ROW_ORDER.map((source) => (
+          <QuoteRow
+            key={source}
+            label={SOURCE_LABEL[source]}
+            quote={bySource.get(source)}
+            storePrice={storePrice}
+          />
+        ))}
+      </ul>
+      {/* No links here: lego.com and the building instructions are both in the "Liens" card at the
+          foot of the screen, where everything that leaves the app is grouped. */}
     </section>
   )
 }

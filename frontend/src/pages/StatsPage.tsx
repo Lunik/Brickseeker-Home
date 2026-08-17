@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -16,6 +17,7 @@ import {
 import { api } from '../api/client'
 import type { CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
+import ListConditionsSheet from '../components/ListConditionsSheet'
 import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
 import { formatEUR, formatEURCompact, formatNumber } from '../lib/format'
 
@@ -25,6 +27,7 @@ const MAX_THEME_BARS = 10
 export default function StatsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [showListConditions, setShowListConditions] = useState(false)
 
   const { data, isLoading, error, isFetching } = useQuery({
     queryKey: ['stats'],
@@ -152,29 +155,38 @@ export default function StatsPage() {
         </ResponsiveContainer>
       </section>
 
-      {/* Horizontal bars with the theme name above each, as on iOS — a vertical chart truncates
-          theme names to unreadable stubs at phone width. */}
+      {/* Horizontal bars against a category axis, as in the iOS `BarMark(x: sets, y: theme)`.
+          Names above the bars (the previous attempt) wrapped onto two or three lines at phone
+          width and collided with the bar above — the gutter is the readable place for them. */}
       <section className="card space-y-2">
         <h2 className="text-[20px] font-bold text-ink">Répartition par thème</h2>
-        <ResponsiveContainer width="100%" height={Math.max(220, topThemes.length * 52)}>
+        <ResponsiveContainer width="100%" height={topThemes.length * 30 + 36}>
           <BarChart
             data={topThemes}
             layout="vertical"
-            margin={{ top: 8, right: 8, bottom: 4, left: 4 }}
-            barCategoryGap={18}
+            margin={{ top: 4, right: 30, bottom: 4, left: 0 }}
+            barCategoryGap={8}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11, fill: 'rgb(var(--ink-faint))' }} allowDecimals={false} />
-            <YAxis type="category" dataKey="themeName" hide />
+            <YAxis
+              type="category"
+              dataKey="themeName"
+              width={104}
+              interval={0}
+              tickLine={false}
+              axisLine={false}
+              tick={<ThemeTick />}
+            />
             <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "rgb(var(--ink))" }} cursor={tooltipCursor} />
-            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" barSize={12} radius={[0, 3, 3, 0]}>
-              {/* The theme name sits above its own bar, as on iOS — a category axis would squeeze
-                  every label into a truncated left gutter at phone width. */}
+            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" barSize={14} radius={[0, 4, 4, 0]}>
+              {/* The count rides just past the end of its own bar: the short bars are otherwise
+                  indistinguishable from each other. */}
               <LabelList
-                dataKey="themeName"
-                position="top"
-                offset={8}
-                style={{ fill: 'rgb(var(--ink-muted))', fontSize: 12 }}
+                dataKey="setCount"
+                position="right"
+                offset={6}
+                style={{ fill: 'rgb(var(--ink-muted))', fontSize: 11 }}
               />
             </Bar>
           </BarChart>
@@ -212,10 +224,12 @@ export default function StatsPage() {
             Compléter les prix manquants ({missing})
           </button>
         )}
+        {/* Opens the editor itself. It used to navigate to Ma collection, leaving the user to
+            find the same sheet behind a tag button in that screen's navigation bar. */}
         <button
           type="button"
           className="btn-ghost w-full justify-between gap-2 px-0 text-left"
-          onClick={() => navigate('/collection')}
+          onClick={() => setShowListConditions(true)}
         >
           Configurer le type (neuf/occasion) des listes
           <Icon name="chevron-right" className="h-4 w-4" />
@@ -308,7 +322,36 @@ export default function StatsPage() {
           </a>
         </div>
       </section>
+
+      <ListConditionsSheet
+        open={showListConditions}
+        onClose={() => setShowListConditions(false)}
+      />
     </div>
+  )
+}
+
+/**
+ * A theme name in the chart's left gutter, truncated with an ellipsis rather than left to run off
+ * the edge of the gutter — SVG text has no `text-overflow`, so an over-long name simply spilled
+ * out of the card ("Speed Champions" rendered as "eed Champions"). Fourteen characters is what
+ * fits at this width, and it is enough to keep "Series 29 minifigures" apart from "Series 24".
+ */
+function ThemeTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const full = String(payload?.value ?? '')
+  const label = full.length > 14 ? `${full.slice(0, 14)}…` : full
+  return (
+    <text
+      x={x}
+      y={y}
+      dx={-6}
+      dy={4}
+      textAnchor="end"
+      style={{ fill: 'rgb(var(--ink-muted))', fontSize: 11 }}
+    >
+      <title>{full}</title>
+      {label}
+    </text>
   )
 }
 

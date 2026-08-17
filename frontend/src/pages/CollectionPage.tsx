@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
-import type { CollectionPayload, ListCondition, SetRow } from '../api/types'
+import type { CollectionPayload, SetRow } from '../api/types'
+import ListConditionsSheet from '../components/ListConditionsSheet'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import Icon from '../components/Icon'
 import { EmptyState, Sheet } from '../components/ui'
-import { CONDITION_LABEL, formatDateTime } from '../lib/format'
+import { formatDateTime } from '../lib/format'
 
 export default function CollectionPage() {
   const navigate = useNavigate()
@@ -23,12 +24,6 @@ export default function CollectionPage() {
   const sync = useMutation({
     mutationFn: () => api.post<CollectionPayload>('/collection/sync'),
     onSuccess: () => queryClient.invalidateQueries(),
-  })
-
-  const setCondition = useMutation({
-    mutationFn: (payload: { listId: number; condition: ListCondition }) =>
-      api.patch(`/collection/lists/${payload.listId}`, { condition: payload.condition }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection'] }),
   })
 
   interface BulkResult {
@@ -150,37 +145,7 @@ export default function CollectionPage() {
         }
       />
 
-      {/* The per-list condition has no Rebrickable equivalent: it is what decides whether a list's
-          sets are valued as new (retail chain) or used (BrickLink occasion). */}
-      <Sheet open={showLists} title="Conditions des listes" onClose={() => setShowLists(false)}>
-        <p className="mb-3 text-sm text-ink-muted">
-          La condition d'une liste décide de la source de prix utilisée pour valoriser les sets
-          qu'elle contient.
-        </p>
-        <ul className="divide-y divide-line">
-          {lists.map((list) => (
-            <li key={list.id} className="flex items-center gap-3 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-ink">{list.name}</span>
-                <span className="block text-xs text-ink-faint">{list.numSets} set(s)</span>
-              </span>
-              <select
-                className="input w-auto"
-                value={list.condition}
-                onChange={(event) =>
-                  setCondition.mutate({
-                    listId: list.id,
-                    condition: event.target.value as ListCondition,
-                  })
-                }
-              >
-                <option value="newSet">{CONDITION_LABEL.newSet}</option>
-                <option value="used">{CONDITION_LABEL.used}</option>
-              </select>
-            </li>
-          ))}
-        </ul>
-      </Sheet>
+      <ListConditionsSheet open={showLists} onClose={() => setShowLists(false)} />
 
       <Sheet
         open={moveTarget !== null}

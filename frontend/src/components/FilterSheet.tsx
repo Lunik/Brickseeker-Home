@@ -26,33 +26,40 @@ interface FilterSheetProps {
  * A row in a grouped card: label on the left, current value on the right — the shape of an iOS
  * `Form` picker row, rather than a label stacked above a full-width control.
  *
- * The select carries its own value text (so no second copy can drift out of sync) and is
- * right-aligned with a chevron beside it.
+ * The value is drawn as text and the `<select>` is a transparent overlay on the whole row. A
+ * styled select cannot be right-aligned: its box is as wide as its widest option, and the browser
+ * lays the chosen label out at the *left* of that box — so "Tous" floated in the middle of the row
+ * while "Dans ma collection" reached the chevron. Text plus an invisible native picker gives the
+ * iOS alignment and keeps the platform picker UI.
  */
 function PickerRow({
   label,
   value,
+  valueLabel,
   onChange,
   children,
 }: {
   label: string
   value: string
+  /** What the current value reads as — the row's own copy, since the select is invisible. */
+  valueLabel: string
   onChange: (value: string) => void
   children: React.ReactNode
 }) {
   return (
-    <label className="flex min-h-12 items-center gap-3 border-b border-line px-4 py-3 last:border-0">
+    <div className="relative flex min-h-12 items-center gap-3 border-b border-line px-4 py-3 last:border-0">
       <span className="shrink-0 text-[17px] text-ink">{label}</span>
+      <span className="ml-auto min-w-0 truncate text-right text-[17px] text-ink-muted">{valueLabel}</span>
+      <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-ink-faint" />
       <select
-        className="ml-auto min-w-0 max-w-[55%] cursor-pointer appearance-none truncate bg-transparent text-right text-[17px] text-ink-muted focus:outline-none"
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
       >
         {children}
       </select>
-      <Icon name="chevron-right" className="pointer-events-none h-4 w-4 shrink-0 text-ink-faint" />
-    </label>
+    </div>
   )
 }
 
@@ -95,10 +102,13 @@ export default function FilterSheet({
           <h3 className="section-title px-1">Tri</h3>
           <div className="list-card">
             <div className="flex min-h-12 items-center gap-2 px-4 py-2">
-              <label className="relative flex flex-1 items-center gap-3">
-                <span className="flex-1 text-[17px] text-ink">Trier par</span>
+              <div className="relative flex flex-1 items-center gap-3">
+                <span className="shrink-0 text-[17px] text-ink">Trier par</span>
+                <span className="ml-auto min-w-0 truncate text-right text-[17px] text-ink-muted">
+                  {SORT_LABEL[filter.sort]}
+                </span>
                 <select
-                  className="cursor-pointer appearance-none bg-transparent pr-1 text-right text-[17px] text-ink-muted focus:outline-none"
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   value={filter.sort}
                   onChange={(event) => {
                     const sort = event.target.value as SortOption
@@ -114,7 +124,7 @@ export default function FilterSheet({
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
               <button
                 type="button"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-muted active:opacity-60"
@@ -133,6 +143,7 @@ export default function FilterSheet({
             <PickerRow
               label="Thème"
               value={filter.themeName ?? ''}
+              valueLabel={filter.themeName ?? 'Tous'}
               onChange={(value) => setFilter({ themeName: value || null })}
             >
               <option value="">Tous</option>
@@ -146,6 +157,7 @@ export default function FilterSheet({
             <PickerRow
               label="Année"
               value={filter.year === null ? '' : String(filter.year)}
+              valueLabel={filter.year === null ? 'Toutes' : String(filter.year)}
               onChange={(value) => setFilter({ year: value ? Number(value) : null })}
             >
               <option value="">Toutes</option>
@@ -160,6 +172,7 @@ export default function FilterSheet({
               <PickerRow
                 label="Liste"
                 value={filter.listName ?? ''}
+                valueLabel={filter.listName ?? 'Toutes'}
                 onChange={(value) => setFilter({ listName: value || null })}
               >
                 <option value="">Toutes</option>
@@ -175,6 +188,13 @@ export default function FilterSheet({
               <PickerRow
                 label="Possession"
                 value={filter.ownedOnly === null ? '' : String(filter.ownedOnly)}
+                valueLabel={
+                  filter.ownedOnly === null
+                    ? 'Tous'
+                    : filter.ownedOnly
+                      ? 'Dans ma collection'
+                      : 'Pas dans ma collection'
+                }
                 onChange={(value) =>
                   setFilter({ ownedOnly: value === '' ? null : value === 'true' })
                 }
@@ -189,6 +209,7 @@ export default function FilterSheet({
               <PickerRow
                 label="Disponibilité lego.com"
                 value={filter.availability ?? ''}
+                valueLabel={filter.availability ? AVAILABILITY_LABEL[filter.availability] : 'Toutes'}
                 onChange={(value) =>
                   setFilter({ availability: (value || null) as StoreAvailability | null })
                 }

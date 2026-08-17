@@ -22,11 +22,24 @@ interface MapPoint {
 
 // Leaflet's default marker icons are resolved relative to the CSS, which Vite's bundling breaks.
 // An inline SVG divIcon avoids the broken-image markers entirely and needs no asset pipeline.
+//
+// A teardrop rather than the dot it used to be: a dot marks its centre, and the centre of a circle
+// drawn over a map is ambiguous about which spot it means — the tip of a pin is not. `rgb(var(...))`
+// resolves here because the marker is a real element in the document, so the pin follows the theme
+// colour, and the white outline keeps it legible over both the green and the grey of OSM tiles.
 const markerIcon = L.divIcon({
   className: '',
-  html: '<div style="width:18px;height:18px;border-radius:50%;background:rgb(227,0,11);border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+  html: `
+    <svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg"
+         style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))">
+      <path d="M13 1C6.9 1 2 5.9 2 12c0 7.7 9.4 19.1 10.2 20a1 1 0 0 0 1.6 0C14.6 31.1 24 19.7 24 12 24 5.9 19.1 1 13 1Z"
+            fill="rgb(var(--brand))" stroke="#fff" stroke-width="2"/>
+      <circle cx="13" cy="12" r="4" fill="#fff" fill-opacity="0.92"/>
+    </svg>`,
+  iconSize: [26, 34],
+  // The tip, not the middle: the pin must point at the scan's coordinates.
+  iconAnchor: [13, 34],
+  popupAnchor: [0, -30],
 })
 
 export default function ScanMap() {

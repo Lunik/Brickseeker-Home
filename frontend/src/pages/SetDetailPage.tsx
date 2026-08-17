@@ -165,7 +165,18 @@ export default function SetDetailPage() {
   if (error) return <ErrorLabel message={(error as Error).message} />
   if (!data) return <EmptyState icon={<Icon name="search" className="h-9 w-9" />} title="Set introuvable" />
 
-  const alertsByCondition = new Map(data.alerts.map((alert) => [alert.condition, alert]))
+  const armedAlerts = data.alerts.filter((alert) => alert.isEnabled)
+  /** Three states, as on iOS: no alert, a stored alert switched off, and one actually armed. */
+  const alertSummary = armedAlerts.length
+    ? armedAlerts
+        .map(
+          (alert) =>
+            `${CONDITION_LABEL[alert.condition].toLowerCase()} sous ${formatEUR(alert.effectiveThresholdEur)}`,
+        )
+        .join(' · ')
+    : data.alerts.length
+      ? 'Désactivée'
+      : null
 
   return (
     <div className="space-y-5 pb-8">
@@ -292,14 +303,26 @@ export default function SetDetailPage() {
           </div>
 
           <div className="list-card">
+            {/* One row for both conditions, carrying their state — as on iOS, where the same row
+                is the "an alert is armed" marker. A second card at the foot of the screen listing
+                "Neuf / Occasion · Créer" said the same thing twice. */}
             <button
               type="button"
               className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left active:bg-surface-sunken"
-              onClick={() => setAlertCondition('newSet')}
+              onClick={() => setAlertCondition(data.alerts[0]?.condition ?? 'newSet')}
             >
-              <Icon name="bell" className="h-5 w-5 text-brand" />
-              <span className="flex-1 text-[17px] text-ink">Alerte de prix</span>
-              <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />
+              <Icon
+                name={armedAlerts.length ? 'bell' : data.alerts.length ? 'bell-off' : 'bell'}
+                filled={armedAlerts.length > 0}
+                className={`h-5 w-5 ${armedAlerts.length ? 'text-[rgb(var(--warning))]' : 'text-brand'}`}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[17px] text-ink">Alerte de prix</span>
+                {alertSummary && (
+                  <span className="block text-[13px] text-ink-faint">{alertSummary}</span>
+                )}
+              </span>
+              <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-ink-faint" />
             </button>
             <button
               type="button"
@@ -335,33 +358,6 @@ export default function SetDetailPage() {
       />
 
       <PriceHistoryChart history={data.priceHistory} soldListings={data.soldListings} />
-
-      <section className="card space-y-2">
-        <h2 className="section-title">Alertes de prix</h2>
-        {(['newSet', 'used'] as const).map((condition) => {
-          const alert = alertsByCondition.get(condition)
-          return (
-            <div key={condition} className="flex items-center justify-between gap-3 py-1">
-              <span className="text-sm text-ink">
-                {CONDITION_LABEL[condition]}
-                {alert && (
-                  <span className="block text-xs text-ink-faint">
-                    Seuil {formatEUR(alert.effectiveThresholdEur)}
-                    {alert.isEnabled ? '' : ' · désactivée'}
-                  </span>
-                )}
-              </span>
-              <button
-                type="button"
-                className="btn-ghost px-2 py-1 text-xs"
-                onClick={() => setAlertCondition(condition)}
-              >
-                {alert ? 'Modifier' : 'Créer'}
-              </button>
-            </div>
-          )
-        })}
-      </section>
 
       {data.scanEvents.length > 0 && (
         <section className="card space-y-2">
@@ -524,7 +520,7 @@ export default function SetDetailPage() {
         setNum={setNum}
         setName={data.set.name}
         condition={alertCondition ?? 'newSet'}
-        existing={data.alerts.find((item) => item.condition === alertCondition) ?? null}
+        alerts={data.alerts}
         referenceHint={
           data.storePriceEur
             ? { amount: data.storePriceEur, sourceName: 'lego.com (officiel)' }

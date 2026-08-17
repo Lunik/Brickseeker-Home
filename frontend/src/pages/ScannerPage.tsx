@@ -5,6 +5,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { LegoSet, ResolveResult } from '../api/types'
 import { useCamera } from '../hooks/useCamera'
+import {
+  playCandidateDetected,
+  playResolutionFailed,
+  playResolutionSucceeded,
+  prepareFeedback,
+} from '../lib/feedback'
 import { useSettings } from '../lib/settings-context'
 import Icon from '../components/Icon'
 import { SetThumbnail } from '../components/ui'
@@ -62,11 +68,22 @@ export default function ScannerPage() {
   // Read inside the interval without making it a dependency: putting it in the deps tore the
   // timer down and rebuilt it on every resolve, restarting the cadence each time.
   const resolvingRef = useRef(false)
+  /** The last candidate that got a beep, so one detection is one cue and not one per frame. */
+  const pulsedRef = useRef<string | null>(null)
 
   const captureLocation = Boolean(preferences?.scan_location_enabled)
 
+  // Opening the scanner is a user gesture, which is what lets the audio context start at all —
+  // one created later, inside the capture loop, is born suspended and stays silent.
+  useEffect(() => {
+    prepareFeedback()
+  }, [])
+
   const resolve = useCallback(
     async (setNum: string, source: string) => {
+      // Only the camera path gives feedback: a phone that buzzes while you type a number by hand
+      // is noise, and the user is looking at the screen anyway. Same rule as iOS.
+      const withFeedback = source === 'camera'
       resolvingRef.current = true
       setResolving(true)
       setMessage(null)
@@ -89,6 +106,7 @@ export default function ScannerPage() {
 
         const result = await api.post<ResolveResult>('/scan/lookup', { setNum, source, ...coords })
         if (result.set) {
+          if (withFeedback) playResolutionSucceeded()
           await queryClient.invalidateQueries({ queryKey: ['history'] })
           if (batchMode) {
             // Stay on the camera: the whole point of the session is not to interrupt the sweep.
@@ -105,16 +123,21 @@ export default function ScannerPage() {
           return
         }
         if (result.status === 'ambiguous' && result.candidates.length) {
+          // Something *was* recognised — the user still has to pick, but the scan worked.
+          if (withFeedback) playResolutionSucceeded()
           setAmbiguous(result.candidates)
           return
         }
+        if (withFeedback) playResolutionFailed()
         setMessage(`Aucun set trouvé pour « ${setNum} ».`)
       } catch (caught) {
+        if (withFeedback) playResolutionFailed()
         setMessage(caught instanceof Error ? caught.message : 'Recherche impossible')
       } finally {
         resolvingRef.current = false
         setResolving(false)
         setCandidate(null)
+        pulsedRef.current = null
       }
     },
     [batchMode, captureLocation, navigate, queryClient],
@@ -163,6 +186,12 @@ export default function ScannerPage() {
         const best = ranked[0]
         if (!best) return
         setCandidate(best[0])
+        // Fires the moment a number is picked out of the frame, before any network call — the
+        // point is to tell a user holding the phone at arm's length that the shot landed.
+        if (pulsedRef.current !== best[0]) {
+          pulsedRef.current = best[0]
+          playCandidateDetected()
+        }
 
         const [setNum, seen] = best
         if (seen.count >= MIN_SIGHTINGS && now - seen.firstSeen >= DEBOUNCE_MS) {
