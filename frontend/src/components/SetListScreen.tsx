@@ -65,6 +65,18 @@ export interface SetListScreenProps {
   renderItems?: (rows: SetRowData[], selection: RenderSelection) => ReactNode
   /** The caller already applied `filter` server-side; skip the client-side pass. */
   serverFiltered?: boolean
+  /** What the trailing count caption calls one row — the minifig gallery isn't sets. */
+  itemNoun?: string
+  /**
+   * Theme/year choices for the filter sheet, computed over the screen's whole scope.
+   *
+   * Required on a `serverFiltered` screen: `rows` there is one page, and deriving the dropdown
+   * from it offers only whatever theme/year happened to land on that page — picking anything else
+   * silently returned nothing (#finding-10). Omit on a client-filtered screen, where `rows` really
+   * is everything and deriving from it is correct.
+   */
+  themeOptions?: string[]
+  yearOptions?: number[]
 }
 
 export default function SetListScreen({
@@ -89,6 +101,9 @@ export default function SetListScreen({
   isRefreshing = false,
   renderItems,
   serverFiltered = false,
+  itemNoun = 'set',
+  themeOptions,
+  yearOptions,
 }: SetListScreenProps) {
   const { filter, setFilter, reset, isActive } = useFilterState(screenId, defaultSort)
   const [showFilters, setShowFilters] = useState(false)
@@ -105,12 +120,14 @@ export default function SetListScreen({
   )
 
   const themes = useMemo(
-    () => [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(),
-    [rows],
+    () => themeOptions ?? [...new Set(rows.map((row) => row.themeName).filter(Boolean))].sort(),
+    [rows, themeOptions],
   )
   const years = useMemo(
-    () => [...new Set(rows.map((row) => row.year).filter((year) => year > 0))].sort((a, b) => b - a),
-    [rows],
+    () =>
+      yearOptions ??
+      [...new Set(rows.map((row) => row.year).filter((year) => year > 0))].sort((a, b) => b - a),
+    [rows, yearOptions],
   )
   const lists = useMemo(
     () =>
@@ -257,48 +274,52 @@ export default function SetListScreen({
             }
           />
         )
-      ) : renderItems ? (
-        renderItems(rendered, {
-          selecting,
-          isSelected: (setNum) => selected.has(setNum),
-          activate: (row) => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible)),
-          openMenu: (row) => {
-            if (!selecting && bulkActions.length > 0) setMenuFor(row)
-          },
-        })
       ) : (
         <>
-          {/* One grouped card holding every row, dividers inset past the thumbnail. */}
-          <ul className="list-card">
-            {rendered.map((row, index) => (
-              <li
-                key={row.setNum}
-                className={index > 0 ? 'border-t border-line ml-[76px] pl-0' : ''}
-              >
-                <div className={index > 0 ? '-ml-[76px]' : ''}>
-                  <SetRow
-                    row={row}
-                    subtitle={subtitleFor?.(row)}
-                    selecting={selecting}
-                    selected={selected.has(row.setNum)}
-                    onClick={() => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible))}
-                    onContextMenu={
-                      selecting || bulkActions.length === 0
-                        ? undefined
-                        : (event) => {
-                            event.preventDefault()
-                            setMenuFor(row)
-                          }
-                    }
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-          {/* The observer target: reaching it mounts the next page. */}
+          {renderItems ? (
+            renderItems(rendered, {
+              selecting,
+              isSelected: (setNum) => selected.has(setNum),
+              activate: (row) => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible)),
+              openMenu: (row) => {
+                if (!selecting && bulkActions.length > 0) setMenuFor(row)
+              },
+            })
+          ) : (
+            // One grouped card holding every row, dividers inset past the thumbnail.
+            <ul className="list-card">
+              {rendered.map((row, index) => (
+                <li
+                  key={row.setNum}
+                  className={index > 0 ? 'border-t border-line ml-[76px] pl-0' : ''}
+                >
+                  <div className={index > 0 ? '-ml-[76px]' : ''}>
+                    <SetRow
+                      row={row}
+                      subtitle={subtitleFor?.(row)}
+                      selecting={selecting}
+                      selected={selected.has(row.setNum)}
+                      onClick={() => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible))}
+                      onContextMenu={
+                        selecting || bulkActions.length === 0
+                          ? undefined
+                          : (event) => {
+                              event.preventDefault()
+                              setMenuFor(row)
+                            }
+                      }
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* The observer target: reaching it mounts the next page. Both branches above need it —
+              renderItems screens (the minifig grid) page exactly like the list does. */}
           <div ref={sentinelRef} aria-hidden="true" />
           <p className="px-1 text-[13px] text-ink-faint">
-            {visible.length} set{visible.length > 1 ? 's' : ''}
+            {visible.length} {itemNoun}
+            {visible.length > 1 ? 's' : ''}
             {visible.length !== rows.length ? ` sur ${rows.length}` : ''}
             {renderLimit < visible.length ? ` · ${renderLimit} affichés` : ''}
           </p>

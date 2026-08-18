@@ -197,10 +197,18 @@ export function Badge({
 /**
  * The stand-in for a minifig with no usable artwork — the same idea as the iOS `MinifigPlaceholder`
  * asset. Bundled (Vite hashes it into the build) rather than fetched, so the fallback can't itself
- * fail to load, and trimmed and palette-reduced to 13 KB from the 1 MB original.
+ * fail to load, and trimmed to a transparent-background 2.3 KB PNG from the 1 MB original — safe to
+ * drop on any surface, light or dark, unlike `SetThumbnail`'s fixed white tile below.
  */
-export function MinifigPlaceholder({ className = 'h-full w-full object-contain' }: { className?: string }) {
-  return <img src={minifigPlaceholder} alt="" aria-hidden="true" className={className} />
+export function MinifigPlaceholder({ className = '' }: { className?: string }) {
+  return (
+    <img
+      src={minifigPlaceholder}
+      alt=""
+      aria-hidden="true"
+      className={`h-full w-full object-contain ${className}`}
+    />
+  )
 }
 
 /**
@@ -211,10 +219,13 @@ export function SetThumbnail({
   url,
   alt,
   size = 'md',
+  isMinifig = false,
 }: {
   url: string | null | undefined
   alt: string
   size?: 'sm' | 'md' | 'lg'
+  /** Missing artwork falls back to the minifig silhouette instead of the generic brick icon. */
+  isMinifig?: boolean
 }) {
   // Rebrickable serves plenty of URLs that 404, and a failed <img> falls back to the browser's own
   // torn-page glyph — which looks like the app is broken rather than the artwork missing. `onError`
@@ -232,6 +243,8 @@ export function SetThumbnail({
           className="h-full w-full object-contain p-0.5"
           onError={() => setFailed(true)}
         />
+      ) : isMinifig ? (
+        <MinifigPlaceholder className="p-1" />
       ) : (
         <Icon name="brick" className="h-6 w-6 text-ink-faint" />
       )}

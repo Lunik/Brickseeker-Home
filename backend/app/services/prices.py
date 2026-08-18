@@ -13,6 +13,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
+from ..db import session_scope
 from . import alerts, bricklink, collection_repo
 from .pricing import PriceQuote, is_minifig
 from .rebrickable import LegoSet
@@ -99,9 +100,13 @@ async def refresh_set_prices(
     """
     set_num = lego_set.set_num
 
-    store_task = (
-        asyncio.create_task(fetch_store_price(session, set_num)) if include_store else None
-    )
+    async def isolated_store_price() -> StorePrice | None:
+        # Own session: this task runs concurrently with `fetch_prices` below, and an AsyncSession
+        # cannot be shared across concurrent operations (SQLAlchemy raises, or worse, doesn't).
+        async with session_scope() as store_session:
+            return await fetch_store_price(store_session, set_num)
+
+    store_task = asyncio.create_task(isolated_store_price()) if include_store else None
     quotes = await fetch_prices(session, lego_set)
     store_price = await store_task if store_task else None
 

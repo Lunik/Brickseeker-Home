@@ -41,7 +41,12 @@ WORKDIR /app
 
 COPY backend/pyproject.toml ./backend/pyproject.toml
 COPY backend/app/__init__.py ./backend/app/__init__.py
-RUN pip install --no-cache-dir ./backend
+# Editable, not a normal install: at this point `backend/app/` holds nothing but `__init__.py` (kept
+# minimal on purpose, so a code-only change doesn't bust this layer and force every dependency to
+# reinstall) — a normal `pip install` would copy *that* into site-packages as the whole `app`
+# package. Editable only registers a path redirect, so it resolves against whatever is actually in
+# `/app/backend/app/` once the real tree lands below, rather than the empty stub frozen at this step.
+RUN pip install --no-cache-dir -e ./backend
 
 # Chromium + its system libraries. Kept in its own layer so a code change doesn't re-download it.
 RUN playwright install --with-deps chromium \

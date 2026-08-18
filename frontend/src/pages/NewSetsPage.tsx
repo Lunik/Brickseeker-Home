@@ -78,6 +78,18 @@ export default function NewSetsPage() {
     enabled: hasCatalog,
   })
 
+  // Over the whole catalogue this screen browses, not just the current 60-row page — a dropdown
+  // built from `rows` alone offered only what happened to be on that page (#finding-10).
+  const filterOptions = useQuery({
+    queryKey: ['new-sets-filter-options', includeAll],
+    queryFn: () =>
+      api.get<{ themes: string[]; years: number[] }>(
+        `/catalog/new-sets/filter-options${query({ includeAll })}`,
+      ),
+    enabled: hasCatalog,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const download = useMutation({
     mutationFn: () => api.post('/catalog/sets/download'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['catalog-status'] }),
@@ -156,6 +168,8 @@ export default function NewSetsPage() {
         // The rows are already the server's answer; filtering them again would re-filter one page.
         serverFiltered
         rows={rows}
+        themeOptions={filterOptions.data?.themes}
+        yearOptions={filterOptions.data?.years}
         isLoading={isLoading}
         error={error ? (error as Error).message : null}
         bulkActions={[actions.refreshPrices, actions.addToCollection, actions.addToWishlist]}

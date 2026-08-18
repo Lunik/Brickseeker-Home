@@ -6,6 +6,7 @@ import { api, imageUrl, query } from '../api/client'
 import type { CatalogStatus, MinifigRow, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import SetListScreen from '../components/SetListScreen'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFilterState } from '../hooks/useFilterState'
 import { EmptyState, ErrorLabel, MinifigPlaceholder, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
@@ -19,7 +20,7 @@ import { formatEUR } from '../lib/format'
  */
 function MinifigTile({ row }: { row: SetRow }) {
   const [failed, setFailed] = useState(false)
-  const src = row.setImgUrl ? imageUrl(row.setImgUrl) : null
+  const src = imageUrl(row.setImgUrl)
 
   return (
     // Fixed box, as on the detail screen: the grid must not reflow as images land. Desaturated
@@ -39,7 +40,7 @@ function MinifigTile({ row }: { row: SetRow }) {
           onError={() => setFailed(true)}
         />
       ) : (
-        <MinifigPlaceholder className="h-full w-full object-contain p-2" />
+        <MinifigPlaceholder className="p-2" />
       )}
     </div>
   )
@@ -72,6 +73,10 @@ export default function MinifigsPage() {
   // The same store instance `SetListScreen` uses for this screen id, so the search field and the
   // filter sheet drive the query without a second copy of that state.
   const { filter } = useFilterState('minifigs', 'name')
+  // The field itself binds to `filter.search` directly, so typing feels instant; only the query
+  // waits — without this, each keystroke re-ran the handler's full scan (every pivot row, every
+  // one of ~17 000 catalogue rows, plus every cached price) against the whole catalogue.
+  const debouncedSearch = useDebouncedValue(filter.search, 300)
 
   const status = useQuery({
     queryKey: ['catalog-status'],
@@ -82,11 +87,11 @@ export default function MinifigsPage() {
   const hasCatalog = (status.data?.minifigs.rowCount ?? 0) > 0
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['minifigs', ownedOnly, filter],
+    queryKey: ['minifigs', ownedOnly, { ...filter, search: debouncedSearch }],
     queryFn: () =>
       api.get<{ count: number; results: MinifigRow[] }>(
         `/catalog/minifigs${query({
-          search: filter.search,
+          search: debouncedSearch,
           themeName: filter.themeName,
           year: filter.year,
           ownedOnly,
@@ -98,6 +103,21 @@ export default function MinifigsPage() {
         })}`,
       ),
     enabled: hasCatalog,
+    // The catalogue and the collection don't change mid-session; a filter/sort tweak re-fetching
+    // instantly matters far more than shaving a few minutes off freshness.
+    staleTime: 60_000,
+  })
+
+  // Over the whole scope this screen browses, not just the current page — a dropdown built from
+  // `rows` alone offered only whatever theme/year happened to land there (#finding-10).
+  const filterOptions = useQuery({
+    queryKey: ['minifigs-filter-options', ownedOnly],
+    queryFn: () =>
+      api.get<{ themes: string[]; years: number[] }>(
+        `/catalog/minifigs/filter-options${query({ ownedOnly })}`,
+      ),
+    enabled: hasCatalog,
+    staleTime: 5 * 60 * 1000,
   })
 
   const download = useMutation({
@@ -186,6 +206,9 @@ export default function MinifigsPage() {
       showAvailabilityFilter={false}
       searchPlaceholder="Nom ou identifiant"
       rows={rows}
+      itemNoun="minifig"
+      themeOptions={filterOptions.data?.themes}
+      yearOptions={filterOptions.data?.years}
       // The server did the filtering and the sorting; re-applying them here would only re-filter
       // a page that is already a subset, and hide rows the server deliberately matched.
       serverFiltered

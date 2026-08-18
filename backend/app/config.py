@@ -109,8 +109,15 @@ class Settings(BaseSettings):
         if key_file.exists():
             return key_file.read_text().strip()
         generated = secrets.token_urlsafe(48)
-        key_file.write_text(generated)
-        key_file.chmod(0o600)
+        # Created pre-restricted (O_EXCL | 0600), not written-then-chmod'd: the credentials this
+        # key decrypts must never be readable by another user even for the instant between the
+        # two calls a separate chmod would leave open.
+        try:
+            fd = os.open(key_file, os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return key_file.read_text().strip()
+        with os.fdopen(fd, "w") as handle:
+            handle.write(generated)
         return generated
 
 

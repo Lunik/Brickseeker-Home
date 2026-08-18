@@ -266,25 +266,30 @@ async def load_and_extract(
 # Price string parsing (port of `PriceParsing.swift`)
 # --------------------------------------------------------------------------------------
 
-#: Thousands groups are matched explicitly (three digits behind a space) so `"1 174,00 EUR"` reads
-#: as 1174 rather than stopping at the first digit — Cdiscount space-separates some prices and not
-#: others, and the narrow/non-breaking spaces it uses are normalised to plain spaces first.
-_AMOUNT_RE = re.compile(r"[0-9]+(?:[ ][0-9]{3})*(?:[.,][0-9]+)?")
+#: Thousands groups are matched explicitly (three digits behind a space, dot or comma) so
+#: `"1 174,00 EUR"`, `"1.174,00 EUR"` and `"$1,174.00"` all read as 1174 rather than stopping at
+#: the first separator. A trailing group counts as the *decimal* fraction rather than another
+#: thousands group precisely when it has one or two digits, not three — that length, not which
+#: character it uses, is what disambiguates it. The narrow/non-breaking spaces sites use are
+#: normalised to plain spaces first.
+_AMOUNT_RE = re.compile(r"(?P<whole>[0-9]+(?:[ .,][0-9]{3})*)(?:[.,](?P<frac>[0-9]{1,2}))?")
 _CURRENCY_CODE_RE = re.compile(r"[A-Z]{3}")
 _SPACES = (" ", " ", " ")
 
 
 def parse_amount(raw: str) -> float | None:
-    """Best-effort amount out of a scraped price string (`"EUR 22.50"`, `"€22,50"`, `"1 174,00 €"`)."""
+    """Best-effort amount out of a scraped price string. Handles the formatting conventions
+    actually seen across sites: `"EUR 22.50"`, `"22,50 EUR"`, `"1 174,00 EUR"` (French),
+    `"1.174,00 EUR"` (German/Cdiscount) and `"$1,174.00"` (US)."""
     cleaned = raw
     for space in _SPACES:
         cleaned = cleaned.replace(space, " ")
     match = _AMOUNT_RE.search(cleaned)
     if match is None:
         return None
-    number = match.group(0).replace(" ", "")
-    # A lone comma is the French decimal mark; a comma *alongside* a dot is a thousands separator.
-    number = number.replace(",", "." if "," in number and "." not in number else "")
+    whole = re.sub(r"[ .,]", "", match.group("whole"))
+    frac = match.group("frac")
+    number = f"{whole}.{frac}" if frac else whole
     try:
         return float(number)
     except ValueError:

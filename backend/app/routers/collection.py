@@ -176,13 +176,28 @@ async def bulk_action(payload: BulkIn, session: SessionDep) -> dict[str, object]
                     ),
                     None,
                 )
-                await collection_repo.set_collection_status(
-                    session,
-                    set_num,
-                    is_in_collection=True,
-                    list_id=payload.list_id,
-                    list_name=list_name,
-                )
+                user_set = await client.fetch_user_set(set_num) if cached is None else None
+                if user_set is not None:
+                    # No cache row yet — a catalogue set added straight into a list, never
+                    # opened first. `set_collection_status` no-ops without a row, so this needs
+                    # the same fetch-and-upsert `add_to_collection` uses, or the move succeeds on
+                    # Rebrickable and never appears in Ma collection until a full sync.
+                    await collection_repo.cache_set(
+                        session,
+                        user_set.lego_set,
+                        is_in_collection=True,
+                        list_id=user_set.list_id or payload.list_id,
+                        list_name=list_name,
+                        mark_as_scanned=False,
+                    )
+                else:
+                    await collection_repo.set_collection_status(
+                        session,
+                        set_num,
+                        is_in_collection=True,
+                        list_id=payload.list_id,
+                        list_name=list_name,
+                    )
             else:
                 raise ApiError(f"Action inconnue : {payload.action}")
         except ApiError as error:

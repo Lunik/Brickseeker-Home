@@ -12,9 +12,9 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
 
 from ..db import session_scope
-from ..deps import SessionDep, require_auth
+from ..deps import ApiError, SessionDep, require_auth
 from ..schemas import CamelModel, OkOut, SetRowOut
-from ..services import brickset, catalog, collection_repo, wishlist_sync
+from ..services import brickset, catalog, collection_repo, rebrickable, wishlist_sync
 from ..services.pricing import resolve_wishlist_price_detailed
 
 router = APIRouter(prefix="/wishlist", tags=["liste cadeaux"], dependencies=[Depends(require_auth)])
@@ -92,6 +92,18 @@ async def import_wishlist(
 async def add_to_wishlist(set_num: str, session: SessionDep) -> OkOut:
     client = await brickset.client_for(session)
     await client.add_to_wishlist(set_num)
+    if await collection_repo.cached_set(session, set_num) is None:
+        # No cache row yet — a catalogue set added straight to the wishlist, never scanned or
+        # owned. `set_wishlist_status` no-ops without a row, so the add would succeed on Brickset
+        # and never appear in Liste cadeaux until a full sync — the same case
+        # `wishlist_sync.apply`'s enrichment pass exists to cover for the bulk sync path.
+        rebrickable_client = await rebrickable.client_for(session)
+        try:
+            lego_set = await rebrickable_client.fetch_set(set_num)
+        except ApiError:
+            lego_set = None
+        if lego_set is not None:
+            await collection_repo.cache_wishlist_set(session, lego_set)
     await collection_repo.set_wishlist_status(session, set_num, True)
     return OkOut()
 

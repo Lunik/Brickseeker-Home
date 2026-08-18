@@ -88,6 +88,37 @@ async def themes(session: SessionDep) -> dict[str, object]:
     return {"themes": [{"themeId": theme_id, "name": name} for theme_id, name in sorted(names.items())]}
 
 
+@router.get("/new-sets/filter-options")
+async def new_sets_filter_options(
+    session: SessionDep,
+    include_all: bool = Query(default=False, alias="includeAll"),
+) -> dict[str, object]:
+    """Theme and year choices for Nouveaux sets, over its whole scope — not just the current page.
+
+    `SetListScreen` normally derives filter options from the `rows` it was handed, which is correct
+    for a client-filtered screen (`rows` is everything) but not for this `serverFiltered` one:
+    `rows` there is one 60-row page, so the dropdown offered only whatever themes/years happened to
+    land on it, and picking anything else showed nothing (#finding-10). Scoped by `includeAll` the
+    same way `/new-sets` itself is, so the choices always match what that call would actually find.
+    """
+    hide_enabled = bool(await app_settings.get_setting(session, "hide_wearables_enabled"))
+    theme_names = await catalog.theme_names(session)
+
+    query_stmt = select(CatalogSet.theme_id, CatalogSet.year).distinct()
+    baseline = (await session.execute(select(func.min(CatalogSet.first_seen_at)))).scalar_one_or_none()
+    if not include_all and baseline is not None:
+        query_stmt = query_stmt.where(CatalogSet.first_seen_at > baseline)
+    pairs = (await session.execute(query_stmt)).all()
+
+    theme_ids = {theme_id for theme_id, _ in pairs}
+    years = {year for _, year in pairs if year > 0}
+    visible_theme_ids = {
+        theme_id for theme_id in theme_ids if not await catalog.should_hide(session, theme_id, hide_enabled)
+    }
+    themes_out = sorted({theme_names.get(theme_id, f"Thème #{theme_id}") for theme_id in visible_theme_ids})
+    return {"themes": themes_out, "years": sorted(years, reverse=True)}
+
+
 @router.get("/new-sets")
 async def new_sets(
     session: SessionDep,
@@ -165,7 +196,7 @@ async def new_sets(
             )
         )
 
-    results.sort(key=_sort_key(sort), reverse=not ascending)
+    results = _sort_results(results, sort, ascending)
     return {
         "count": len(results),
         "results": results[offset : offset + limit],
@@ -173,22 +204,64 @@ async def new_sets(
     }
 
 
-def _sort_key(sort: str):  # noqa: ANN202 - a key function per sort option
+def _sort_nulls_last(rows: list, value_of, *, ascending: bool) -> list:
+    """Sorts by `value_of`, with rows whose value is `None` always trailing — independent of
+    `ascending`.
+
+    A `(has_value, value)` tuple key can't do this: `reverse=not ascending` flips the has-value
+    partition along with the value order, so "Prix croissant" put every unpriced set *first* —
+    `False < True` wins when not reversed. Keeping the None/non-None split outside the reversible
+    key, as a separate pass, is what `useFilterState.ts`'s `compareNullable` also does client-side.
+    """
+    present = [row for row in rows if value_of(row) is not None]
+    missing = [row for row in rows if value_of(row) is None]
+    present.sort(key=value_of, reverse=not ascending)
+    return [*present, *missing]
+
+
+def _sort_results(results: list, sort: str, ascending: bool) -> list:
     match sort:
         case "year":
             # `year` ties constantly — it is the finest date Rebrickable exposes, so hundreds of
             # sets share one value. `set_num` is not a chronological claim, only a stable one, so
-            # the list stops reshuffling ties between reloads.
-            return lambda row: (row.year, row.set_num)
+            # the list stops reshuffling ties between reloads. Never `None`, so no null handling.
+            results.sort(key=lambda row: (row.year, row.set_num), reverse=not ascending)
+            return results
         case "name":
-            return lambda row: row.name.lower()
+            results.sort(key=lambda row: row.name.lower(), reverse=not ascending)
+            return results
         case "partCount":
-            return lambda row: row.num_parts
+            results.sort(key=lambda row: row.num_parts, reverse=not ascending)
+            return results
         case "price":
-            # Unpriced entries sort last in both directions.
-            return lambda row: (row.resolved_price is not None, row.resolved_price or 0.0)
+            return _sort_nulls_last(results, lambda row: row.resolved_price, ascending=ascending)
         case _:
-            return lambda row: (row.first_seen_at is not None, row.first_seen_at or datetime.min)
+            return _sort_nulls_last(results, lambda row: row.first_seen_at, ascending=ascending)
+
+
+@router.get("/minifigs/filter-options")
+async def minifigs_filter_options(
+    session: SessionDep,
+    owned_only: bool = Query(default=True, alias="ownedOnly"),
+) -> dict[str, object]:
+    """Theme and year choices for the minifig gallery, over its whole scope — see
+    `new_sets_filter_options` for why `rows`-derived options are wrong on a `serverFiltered`
+    screen. Mirrors `owned_only` the same way the gallery itself does: with it on, a theme the
+    user owns nothing in is not a useful filter choice, so it isn't offered.
+    """
+    theme_names = await catalog.theme_names(session)
+    rows = (await session.execute(select(CatalogMinifig))).scalars().all()
+
+    if owned_only:
+        owned_set_nums = {cached.set_num for cached in await collection_repo.owned_sets(session)}
+        pivots = (await session.execute(select(CatalogMinifigSet))).scalars().all()
+        owned_fig_nums = {pivot.fig_num for pivot in pivots if pivot.set_num in owned_set_nums}
+        rows = [row for row in rows if row.fig_num in owned_fig_nums]
+
+    theme_ids = {row.theme_id for row in rows if row.theme_id is not None}
+    years = {row.year for row in rows if row.year}
+    themes_out = sorted({theme_names.get(theme_id, f"Thème #{theme_id}") for theme_id in theme_ids})
+    return {"themes": themes_out, "years": sorted(years, reverse=True)}
 
 
 @router.get("/minifigs")
@@ -277,10 +350,7 @@ async def minifigs(
         case "year":
             results.sort(key=lambda row: (row.year or 0, row.fig_num), reverse=not ascending)
         case "price":
-            results.sort(
-                key=lambda row: (row.resolved_price is not None, row.resolved_price or 0.0),
-                reverse=not ascending,
-            )
+            results = _sort_nulls_last(results, lambda row: row.resolved_price, ascending=ascending)
         case _:
             results.sort(key=lambda row: row.name.lower(), reverse=not ascending)
 

@@ -45,6 +45,8 @@ _TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 #: Anything larger than this is not a set thumbnail; refusing it keeps a hostile redirect from
 #: filling the volume.
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+#: A redirect chain this long is not a CDN doing HTTP->HTTPS or a canonical-host bounce.
+_MAX_REDIRECTS = 5
 
 
 class ImageNotAllowed(Exception):
@@ -85,23 +87,46 @@ async def fetch_cached_image(url: str) -> tuple[bytes, str]:
         return path.read_bytes(), _content_type(path)
 
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            payload = response.content
+        payload, content_type = await _download(url, path)
     except httpx.HTTPError as error:
         raise ImageUnavailable(url) from error
-
-    if len(payload) > MAX_IMAGE_BYTES:
-        raise ImageUnavailable(url)
 
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_bytes(payload)
     tmp.replace(path)  # atomic: a concurrent reader never sees a half-written file
     _evict_if_needed()
 
-    content_type = response.headers.get("content-type", _content_type(path)).split(";")[0]
     return payload, content_type
+
+
+async def _download(url: str, path: Path) -> tuple[bytes, str]:
+    """Fetch `url`, following redirects by hand and re-checking the allowlist on every hop.
+
+    `follow_redirects=True` only lets us see the *final* URL after the request already happened —
+    by then a redirect to an internal address has already reached it. And the size cap must apply
+    to bytes as they arrive, not to a fully-buffered body: buffering first defeats the whole point
+    of the cap, an oversized response is what it exists to stop paying for.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=False) as client:
+        for _ in range(_MAX_REDIRECTS):
+            async with client.stream("GET", url) as response:
+                if response.has_redirect_location:
+                    url = str(response.url.join(response.headers["location"]))
+                    if not _is_allowed(url):
+                        raise ImageNotAllowed(url)
+                    continue
+
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", _content_type(path)).split(
+                    ";"
+                )[0]
+                chunks = bytearray()
+                async for chunk in response.aiter_bytes():
+                    chunks.extend(chunk)
+                    if len(chunks) > MAX_IMAGE_BYTES:
+                        raise ImageUnavailable(url)
+                return bytes(chunks), content_type
+        raise ImageUnavailable(url)
 
 
 def _evict_if_needed() -> None:

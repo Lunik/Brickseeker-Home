@@ -32,6 +32,7 @@ from app.services.pricing import (
     resolve_wishlist_price,
     resolve_wishlist_price_condition,
 )
+from app.services.scraping.browser import parse_amount
 
 
 def quote(source: PriceSource, amount: float, **kwargs: object) -> PriceQuote:
@@ -248,3 +249,28 @@ class TestStoreAvailability:
     )
     def test_only_the_three_observed_strings_map(self, raw: str | None, expected: StoreAvailability) -> None:
         assert StoreAvailability.from_raw(raw) is expected
+
+
+class TestParseAmount:
+    """Every quote the four resolution chains above see starts as a scraped string — a wrong
+    separator here is wrong for every downstream decision at once, the same failure mode the
+    module docstring warns about."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("EUR 22.50", 22.50),
+            ("€22,50", 22.50),
+            ("1 174,00 €", 1174.0),  # French: space thousands, comma decimal
+            ("1.174,00 €", 1174.0),  # German/Cdiscount: dot thousands, comma decimal
+            ("$1,174.00", 1174.0),  # US: comma thousands, dot decimal
+            ("129,99 €", 129.99),
+            ("1234.56", 1234.56),  # no thousands separator at all
+            ("1 174 €", 1174.0),  # thousands, no decimal part
+        ],
+    )
+    def test_handles_every_separator_convention(self, raw: str, expected: float) -> None:
+        assert parse_amount(raw) == pytest.approx(expected)
+
+    def test_returns_none_without_a_number(self) -> None:
+        assert parse_amount("Indisponible") is None

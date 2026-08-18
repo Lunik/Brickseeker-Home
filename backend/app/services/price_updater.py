@@ -102,11 +102,23 @@ class PriceUpdater:
         """
         if self._state.is_running or self._watch_running:
             return "busy"
+        # Claimed synchronously, before the first `await` below: two `POST /prices/batch/start`
+        # calls arriving close together (the button lives on six different screens) both passed
+        # the check above while this was still False, then both built a queue and both started a
+        # `_run` — two loops popping the same queue, double-incrementing `done`, scraping some sets
+        # twice and racing each other's `finally` for `last_completed_at`. Nothing can run between
+        # this line and the check above, so nothing can observe the gap.
+        self._state.is_running = True
 
-        async with session_scope() as session:
-            queue = await self._build_queue(session, set_nums, only_missing)
+        try:
+            async with session_scope() as session:
+                queue = await self._build_queue(session, set_nums, only_missing)
+        except BaseException:
+            self._state.is_running = False
+            raise
 
         if not queue:
+            self._state.is_running = False
             self._state.last_completed_at = datetime.now(UTC)
             return "empty"
 

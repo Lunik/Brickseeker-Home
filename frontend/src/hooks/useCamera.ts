@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /**
  * The rear camera, as a hook.
@@ -146,14 +146,15 @@ export function useCamera(enabled: boolean): CameraHandle {
     [],
   )
 
-  return {
-    videoRef,
-    isActive,
-    error,
-    hasTorch,
-    torchOn,
-    toggleTorch,
-    captureFrame,
-    restart: () => setAttempt((value) => value + 1),
-  }
+  const restart = useCallback(() => setAttempt((value) => value + 1), [])
+
+  // A fresh object every render defeats any effect that depends on this handle wholesale — exactly
+  // the `resolvingRef`-vs-effect-deps trap described above, but for the handle itself: the capture
+  // loop in ScannerPage depends on `camera`, so an unmemoized return tore that interval down and
+  // rebuilt it on every `setResolving`/`setCandidate` inside a resolve, restarting its 800 ms
+  // cadence each time.
+  return useMemo(
+    () => ({ videoRef, isActive, error, hasTorch, torchOn, toggleTorch, captureFrame, restart }),
+    [isActive, error, hasTorch, torchOn, toggleTorch, captureFrame, restart],
+  )
 }

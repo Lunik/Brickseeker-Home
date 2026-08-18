@@ -16,6 +16,7 @@ import {
   EmptyState,
   ErrorLabel,
   LoadingBlock,
+  MinifigPlaceholder,
   Sheet,
   SetThumbnail,
   StatusLine,
@@ -69,6 +70,10 @@ export default function SetDetailPage() {
   const [showLists, setShowLists] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [paidPriceValue, setPaidPriceValue] = useState('')
+  // Paging through siblings reuses this component (the route has no `key`), so a broken image on
+  // one set must not keep showing the placeholder once the pager moves to a set whose image is fine.
+  const [heroImageFailed, setHeroImageFailed] = useState(false)
+  useEffect(() => setHeroImageFailed(false), [setNum])
 
   const key = ['set', setNum]
   const { data, isLoading, error } = useQuery({
@@ -228,12 +233,17 @@ export default function SetDetailPage() {
         {/* A fixed box reserved before the image loads: without it the whole page shifted down
             the moment the artwork arrived, moving whatever the user was about to tap. */}
         <div className="flex h-64 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/5">
-          {data.set.setImgUrl ? (
+          {data.set.setImgUrl && !heroImageFailed ? (
             <img
               src={imageUrl(data.set.setImgUrl)}
               alt={data.set.name}
               className="h-full w-full object-contain"
+              onError={() => setHeroImageFailed(true)}
             />
+          ) : data.isMinifig ? (
+            // The tile itself is `bg-white/5` (near-transparent, dark in dark mode) — safe only
+            // because the placeholder's own background is transparent (#finding-15), not white.
+            <MinifigPlaceholder className="h-40 w-40" />
           ) : (
             <Icon name="brick" className="h-12 w-12 text-ink-faint" />
           )}
@@ -407,6 +417,7 @@ export default function SetDetailPage() {
             caption: entry.quantity && entry.quantity > 1 ? `×${entry.quantity}` : entry.setNum,
           }))}
           onOpen={(figNum) => navigate(`/set/${encodeURIComponent(figNum)}`)}
+          isMinifig
         />
       )}
 
@@ -567,10 +578,13 @@ function Gallery({
   title,
   items,
   onOpen,
+  isMinifig = false,
 }: {
   title: string
   items: { key: string; name: string; imgUrl: string | null; caption: string }[]
   onOpen: (key: string) => void
+  /** Whether every item here is a minifig — "Minifigs de ce set" is, "Sets similaires" isn't. */
+  isMinifig?: boolean
 }) {
   return (
     <section className="card space-y-2">
@@ -579,7 +593,7 @@ function Gallery({
         {items.map((item) => (
           <li key={item.key} className="w-24 shrink-0">
             <button type="button" className="w-full text-left" onClick={() => onOpen(item.key)}>
-              <SetThumbnail url={item.imgUrl} alt={item.name} size="lg" />
+              <SetThumbnail url={item.imgUrl} alt={item.name} size="lg" isMinifig={isMinifig} />
               <span className="mt-1 block truncate text-xs font-medium text-ink" title={item.name}>
                 {item.name}
               </span>

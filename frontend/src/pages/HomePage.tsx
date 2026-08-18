@@ -19,10 +19,6 @@ interface WishlistPayload {
   isLinked: boolean
 }
 
-interface StatsPayload {
-  setCount: number
-}
-
 /**
  * The app root — and the app's only navigation hub, exactly as on iOS: every other screen is
  * reached from a tile here or from the floating scan cluster.
@@ -60,12 +56,6 @@ export default function HomePage() {
     queryFn: () => api.get<{ count: number }>('/catalog/minifigs?ownedOnly=true&limit=1'),
     retry: false,
   })
-  const stats = useQuery({
-    queryKey: ['stats-lite'],
-    queryFn: () => api.get<StatsPayload>('/stats'),
-    enabled: false,
-  })
-
   const sync = useMutation({
     mutationFn: () => api.post<CollectionPayload>('/collection/sync'),
     onSuccess: async () => {
@@ -209,7 +199,7 @@ export default function HomePage() {
               <Link to="/collection">
                 <StatCard
                   title="Sets possédés"
-                  value={String(collection.data?.sets.length ?? stats.data?.setCount ?? 0)}
+                  value={String(collection.data?.sets.length ?? 0)}
                   icon={<Icon name="box" className="h-7 w-7" />}
                   isLink
                 />

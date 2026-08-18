@@ -867,7 +867,7 @@ async def upsert_price_alert(
     threshold_eur: float | None = None,
     discount_percent: float | None = None,
     reference_price_eur: float | None = None,
-    reference_source_name: float | None = None,
+    reference_source_name: str | None = None,
     is_enabled: bool = True,
 ) -> PriceAlert:
     """Creates or replaces the alert for (set, condition). Exactly one of `threshold_eur` /

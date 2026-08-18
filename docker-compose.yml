@@ -9,17 +9,13 @@ services:
     volumes:
       # Everything mutable: SQLite database, image cache, catalogue snapshots, secret key.
       - ./data:/data
-    environment:
-      # Optional password gate. Leave unset for an open LAN-only deployment.
-      # BRICKSEEKER_PASSWORD: "change-me"
-      #
-      # Pin this in a real deployment: it encrypts the stored Rebrickable/Brickset/BrickLink
-      # credentials. Left unset, one is generated into /data/secret.key on first run.
-      # BRICKSEEKER_SECRET_KEY: "..."
-      BRICKSEEKER_LOG_LEVEL: INFO
-      # Set to false to never launch Chromium (drops lego.com/Amazon/Cdiscount prices,
-      # keeps BrickLink and everything else).
-      BRICKSEEKER_SCRAPING_ENABLED: "true"
+    # `environment:` takes precedence over `env_file:` and would silently shadow whatever a
+    # user sets in .env, so configuration lives only in .env / .env.example — see there.
+    # required: false — the README's quick start is `docker compose up -d` with no setup step,
+    # and an empty/absent .env is documented as a working configuration.
+    env_file:
+      - path: .env
+        required: false
     # Chromium needs more than Docker's default 64 MB of shared memory or it crashes mid-page.
     shm_size: "1gb"
     healthcheck:

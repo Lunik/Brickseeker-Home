@@ -37,7 +37,6 @@ export default function ScannerPage() {
   const queryClient = useQueryClient()
   const { preferences } = useSettings()
 
-  const [paused, setPaused] = useState(false)
   const [candidate, setCandidate] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [ambiguous, setAmbiguous] = useState<LegoSet[] | null>(null)
@@ -53,7 +52,7 @@ export default function ScannerPage() {
 
   // Any sheet covering the camera stops it — the iOS scanner treats this as a hard rule, and
   // it is also what keeps a background resolve from yanking the user off a form they are typing.
-  const isCovered = paused || showManual || ambiguous !== null
+  const isCovered = showManual || ambiguous !== null
   const camera = useCamera(!isCovered)
 
   /**
@@ -330,10 +329,7 @@ export default function ScannerPage() {
       <Sheet
         open={ambiguous !== null}
         title="Plusieurs sets correspondent"
-        onClose={() => {
-          setAmbiguous(null)
-          setPaused(false)
-        }}
+        onClose={() => setAmbiguous(null)}
       >
         <ul className="divide-y divide-line">
           {(ambiguous ?? []).map((set) => (
