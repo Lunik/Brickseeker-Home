@@ -77,14 +77,28 @@ jobs:
 
       # Reads conventional commits (feat/fix/...) since the previous tag and turns them into
       # a categorized changelog for the release body. Commits that don't follow the convention
-      # are left out rather than mis-categorized.
+      # are left out rather than mis-categorized. Fails hard when there is no previous tag
+      # (e.g. the very first release), so that case falls back to a plain commit log below.
       - name: Generate changelog
         id: changelog
+        continue-on-error: true
         uses: requarks/changelog-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
           writeToFile: false
+
+      - name: Fallback changelog (no previous tag)
+        id: changelog_fallback
+        if: steps.changelog.outcome == 'failure'
+        run: |
+          {
+            echo "changes<<CHANGELOG_EOF"
+            echo "_Première publication : pas de tag précédent pour un changelog par commits conventionnels._"
+            echo ""
+            git log --pretty='- %s (%h)'
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       # Release-ready compose file: points at the just-published GHCR image instead of building
       # locally, so it works as a standalone download from the release page.
@@ -108,7 +122,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ steps.changelog.outputs.changes }}
+          body: ${{ steps.changelog.outputs.changes || steps.changelog_fallback.outputs.changes }}
           files: |
             docker-compose.release.yml
             image-digest.txt
