@@ -1,0 +1,192 @@
+[
+  {
+    "name": "home",
+    "search": "home",
+    "file": "home.svg"
+  },
+  {
+    "name": "box",
+    "search": "box/package",
+    "file": "box.svg"
+  },
+  {
+    "name": "camera",
+    "search": "camera",
+    "file": "camera.svg"
+  },
+  {
+    "name": "clock",
+    "search": "clock/history",
+    "file": "clock.svg"
+  },
+  {
+    "name": "gift",
+    "search": "gift",
+    "file": "gift.svg"
+  },
+  {
+    "name": "bell",
+    "search": "bell/notification",
+    "file": "bell.svg"
+  },
+  {
+    "name": "bell-off",
+    "search": "bell slash",
+    "file": "bell-off.svg"
+  },
+  {
+    "name": "settings",
+    "search": "gear/settings",
+    "file": "settings.svg"
+  },
+  {
+    "name": "warning",
+    "search": "warning triangle",
+    "file": "warning.svg"
+  },
+  {
+    "name": "hash",
+    "search": "hashtag/number",
+    "file": "hash.svg"
+  },
+  {
+    "name": "chart",
+    "search": "bar chart",
+    "file": "chart.svg"
+  },
+  {
+    "name": "user",
+    "search": "user/person",
+    "file": "user.svg"
+  },
+  {
+    "name": "sparkles",
+    "search": "sparkles/new",
+    "file": "sparkles.svg"
+  },
+  {
+    "name": "image",
+    "search": "image/photo",
+    "file": "image.svg"
+  },
+  {
+    "name": "keyboard",
+    "search": "keyboard",
+    "file": "keyboard.svg"
+  },
+  {
+    "name": "heart",
+    "search": "heart",
+    "file": "heart.svg"
+  },
+  {
+    "name": "search",
+    "search": "magnifying glass",
+    "file": "search.svg"
+  },
+  {
+    "name": "filter",
+    "search": "filter/funnel",
+    "file": "filter.svg"
+  },
+  {
+    "name": "map",
+    "search": "map",
+    "file": "map.svg"
+  },
+  {
+    "name": "upload",
+    "search": "upload",
+    "file": "upload.svg"
+  },
+  {
+    "name": "link",
+    "search": "link/chain",
+    "file": "link.svg"
+  },
+  {
+    "name": "close",
+    "search": "close/cross",
+    "file": "close.svg"
+  },
+  {
+    "name": "flashlight",
+    "search": "flashlight/torch",
+    "file": "flashlight.svg"
+  },
+  {
+    "name": "eye",
+    "search": "eye",
+    "file": "eye.svg"
+  },
+  {
+    "name": "eye-off",
+    "search": "eye slash",
+    "file": "eye-off.svg"
+  },
+  {
+    "name": "chevron-left",
+    "search": "chevron left",
+    "file": "chevron-left.svg"
+  },
+  {
+    "name": "chevron-right",
+    "search": "chevron right",
+    "file": "chevron-right.svg"
+  },
+  {
+    "name": "check",
+    "search": "check/tick",
+    "file": "check.svg"
+  },
+  {
+    "name": "refresh",
+    "search": "refresh/reload",
+    "file": "refresh.svg"
+  },
+  {
+    "name": "plus",
+    "search": "plus",
+    "file": "plus.svg"
+  },
+  {
+    "name": "minus",
+    "search": "minus",
+    "file": "minus.svg"
+  },
+  {
+    "name": "brick",
+    "search": "lego brick",
+    "file": "brick.svg"
+  },
+  {
+    "name": "download",
+    "search": "download",
+    "file": "download.svg"
+  },
+  {
+    "name": "tag",
+    "search": "price tag",
+    "file": "tag.svg"
+  },
+  {
+    "name": "inbox",
+    "search": "inbox",
+    "file": "inbox.svg"
+  },
+  {
+    "name": "viewfinder",
+    "search": "viewfinder/scan frame",
+    "file": "viewfinder.svg"
+  },
+  {
+    "name": "checklist",
+    "search": "checklist",
+    "file": "checklist.svg"
+  },
+  {
+    "name": "layers",
+    "search": "layers/stack",
+    "file": "layers.svg"
+  }
+]

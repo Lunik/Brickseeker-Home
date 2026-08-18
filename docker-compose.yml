@@ -1,0 +1,47 @@
+services:
+  brickseeker:
+    build: .
+    image: brickseeker:latest
+    container_name: brickseeker
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Everything mutable: SQLite database, image cache, catalogue snapshots, secret key.
+      - ./data:/data
+    # `environment:` takes precedence over `env_file:` and would silently shadow whatever a
+    # user sets in .env, so configuration lives only in .env / .env.example — see there.
+    # required: false — the README's quick start is `docker compose up -d` with no setup step,
+    # and an empty/absent .env is documented as a working configuration.
+    env_file:
+      - path: .env
+        required: false
+    # Not a user setting like the rest of .env: this is the wiring between the two services this
+    # file defines, so it belongs here rather than in .env.example. Point it at a different CDP
+    # endpoint (or drop it, to fall back to launching Chromium in-process — see browser.py) to use
+    # something other than the bundled `chromium` sidecar.
+    environment:
+      - BRICKSEEKER_BROWSER_WS_ENDPOINT=ws://chromium:3000
+    depends_on:
+      - chromium
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  chromium:
+    # Headless Chromium as its own service instead of bundled into the app image (see Dockerfile) —
+    # lego.com/Amazon/Cdiscount prices need a real browser engine to get past their bot checks, but
+    # that engine no longer has to inflate the image everyone rebuilds on every code change.
+    # Pinned rather than `:latest`: an upstream Chromium bump silently changing what a bot check
+    # sees is exactly the kind of drift this app can't afford — bump deliberately, then re-run
+    # ui-parity-check / a manual price refresh against lego.com before trusting the new tag.
+    image: ghcr.io/browserless/chromium:v2.55.4
+    container_name: brickseeker-chromium
+    restart: unless-stopped
+    # No `ports:` — reachable only from `brickseeker` over the compose network, the same exposure
+    # Chromium had when it ran inside that container's own process.
+    # Chromium needs more than Docker's default 64 MB of shared memory or it crashes mid-page.
+    shm_size: "1gb"

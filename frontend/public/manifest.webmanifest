@@ -1,0 +1,15 @@
+{
+  "name": "BrickSeeker",
+  "short_name": "BrickSeeker",
+  "description": "Scanne des sets LEGO, gère ta collection et compare les prix.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#E3000B",
+  "lang": "fr",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

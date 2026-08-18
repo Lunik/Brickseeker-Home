@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens, matched to the iOS app measured side by side in the simulator.
+ *
+ * Dark mode is **pure black** (SwiftUI's `.systemBackground`) with `.secondarySystemBackground`
+ * cards and no borders — the card reads as raised purely by being lighter than the page. Light
+ * mode is the inverse grouped style: a grey page, white cards. Getting these two backgrounds wrong
+ * is what made the first pass look like a different app.
+ *
+ * `--brand` is rewritten at runtime by lib/theme.ts, so nothing hardcodes which of the three LEGO
+ * colours is active.
+ */
+:root {
+  --brand: 227 0 11; /* rouge #E3000B */
+  --brand-soft: 253 232 233;
+
+  --surface: 242 242 247; /* grouped page background */
+  --surface-raised: 255 255 255; /* cards */
+  --surface-sunken: 229 229 234; /* controls inside a card */
+
+  --ink: 0 0 0;
+  --ink-muted: 60 60 67;
+  --ink-faint: 138 138 142;
+  --line: 209 209 214;
+
+  --positive: 52 199 89;
+  --negative: 255 59 48;
+  --warning: 255 149 0;
+
+  color-scheme: light;
+}
+
+.dark {
+  --brand-soft: 60 20 22;
+
+  --surface: 0 0 0;
+  --surface-raised: 28 28 30;
+  --surface-sunken: 44 44 46;
+
+  --ink: 255 255 255;
+  --ink-muted: 174 174 178;
+  --ink-faint: 142 142 147;
+  --line: 56 56 58;
+
+  --positive: 48 209 88;
+  --negative: 255 69 58;
+  --warning: 255 159 10;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@layer components {
+  /* The grouped card. No border: the lighter fill is what raises it, exactly as on iOS. */
+  .card {
+    @apply rounded-2xl bg-surface-raised p-4;
+  }
+
+  /* A card holding rows, with the dividers inset past the leading content (iOS list style). */
+  .list-card {
+    @apply overflow-hidden rounded-2xl bg-surface-raised;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[17px] font-semibold
+           transition-opacity active:opacity-60 disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand text-white;
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface-sunken text-ink;
+  }
+
+  /* iOS's most common action: tinted text, no chrome at all. */
+  .btn-ghost {
+    @apply btn bg-transparent font-normal text-brand;
+  }
+
+  .btn-danger {
+    @apply btn bg-[rgb(var(--negative))] text-white;
+  }
+
+  /* The pill buttons in a navigation bar — circular for an icon, oval for a word. */
+  .nav-pill {
+    @apply inline-flex min-h-11 items-center justify-center gap-1 rounded-full bg-surface-raised px-4
+           text-[17px] text-brand transition-opacity active:opacity-60 disabled:opacity-40;
+  }
+
+  .nav-circle {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-brand
+           transition-opacity active:opacity-60 disabled:opacity-40;
+  }
+
+  .input {
+    @apply w-full rounded-xl bg-surface-sunken px-3 py-3 text-[17px] text-ink
+           placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
+  }
+
+  /* The search field is a fully-rounded pill with the glass inside it. */
+  .search-field {
+    @apply w-full rounded-full bg-surface-raised py-3 pl-11 pr-4 text-[17px] text-ink
+           placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium;
+  }
+
+  /* Section label above a grouped card: plain grey, sentence case — never uppercase. */
+  .section-title {
+    @apply text-[17px] font-semibold text-ink-muted;
+  }
+
+  /* Explanatory copy under a grouped card. */
+  .section-footer {
+    @apply px-1 text-[13px] leading-snug text-ink-faint;
+  }
+
+  .segmented {
+    @apply flex rounded-lg bg-surface-sunken p-0.5;
+  }
+
+  .segmented-option {
+    @apply flex-1 rounded-md py-1.5 text-center text-[15px] font-medium text-ink transition-colors;
+  }
+
+  .segmented-option-active {
+    @apply bg-[rgb(var(--ink))]/15 font-semibold;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
