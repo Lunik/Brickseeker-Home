@@ -86,7 +86,6 @@ export default function WishlistPage() {
         rows={data?.sets ?? []}
         isLoading={isLoading}
         error={error ? (error as Error).message : null}
-        subtitleFor={(row) => [row.themeName, row.year || null].filter(Boolean).join(' · ')}
         bulkActions={actions}
         onOpenSet={(row, visible) =>
           navigate(`/set/${encodeURIComponent(row.setNum)}`, {

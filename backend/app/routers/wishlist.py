@@ -15,9 +15,17 @@ from ..db import session_scope
 from ..deps import ApiError, SessionDep, require_auth
 from ..schemas import CamelModel, OkOut, SetRowOut
 from ..services import brickset, catalog, collection_repo, rebrickable, wishlist_sync
-from ..services.pricing import resolve_wishlist_price_detailed
+from ..services.pricing import ListCondition, resolve_wishlist_price_detailed
 
 router = APIRouter(prefix="/wishlist", tags=["liste cadeaux"], dependencies=[Depends(require_auth)])
+
+#: Wishlist-specific wording (iOS `WishlistView.priceLabel`, #157): a wishlist set isn't owned, so
+#: "Neuf"/"Occasion" (what the collection chains use) would describe a condition nobody holds —
+#: "meilleure offre" says what the amount actually is instead.
+_WISHLIST_PRICE_LABEL = {
+    ListCondition.NEW: "Meilleure offre",
+    ListCondition.USED: "Meilleure offre (occasion)",
+}
 
 
 class WishlistOut(CamelModel):
@@ -47,7 +55,7 @@ async def read_wishlist(session: SessionDep) -> WishlistOut:
                 theme_name=theme_names.get(cached.theme_id, f"Thème #{cached.theme_id}"),
                 resolved_price=resolved[0] if resolved else None,
                 price_condition=resolved[1].value if resolved else None,
-                price_label=resolved[1].display_name if resolved else None,
+                price_label=_WISHLIST_PRICE_LABEL[resolved[1]] if resolved else None,
                 has_price_alert=cached.set_num in alerted,
             )
         )
