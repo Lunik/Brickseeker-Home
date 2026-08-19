@@ -195,6 +195,49 @@ export function Badge({
 }
 
 /**
+ * The iOS switch. Use this for every on/off preference — a bare checkbox reads as a form control
+ * from another app entirely next to the rest of these primitives.
+ *
+ * Drop it inside the `<label>` that carries the wording, as the iOS rows do:
+ *
+ *     <label className="flex items-center justify-between gap-3">
+ *       <span className="text-sm text-ink">Rafraîchissement en arrière-plan</span>
+ *       <Toggle checked={…} onChange={…} />
+ *     </label>
+ *
+ * `label` is only needed when the switch stands on its own, with no wording wrapping it.
+ */
+export function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+  label,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  disabled?: boolean
+  label?: string
+}) {
+  return (
+    <span className="toggle">
+      <input
+        type="checkbox"
+        role="switch"
+        className="toggle-input"
+        checked={checked}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {/* Purely decorative: the input above is the control a screen reader sees. */}
+      <span className="toggle-track" aria-hidden="true">
+        <span className="toggle-knob" />
+      </span>
+    </span>
+  )
+}
+
+/**
  * The stand-in for a minifig with no usable artwork — the same idea as the iOS `MinifigPlaceholder`
  * asset. Bundled (Vite hashes it into the build) rather than fetched, so the fallback can't itself
  * fail to load, and trimmed to a transparent-background 2.3 KB PNG from the 1 MB original — safe to

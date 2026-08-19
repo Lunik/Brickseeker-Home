@@ -6,7 +6,7 @@ import { api } from '../api/client'
 import type { BatchStatus, CatalogName, CatalogStatus } from '../api/types'
 import Icon from '../components/Icon'
 import PushToggle from '../components/PushToggle'
-import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
+import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, NavBar, Spinner, Toggle } from '../components/ui'
 import { offlineCatalogStore, type OfflineCatalogName } from '../lib/offline-catalog-store'
 import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
@@ -650,12 +650,9 @@ export default function SettingsPage() {
         </Link>
         <label className="flex items-center justify-between gap-3">
           <span className="text-sm text-ink">Rafraîchissement en arrière-plan</span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={Boolean(preferences['backgroundRefresh.enabled'])}
-            onChange={(event) =>
-              void updatePreferences({ 'backgroundRefresh.enabled': event.target.checked })
-            }
+            onChange={(checked) => void updatePreferences({ 'backgroundRefresh.enabled': checked })}
           />
         </label>
         <PushToggle />
@@ -670,10 +667,9 @@ export default function SettingsPage() {
               *suggèrent* des sets. Rien de ce que vous possédez ne disparaît.
             </span>
           </span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={Boolean(preferences.hide_wearables_enabled)}
-            onChange={(event) => void updatePreferences({ hide_wearables_enabled: event.target.checked })}
+            onChange={(checked) => void updatePreferences({ hide_wearables_enabled: checked })}
           />
         </label>
       </Section>
@@ -688,10 +684,9 @@ export default function SettingsPage() {
               « dans quel magasin l'ai-je vu ».
             </span>
           </span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={Boolean(preferences.scan_location_enabled)}
-            onChange={(event) => void updatePreferences({ scan_location_enabled: event.target.checked })}
+            onChange={(checked) => void updatePreferences({ scan_location_enabled: checked })}
           />
         </label>
       </Section>

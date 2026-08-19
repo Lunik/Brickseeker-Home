@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { ListCondition, PriceAlert } from '../api/types'
 import { CONDITION_LABEL, formatEUR } from '../lib/format'
-import { ErrorLabel, Sheet } from './ui'
+import { ErrorLabel, Sheet, Toggle } from './ui'
 
 interface PriceAlertEditorProps {
   open: boolean
@@ -177,9 +177,9 @@ export default function PriceAlertEditor({
           </label>
         )}
 
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+        <label className="flex items-center justify-between gap-3">
           <span className="text-sm text-ink">Alerte active</span>
+          <Toggle checked={enabled} onChange={setEnabled} />
         </label>
 
         <p className="text-xs text-ink-faint">

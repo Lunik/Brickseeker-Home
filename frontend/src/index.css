@@ -143,6 +143,50 @@ body {
   .segmented-option-active {
     @apply bg-[rgb(var(--ink))]/15 font-semibold;
   }
+
+  /*
+   * The iOS switch, at its real size: a 51×31 track with a 27 knob inset by 2, so the knob travels
+   * exactly 20px. A checkbox still drives it — visually hidden, stretched over the track — because
+   * that keeps the label click, the keyboard focus and the form semantics native; `role="switch"`
+   * only renames for a screen reader what the control already is. Hand-rolling this out of a
+   * `<button>` would mean re-implementing all three.
+   *
+   * The state selectors are plain CSS rather than Tailwind's `peer-checked:`, which compiles to a
+   * sibling combinator and so cannot reach the knob *inside* the track.
+   */
+  .toggle {
+    @apply relative inline-flex shrink-0;
+  }
+
+  .toggle-input {
+    @apply absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-default;
+  }
+
+  .toggle-track {
+    @apply flex h-[31px] w-[51px] items-center rounded-full bg-surface-sunken p-[2px]
+           transition-colors duration-200;
+  }
+
+  .toggle-knob {
+    @apply h-[27px] w-[27px] rounded-full bg-white transition-transform duration-200;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  }
+
+  .toggle-input:checked ~ .toggle-track {
+    @apply bg-brand;
+  }
+
+  .toggle-input:checked ~ .toggle-track .toggle-knob {
+    transform: translateX(20px);
+  }
+
+  .toggle-input:focus-visible ~ .toggle-track {
+    @apply ring-2 ring-brand/40 ring-offset-2 ring-offset-[rgb(var(--surface-raised))];
+  }
+
+  .toggle-input:disabled ~ .toggle-track {
+    @apply opacity-40;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

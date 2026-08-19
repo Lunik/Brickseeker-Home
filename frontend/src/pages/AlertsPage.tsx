@@ -5,7 +5,7 @@ import { api } from '../api/client'
 import type { PriceAlert } from '../api/types'
 import { CONDITION_LABEL, formatEUR, formatRelative } from '../lib/format'
 import Icon from '../components/Icon'
-import { EmptyState, ErrorLabel, LoadingBlock, NavBar, SetThumbnail } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, SetThumbnail, Toggle } from '../components/ui'
 
 export default function AlertsPage() {
   const navigate = useNavigate()
@@ -98,12 +98,11 @@ export default function AlertsPage() {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <label className="flex items-center gap-1.5 text-xs text-ink-muted">
-                    <input
-                      type="checkbox"
-                      checked={alert.isEnabled}
-                      onChange={(event) => toggle.mutate({ id: alert.id, isEnabled: event.target.checked })}
-                    />
                     Active
+                    <Toggle
+                      checked={alert.isEnabled}
+                      onChange={(isEnabled) => toggle.mutate({ id: alert.id, isEnabled })}
+                    />
                   </label>
                   <button
                     type="button"
