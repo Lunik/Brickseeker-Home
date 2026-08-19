@@ -174,9 +174,48 @@ export default function ScannerPage() {
           return
         }
 
+        // Fired now either way, but only *awaited* below when there's no faster signal to act on
+        // — `/scan/lookup` still does real work beyond identification (records the ScanEvent,
+        // reverse-geocodes a camera scan, caches the canonical row) that nothing here needs to
+        // wait on just to confirm the scan landed.
+        const lookupPromise = api.post<ResolveResult>('/scan/lookup', { setNum, source, ...coords })
+
+        // The on-device catalogue snapshot is the same Rebrickable data the live call would
+        // consult anyway, so a hit here is trustworthy enough to act on before the network round
+        // trip finishes — which is what made a successful scan feel like it hadn't registered.
+        // Left running underneath, `lookupPromise`'s eventual ScanEvent is what History actually
+        // shows; a set detail page opened from here reads its own data independently on mount, so
+        // it doesn't matter that this is a beat ahead of what the server has confirmed yet.
+        const quickMatch = await offlineCatalogStore.lookupSet(setNum)
+        if (quickMatch) {
+          if (withFeedback) playResolutionSucceeded()
+          void lookupPromise
+            .then((result) => {
+              if (result.set) return queryClient.invalidateQueries({ queryKey: ['history'] })
+            })
+            .catch(() => {
+              // Nothing left to report a late failure to — the user has already moved on, and a
+              // detail page opened below reads its own data on its own query, not this response.
+            })
+          if (batchMode) {
+            batchSession.add(quickMatch)
+            setMessage(`${quickMatch.setNum} ajouté à la session`)
+            return
+          }
+          // `scanEventId: null`, not `lookupPromise`'s eventual one: waiting on it here would
+          // undo the whole point of this branch. The narrow cost is that "Prix vu en magasin",
+          // if saved in the roughly one second before the ScanEvent above actually lands, creates
+          // a second History row instead of patching this scan's — accepted rather than threading
+          // a result that only arrives after the component reading it may already be mounted.
+          navigate(`/set/${encodeURIComponent(quickMatch.setNum)}`, {
+            state: { fromScan: true, offline: false, scanEventId: null },
+          })
+          return
+        }
+
         let result: ResolveResult
         try {
-          result = await api.post<ResolveResult>('/scan/lookup', { setNum, source, ...coords })
+          result = await lookupPromise
         } catch (caught) {
           // A real HTTP error response (`ApiError`) is a server-side problem, not a connectivity
           // one — surface it normally via the outer catch. Anything else is a genuine network
