@@ -1,0 +1,108 @@
+name: Purge old GHCR builds
+
+# Deliberately `workflow_dispatch` only for now — no `schedule:` trigger until a real dry run
+# (and, ideally, one real deletion) has been watched end to end. Add `schedule:` once that's done.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted without deleting anything"
+        type: boolean
+        default: true
+      keep_ephemeral:
+        description: "How many recent non-release builds to keep, beyond the protected ones"
+        type: string
+        default: "15"
+
+permissions:
+  packages: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge old nightly/sha builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          PACKAGE: brickseeker-home
+          DRY_RUN: ${{ inputs.dry_run }}
+          KEEP_EPHEMERAL: ${{ inputs.keep_ephemeral }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          owner = os.environ["OWNER"].lower()
+          package = os.environ["PACKAGE"]
+          dry_run = os.environ["DRY_RUN"] != "false"
+          keep_ephemeral = int(os.environ["KEEP_EPHEMERAL"])
+
+          # Every build here pushes 3 manifests to the registry: the real (tagged) image plus two
+          # untagged referrer manifests — provenance/SBOM attestations that `docker/build-push-
+          # action@v6` attaches by default. A generic "delete anything with no tags" policy would
+          # nuke those attestations for images we are *keeping*, which is precisely the documented
+          # failure mode of community purge actions (they can silently break verification tooling,
+          # or on a multi-arch build, `docker pull` itself — see actions/delete-package-versions#162
+          # and https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+          #
+          # So versions are never judged in isolation here. They are grouped into "build units" —
+          # everything one `docker buildx build --push` produced — and a whole unit is kept or
+          # deleted together, based on whether *any* tag in it is one we protect. The grouping key
+          # is proximity of the numeric version id: verified empirically against every version this
+          # package has ever held, the largest gap within one build's 3 ids is 45, the smallest gap
+          # between two different builds is 762 — an 18x margin, so a threshold of 500 cannot
+          # misclassify in either direction on the data actually observed.
+          CLUSTER_GAP = 500
+          RELEASE_TAG = re.compile(r"^v\d+\.\d+\.\d+$")
+          LIVE_TAGS = {"latest", "nightly"}
+
+          def gh_json(*args):
+              out = subprocess.run(["gh", "api", "--paginate", *args], check=True, capture_output=True, text=True)
+              return json.loads(out.stdout) if out.stdout.strip().startswith("[") else [
+                  json.loads(line) for line in out.stdout.splitlines() if line.strip()
+              ]
+
+          versions = gh_json(f"/users/{owner}/packages/container/{package}/versions")
+          versions.sort(key=lambda v: v["id"])
+
+          clusters, current = [], []
+          for v in versions:
+              if current and v["id"] - current[-1]["id"] > CLUSTER_GAP:
+                  clusters.append(current)
+                  current = []
+              current.append(v)
+          if current:
+              clusters.append(current)
+
+          protected, ephemeral = [], []
+          for c in clusters:
+              tags = sorted({t for v in c for t in v.get("metadata", {}).get("container", {}).get("tags", [])})
+              is_protected = any(RELEASE_TAG.match(t) for t in tags) or bool(LIVE_TAGS & set(tags))
+              entry = {"tags": tags, "ids": [v["id"] for v in c], "newest": max(v["created_at"] for v in c)}
+              (protected if is_protected else ephemeral).append(entry)
+
+          ephemeral.sort(key=lambda e: e["newest"], reverse=True)
+          keep, delete = ephemeral[:keep_ephemeral], ephemeral[keep_ephemeral:]
+
+          print(f"{len(versions)} versions across {len(clusters)} builds: "
+                f"{len(protected)} protected, {len(keep)} recent ephemeral kept, "
+                f"{len(delete)} builds ({sum(len(e['ids']) for e in delete)} versions) "
+                f"{'would be ' if dry_run else ''}deleted.\n")
+
+          for e in delete:
+              print(f"  {'[dry-run] would delete' if dry_run else 'deleting'} "
+                    f"{e['newest']}  tags={e['tags'] or '(none)'}  ids={e['ids']}")
+              if not dry_run:
+                  for vid in e["ids"]:
+                      subprocess.run(
+                          ["gh", "api", "--method", "DELETE",
+                           f"/users/{owner}/packages/container/{package}/versions/{vid}"],
+                          check=True,
+                      )
+
+          if not delete:
+              print("  nothing to delete.")
+          PY
