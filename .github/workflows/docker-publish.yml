@@ -63,6 +63,18 @@ jobs:
           fi
           echo "ref=${GITHUB_REF_NAME} highest=${highest:-<none>}"
 
+      # What the in-app footer shows. A release reports its tag; anything else reports the commit
+      # it was built from, so a bug report off a nightly still says exactly which build.
+      - name: Compute app version
+        id: version
+        run: |
+          case "${GITHUB_REF}" in
+            refs/tags/v*) value="${GITHUB_REF_NAME}" ;;
+            *)            value="nightly-$(git rev-parse --short HEAD)" ;;
+          esac
+          echo "value=${value}" >> "$GITHUB_OUTPUT"
+          echo "app version: ${value}"
+
       # Four tag strategies, all from the same build:
       #   - `nightly` on every push to master
       #   - `vX.Y.Z` on a matching git tag (kept with its `v` prefix)
@@ -88,6 +100,8 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: |
+            BRICKSEEKER_VERSION=${{ steps.version.outputs.value }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

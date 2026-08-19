@@ -21,6 +21,11 @@ COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --no-audit --no-fund
 
 COPY frontend/ ./
+# What the footer reports. Passed by CI as the git tag being released; without it the build falls
+# back to `git describe`, which finds no repository here and settles on "dev" — correct for an
+# image somebody built by hand from a working copy.
+ARG BRICKSEEKER_VERSION
+ENV BRICKSEEKER_VERSION=${BRICKSEEKER_VERSION}
 RUN npm run build
 
 

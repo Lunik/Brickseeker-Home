@@ -73,6 +73,13 @@ function Chrome() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {/* Never over the scanner: that screen is full-bleed camera with its own controls pinned to
+          the bottom edge, and a version line would sit on top of them. */}
+      {!isScanner && (
+        <footer className="px-4 pb-6 text-center text-[11px] text-ink-faint">
+          BrickSeeker {__APP_VERSION__}
+        </footer>
+      )}
     </div>
   )
 }
