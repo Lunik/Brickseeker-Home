@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from ..deps import SessionDep, require_auth
@@ -29,6 +31,10 @@ class LookupIn(CamelModel):
     price_seen_eur: float | None = None
     latitude: float | None = None
     longitude: float | None = None
+    #: Set only when replaying a scan that was queued offline — the moment it actually happened,
+    #: not the moment the sync request reached the server. Omitted, a live scan is stamped `_now()`
+    #: as before.
+    scanned_at: datetime | None = None
 
 
 class LookupOut(ResolveOut):
@@ -88,7 +94,7 @@ async def lookup(payload: LookupIn, session: SessionDep) -> LookupOut:
             )
 
         event = await collection_repo.record_scan_event(
-            session, set_num, price_seen_eur=payload.price_seen_eur
+            session, set_num, price_seen_eur=payload.price_seen_eur, scanned_at=payload.scanned_at
         )
         event_id = event.id
         # Location only for a real camera scan: a typed number says nothing about where you were.

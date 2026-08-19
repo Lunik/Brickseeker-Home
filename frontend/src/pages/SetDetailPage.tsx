@@ -21,6 +21,7 @@ import {
   SetThumbnail,
   StatusLine,
 } from '../components/ui'
+import { useBackendReachable } from '../lib/backend-reachability'
 import { useSettings } from '../lib/settings-context'
 import {
   baseSetNum,
@@ -63,8 +64,10 @@ export default function SetDetailPage() {
   const navState = location.state as { siblings?: string[]; scanEventId?: number | null } | null
   const siblings = navState?.siblings ?? []
   const index = siblings.indexOf(setNum)
+  const backendReachable = useBackendReachable()
 
   const [alertCondition, setAlertCondition] = useState<'newSet' | 'used' | null>(null)
+  const [refreshBlocked, setRefreshBlocked] = useState(false)
   const [showPaidPrice, setShowPaidPrice] = useState(false)
   const [showScanPrice, setShowScanPrice] = useState(false)
   const [showLists, setShowLists] = useState(false)
@@ -163,7 +166,9 @@ export default function SetDetailPage() {
   )
 
   if (isLoading) return <LoadingBlock />
-  if (error) return <ErrorLabel message={(error as Error).message} />
+  // A background refetch failing (offline, or a slow LAN) must not hide a set already restored
+  // from the persisted cache — the badge below says "this is what we last fetched" instead.
+  if (error && !data) return <ErrorLabel message={(error as Error).message} />
   if (!data) return <EmptyState icon={<Icon name="search" className="h-9 w-9" />} title="Set introuvable" />
 
   const armedAlerts = data.alerts.filter((alert) => alert.isEnabled)
@@ -258,6 +263,10 @@ export default function SetDetailPage() {
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
             {data.nonSetKind && <Badge tone="warning">{NON_SET_LABEL[data.nonSetKind]}</Badge>}
             {data.isOfflineResult && <Badge tone="neutral">Résultat hors-ligne</Badge>}
+            {/* Distinct from `isOfflineResult`: that one means the *server* resolved this set via
+                its own offline catalogue. This means the client's own refetch just failed and
+                what's on screen is the last successful read, not necessarily a fresh one. */}
+            {Boolean(error) && <Badge tone="neutral">Dernières données connues</Badge>}
           </div>
         </div>
 
@@ -368,8 +377,19 @@ export default function SetDetailPage() {
         detail={data}
         pricePerPartTarget={Number(preferences?.['appTheme.preferredPricePerPart'] ?? 0.12)}
         isRefreshing={refresh.isPending}
-        onRefresh={() => refresh.mutate()}
+        onRefresh={() => {
+          // Skip the attempt entirely rather than firing it and waiting out a timeout — the
+          // backend is a self-hosted LAN server, not a CDN, and won't answer any faster for
+          // trying.
+          if (!backendReachable) {
+            setRefreshBlocked(true)
+            return
+          }
+          setRefreshBlocked(false)
+          refresh.mutate()
+        }}
       />
+      {refreshBlocked && <ErrorLabel message="Hors-ligne : actualisation impossible pour le moment." />}
 
       <PriceHistoryChart history={data.priceHistory} soldListings={data.soldListings} />
 

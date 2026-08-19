@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BrickSeeker">
+  <rect width="64" height="64" rx="12" fill="#E3000B"/>
+  <!-- A 2x2 brick seen from above: two studs and a body, the smallest readable LEGO cue. -->
+  <rect x="14" y="26" width="36" height="24" rx="3" fill="#fff"/>
+  <rect x="19" y="18" width="10" height="10" rx="2.5" fill="#fff"/>
+  <rect x="35" y="18" width="10" height="10" rx="2.5" fill="#fff"/>
+  <circle cx="32" cy="38" r="7" fill="none" stroke="#E3000B" stroke-width="3"/>
+  <line x1="37" y1="43" x2="43" y2="49" stroke="#E3000B" stroke-width="3" stroke-linecap="round"/>
+</svg>

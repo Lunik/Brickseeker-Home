@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api, setUnauthorizedHandler } from './api/client'
 import { SettingsProvider, useSettings } from './lib/settings-context'
 import { LoadingBlock } from './components/ui'
+import OfflineBanner from './components/OfflineBanner'
 import LoginGate from './pages/LoginGate'
 import HomePage from './pages/HomePage'
 import ScannerPage from './pages/ScannerPage'
@@ -51,6 +52,7 @@ function Chrome() {
 
   return (
     <div className="mx-auto min-h-full w-full max-w-2xl">
+      <OfflineBanner />
       <main className={isScanner ? '' : 'px-4 pb-16 pt-2'}>
         <Routes>
           <Route path="/" element={<HomePage />} />

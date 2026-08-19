@@ -32,7 +32,7 @@ import io
 import json
 import logging
 import zlib
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -53,6 +53,7 @@ from ..models import (
     CatalogTheme,
     utcnow,
 )
+from ..schemas import CatalogMinifigExportOut, CatalogSetExportOut
 from .rebrickable import LegoSet
 
 logger = logging.getLogger(__name__)
@@ -719,6 +720,58 @@ def _decode_status(raw: str | None) -> dict[str, Any] | None:
         return json.loads(raw)
     except json.JSONDecodeError:
         return {"state": "error", "message": raw}
+
+
+# --------------------------------------------------------------------------------------
+# Export — the browser's own offline copy
+# --------------------------------------------------------------------------------------
+
+
+async def export_sets(session: AsyncSession) -> AsyncIterator[str]:
+    """Streams the whole downloaded sets catalogue as NDJSON, one `CatalogSetExportOut` per line.
+
+    Unlike `new_sets()` this is never owned-only or since-first-download filtered — its job is
+    offline *identification* for the client's own IndexedDB copy, not the "what's new" screen.
+    """
+    rows = (await session.execute(select(CatalogSet))).scalars().all()
+    for row in rows:
+        yield (
+            CatalogSetExportOut(
+                set_num=row.set_num,
+                name=row.name,
+                year=row.year,
+                theme_id=row.theme_id,
+                num_parts=row.num_parts,
+                set_img_url=row.set_img_url,
+                first_seen_at=row.first_seen_at,
+            ).model_dump_json(by_alias=True)
+            + "\n"
+        )
+
+
+async def export_minifigs(session: AsyncSession) -> AsyncIterator[str]:
+    """Streams the whole downloaded minifig catalogue as NDJSON, `containing_set_nums` denormalized
+    per row (the same join `minifigs()` computes for the online gallery) so the client never has to
+    sync the pivot table separately."""
+    pivots = (await session.execute(select(CatalogMinifigSet))).scalars().all()
+    sets_by_fig: dict[str, list[str]] = {}
+    for pivot in pivots:
+        sets_by_fig.setdefault(pivot.fig_num, []).append(pivot.set_num)
+
+    rows = (await session.execute(select(CatalogMinifig))).scalars().all()
+    for row in rows:
+        yield (
+            CatalogMinifigExportOut(
+                fig_num=row.fig_num,
+                name=row.name,
+                num_parts=row.num_parts,
+                img_url=row.img_url,
+                theme_id=row.theme_id,
+                year=row.year,
+                containing_set_nums=sets_by_fig.get(row.fig_num, []),
+            ).model_dump_json(by_alias=True)
+            + "\n"
+        )
 
 
 # --------------------------------------------------------------------------------------

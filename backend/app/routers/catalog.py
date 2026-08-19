@@ -10,10 +10,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from ..db import session_scope
-from ..deps import SessionDep, require_auth
+from ..deps import ApiError, SessionDep, require_auth
 from ..models import CatalogMinifig, CatalogMinifigSet, CatalogSet
 from ..schemas import CamelModel, OkOut
 from ..services import app_settings, catalog, collection_repo
@@ -52,6 +53,21 @@ class MinifigOut(CamelModel):
 @router.get("/status")
 async def status(session: SessionDep) -> dict[str, object]:
     return await catalog.catalog_status(session)
+
+
+@router.get("/export")
+async def export(session: SessionDep, name: str = Query()) -> StreamingResponse:
+    """The client's own offline copy: the whole downloaded catalogue as NDJSON, one row per line.
+
+    Streamed rather than one JSON array so neither side has to hold ~28 000 (sets) or ~12 000
+    (minifigs) rows serialized in memory at once. Never owned-only or since-first-download
+    filtered, unlike `/new-sets` and `/minifigs` — offline identification needs the whole thing.
+    """
+    if name == "sets":
+        return StreamingResponse(catalog.export_sets(session), media_type="application/x-ndjson")
+    if name == "minifigs":
+        return StreamingResponse(catalog.export_minifigs(session), media_type="application/x-ndjson")
+    raise ApiError(f"Catalogue non exportable : {name}")
 
 
 @router.post("/sets/download", response_model=OkOut)

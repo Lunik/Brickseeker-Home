@@ -11,6 +11,7 @@ import { ConfirmDialog, EmptyState, ErrorLabel, NavBar, SetThumbnail, Spinner } 
 import { useSetActions } from '../hooks/useSetActions'
 import { batchSession, useBatchSession } from '../lib/batch-session'
 import { bestDeal } from '../lib/deal'
+import { usePendingScans } from '../lib/offline-scan-queue'
 import { baseSetNum, formatEUR, SOURCE_LABEL } from '../lib/format'
 
 /**
@@ -31,6 +32,10 @@ export default function BatchSessionPage() {
   const queryClient = useQueryClient()
   const items = useBatchSession()
   const actions = useSetActions()
+  const pendingScans = usePendingScans()
+  // Sets in this session that were resolved offline and haven't been replayed through
+  // `/scan/lookup` yet — a real ScanEvent doesn't exist for them until then.
+  const pendingSetNums = useMemo(() => new Set(pendingScans.map((item) => item.setNum)), [pendingScans])
 
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -239,7 +244,16 @@ export default function BatchSessionPage() {
               >
                 <SetThumbnail url={set.setImgUrl} alt={set.name} size="sm" />
                 <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-ink">{baseSetNum(set.setNum)}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="block font-semibold text-ink">{baseSetNum(set.setNum)}</span>
+                    {pendingSetNums.has(set.setNum) && (
+                      <Icon
+                        name="clock"
+                        className="h-3.5 w-3.5 shrink-0 text-ink-faint"
+                        label="En attente de synchronisation"
+                      />
+                    )}
+                  </span>
                   <span className="block truncate text-[15px] text-ink-muted">{set.name}</span>
                 </span>
 

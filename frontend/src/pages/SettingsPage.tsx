@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -7,6 +7,7 @@ import type { BatchStatus, CatalogName, CatalogStatus } from '../api/types'
 import Icon from '../components/Icon'
 import PushToggle from '../components/PushToggle'
 import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
+import { offlineCatalogStore, type OfflineCatalogName } from '../lib/offline-catalog-store'
 import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
 import { formatDateTime } from '../lib/format'
@@ -97,6 +98,65 @@ export default function SettingsPage() {
       return running ? 2000 : false
     },
   })
+
+  // This device's own IndexedDB copy of the sets/minifigs catalogue — what lets identification
+  // work with zero backend round trip while scanning offline. Distinct from `catalog.data` above,
+  // which is the *server's* download state.
+  const [localCatalog, setLocalCatalog] = useState<
+    Partial<Record<OfflineCatalogName, { exportedAt: string; rowCount: number } | null>>
+  >({})
+  const [catalogSyncing, setCatalogSyncing] = useState<Partial<Record<OfflineCatalogName, boolean>>>({})
+  const previousDownloadedAt = useRef<Partial<Record<OfflineCatalogName, string | null | undefined>>>({})
+
+  async function refreshLocalCatalog(name: OfflineCatalogName) {
+    const meta = await offlineCatalogStore.meta(name)
+    setLocalCatalog((current) => ({ ...current, [name]: meta ?? null }))
+  }
+
+  useEffect(() => {
+    void refreshLocalCatalog('sets')
+    void refreshLocalCatalog('minifigs')
+  }, [])
+
+  async function syncCatalogToDevice(name: OfflineCatalogName) {
+    setCatalogSyncing((current) => ({ ...current, [name]: true }))
+    try {
+      await offlineCatalogStore.pull(name)
+      await refreshLocalCatalog(name)
+      setFeedback('Catalogue synchronisé sur cet appareil.')
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Synchronisation impossible')
+    } finally {
+      setCatalogSyncing((current) => ({ ...current, [name]: false }))
+    }
+  }
+
+  // Auto-pull the moment a backend download finishes, so "télécharger le catalogue" is one action
+  // that transparently also lands a local copy — no separate step for the common path. Keyed on
+  // `downloadedAt` *changing* from what was last observed, not on catching a transient `'running'`
+  // poll: a fast/local download can complete well within the 2s polling interval, so the status
+  // query's very first post-download read may already show `state: null` with `downloadedAt` set —
+  // a transition-based check would silently never fire. The first observation only seeds the ref
+  // (no pull), so a catalogue downloaded in a previous session doesn't trigger a redundant pull on
+  // every mount; every later change fires one.
+  useEffect(() => {
+    for (const name of ['sets', 'minifigs'] as const) {
+      const entry = catalog.data?.[name]
+      const downloadedAt = entry?.downloadedAt ?? null
+      const previous = previousDownloadedAt.current[name]
+      if (previous !== undefined && previous !== downloadedAt && downloadedAt) {
+        void syncCatalogToDevice(name)
+      }
+      previousDownloadedAt.current[name] = downloadedAt
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncCatalogToDevice is stable enough here; keyed on catalog.data
+  }, [catalog.data])
+
+  async function purgeCatalogEverywhere(name: OfflineCatalogName) {
+    await api.delete(`/catalog/${name}`)
+    await offlineCatalogStore.purge(name)
+    await refreshLocalCatalog(name)
+  }
 
   const batch = useQuery({
     queryKey: ['priceBatch'],
@@ -444,10 +504,15 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="Catalogue hors-ligne">
-        {(['sets', 'minifigs'] as CatalogName[]).map((name) => {
+      <Section
+        title="Catalogue hors-ligne"
+        footer="Une fois synchronisé sur cet appareil, le catalogue permet d'identifier un set ou une minifig par son numéro sans connexion — utile pour scanner hors-ligne."
+      >
+        {(['sets', 'minifigs'] as OfflineCatalogName[]).map((name) => {
           const entry = catalog.data?.[name]
           const running = entry?.status?.state === 'running'
+          const local = localCatalog[name]
+          const syncing = Boolean(catalogSyncing[name])
           return (
             <div key={name} className="space-y-1.5 border-b border-line pb-3 last:border-0 last:pb-0">
               <div className="flex items-center justify-between gap-2">
@@ -489,12 +554,32 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     className="btn-ghost text-xs"
-                    onClick={run(() => api.delete(`/catalog/${name}`), 'Catalogue supprimé.')}
+                    onClick={run(() => purgeCatalogEverywhere(name), 'Catalogue supprimé.')}
                   >
                     Purger
                   </button>
                 )}
               </div>
+              {/* Distinct from the block above: that's the server's own download from Rebrickable,
+                  this is whether *this browser* has pulled a copy into IndexedDB yet. */}
+              {(entry?.rowCount ?? 0) > 0 && (
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <span className="text-[11px] text-ink-faint">
+                    Sur cet appareil :{' '}
+                    {local?.rowCount
+                      ? `${local.rowCount.toLocaleString('fr-FR')} entrées · ${formatDateTime(local.exportedAt)}`
+                      : 'pas encore synchronisé'}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-ghost px-2 py-0.5 text-[11px]"
+                    disabled={syncing}
+                    onClick={() => void syncCatalogToDevice(name)}
+                  >
+                    {syncing ? <Spinner className="h-3.5 w-3.5" /> : 'Resynchroniser sur cet appareil'}
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}

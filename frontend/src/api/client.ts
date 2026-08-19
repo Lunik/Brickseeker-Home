@@ -3,6 +3,8 @@
  * error shape, credentials and the 401 → login redirect are handled in exactly one place.
  */
 
+import { reportRequestOutcome } from '../lib/backend-reachability'
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -52,13 +54,25 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
   }
 
-  const response = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: payload,
-    signal,
-    credentials: 'same-origin',
-  })
+  let response: Response
+  try {
+    response = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: payload,
+      signal,
+      credentials: 'same-origin',
+    })
+  } catch (caught) {
+    // An aborted fetch (React Query cancelling a superseded request, or unmounting mid-fetch) is
+    // routine, not a connectivity signal — only a genuine failure (DNS, connection refused, no
+    // path to the LAN server) should flip the banner.
+    if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+      reportRequestOutcome(false)
+    }
+    throw caught
+  }
+  reportRequestOutcome(true)
 
   if (response.status === 401) {
     onUnauthorized?.()

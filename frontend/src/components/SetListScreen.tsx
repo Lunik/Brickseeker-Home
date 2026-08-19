@@ -253,7 +253,10 @@ export default function SetListScreen({
 
       {isLoading ? (
         <LoadingBlock />
-      ) : error ? (
+      ) : error && rows.length === 0 ? (
+        // A background refetch failing while a persisted list is already on screen (offline, or a
+        // slow LAN) must not hide it behind a full-page error — the offline banner already says
+        // "expect stale data" without repeating it five times across every list screen.
         <ErrorLabel message={error} />
       ) : visible.length === 0 ? (
         // The caller's empty state answers "there is nothing here"; once a search or filter is

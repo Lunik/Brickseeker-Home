@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import type { LegoSet, ResolveResult } from '../api/types'
 import { useCamera } from '../hooks/useCamera'
+import { useBackendReachable } from '../lib/backend-reachability'
 import { batchSession, useBatchSession } from '../lib/batch-session'
 import {
   playCandidateDetected,
@@ -12,6 +13,10 @@ import {
   playResolutionSucceeded,
   prepareFeedback,
 } from '../lib/feedback'
+import { offlineCatalogStore } from '../lib/offline-catalog-store'
+import * as offlineOcr from '../lib/offline-ocr'
+import { offlineScanQueue } from '../lib/offline-scan-queue'
+import { extractSetNumbers } from '../lib/set-number-extractor'
 import { useSettings } from '../lib/settings-context'
 import Icon from '../components/Icon'
 import { SetThumbnail } from '../components/ui'
@@ -49,6 +54,7 @@ export default function ScannerPage() {
   // navigates away from here.
   const [batchMode, setBatchMode] = useState(false)
   const batchItems = useBatchSession()
+  const backendReachable = useBackendReachable()
 
   // Any sheet covering the camera stops it — the iOS scanner treats this as a hard rule, and
   // it is also what keeps a background resolve from yanking the user off a form they are typing.
@@ -80,6 +86,20 @@ export default function ScannerPage() {
     prepareFeedback()
   }, [])
 
+  // The offline OCR worker is only ever spun up lazily, on the first offline recognition attempt
+  // (see the capture loop below) — this just frees its WASM memory once the scanner is done with
+  // it, mirroring `useCamera.ts`'s own stop-on-hidden discipline.
+  useEffect(() => {
+    function onVisibility() {
+      if (document.hidden) void offlineOcr.terminateOfflineOcr()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      void offlineOcr.terminateOfflineOcr()
+    }
+  }, [])
+
   const resolve = useCallback(
     async (setNum: string, source: string) => {
       // Only the camera path gives feedback: a phone that buzzes while you type a number by hand
@@ -105,7 +125,55 @@ export default function ScannerPage() {
           })
         }
 
-        const result = await api.post<ResolveResult>('/scan/lookup', { setNum, source, ...coords })
+        // No backend to ask at all — resolve against the on-device catalogue snapshot instead. A
+        // hit is queued for the sync engine (`lib/offline-scan-sync.ts`) to replay through the
+        // real `/scan/lookup` once reachable, rather than navigating to a detail page that has no
+        // cache to fall back on for a set never seen on this device before.
+        async function resolveOffline(): Promise<void> {
+          const found = await offlineCatalogStore.lookupSet(setNum)
+          if (found) {
+            if (withFeedback) playResolutionSucceeded()
+            await offlineScanQueue.enqueue({
+              setNum: found.setNum,
+              source,
+              scannedAt: new Date().toISOString(),
+              priceSeenEur: null,
+              latitude: coords.latitude ?? null,
+              longitude: coords.longitude ?? null,
+              resolvedSet: found,
+            })
+            // Mirrors the online batch-mode path exactly: stay on the camera, don't interrupt the
+            // sweep. Outside batch mode there is nothing to navigate to yet, so this is the whole
+            // confirmation the user gets until the item syncs.
+            if (batchMode) batchSession.add(found)
+            setMessage(`${found.setNum} — ${found.name} enregistré, en attente de connexion.`)
+            return
+          }
+          if (withFeedback) playResolutionFailed()
+          setMessage(
+            (await offlineCatalogStore.isEmpty('sets'))
+              ? 'Catalogue hors-ligne non synchronisé sur cet appareil (Réglages).'
+              : `Aucun set trouvé pour « ${setNum} » dans le catalogue hors-ligne.`,
+          )
+        }
+
+        if (!backendReachable) {
+          await resolveOffline()
+          return
+        }
+
+        let result: ResolveResult
+        try {
+          result = await api.post<ResolveResult>('/scan/lookup', { setNum, source, ...coords })
+        } catch (caught) {
+          // A real HTTP error response (`ApiError`) is a server-side problem, not a connectivity
+          // one — surface it normally via the outer catch. Anything else is a genuine network
+          // failure: the pre-flight `backendReachable` check above was simply stale (nothing had
+          // failed yet to flip it), so fall back exactly as if it had been caught upfront.
+          if (caught instanceof ApiError) throw caught
+          await resolveOffline()
+          return
+        }
         if (result.set) {
           if (withFeedback) playResolutionSucceeded()
           await queryClient.invalidateQueries({ queryKey: ['history'] })
@@ -139,7 +207,7 @@ export default function ScannerPage() {
         pulsedRef.current = null
       }
     },
-    [batchMode, captureLocation, navigate, queryClient],
+    [backendReachable, batchMode, captureLocation, navigate, queryClient],
   )
 
   useEffect(() => {
@@ -151,9 +219,20 @@ export default function ScannerPage() {
       try {
         const blob = await camera.captureFrame()
         if (!blob) return
-        const form = new FormData()
-        form.append('file', blob, 'frame.jpg')
-        const { setNums } = await api.upload<{ setNums: string[] }>('/scan/ocr', form)
+
+        // Skip the network attempt entirely once we already know the backend is unreachable —
+        // firing it anyway would just cost the 800ms cadence waiting out a doomed request every
+        // tick. `set-number-extractor.ts` is the same regex logic `/scan/ocr` runs server-side, so
+        // either path feeds the acceptance logic below identically.
+        let setNums: string[]
+        if (backendReachable) {
+          const form = new FormData()
+          form.append('file', blob, 'frame.jpg')
+          ;({ setNums } = await api.upload<{ setNums: string[] }>('/scan/ocr', form))
+        } else {
+          const candidates = await offlineOcr.recognize(blob)
+          setNums = extractSetNumbers(candidates)
+        }
         const now = Date.now()
 
         // Forget anything not seen for a while, so a number glimpsed on a neighbouring box
@@ -206,7 +285,7 @@ export default function ScannerPage() {
     }, CAPTURE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [camera, isCovered, resolve])
+  }, [backendReachable, camera, isCovered, resolve])
 
   return (
     <div className="relative min-h-[100dvh] bg-black">

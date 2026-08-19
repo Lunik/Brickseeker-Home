@@ -189,5 +189,34 @@ class SetListOut(CamelModel):
     condition: str
 
 
+class CatalogSetExportOut(CamelModel):
+    """One line of `GET /catalog/export?name=sets` — the whole downloaded catalogue, for the
+    browser's own offline copy. Deliberately leaner than `CatalogSetOut`: no owned/availability/
+    price fields, since those are live-only and this snapshot exists purely for offline
+    identification."""
+
+    set_num: str
+    name: str
+    year: int
+    theme_id: int
+    num_parts: int
+    set_img_url: str | None
+    first_seen_at: datetime | None
+
+
+class CatalogMinifigExportOut(CamelModel):
+    """One line of `GET /catalog/export?name=minifigs`. `containing_set_nums` is denormalized here
+    (unlike the online gallery) and uncapped — the client needs the whole join to look a minifig up
+    offline, not a 12-item display sample."""
+
+    fig_num: str
+    name: str
+    num_parts: int
+    img_url: str | None
+    theme_id: int | None
+    year: int | None
+    containing_set_nums: list[str]
+
+
 class OkOut(CamelModel):
     ok: bool = True

@@ -724,11 +724,18 @@ async def _seed_paid_price_from_scan(session: AsyncSession, set_num: str) -> Non
 
 
 async def record_scan_event(
-    session: AsyncSession, set_num: str, price_seen_eur: float | None = None
+    session: AsyncSession,
+    set_num: str,
+    price_seen_eur: float | None = None,
+    scanned_at: datetime | None = None,
 ) -> ScanEvent:
-    """Camera scans only — a manual entry or a History re-open carries no "I was standing in a
-    store" meaning. Returned so the caller can attach a late location fix."""
-    event = ScanEvent(set_num=set_num, scanned_at=_now(), price_seen_eur=price_seen_eur)
+    """Recorded for camera, manual-entry and photo-import lookups (`scan.RECORDED_SOURCES`).
+    Returned so the caller can attach a late location fix.
+
+    `scanned_at` is only ever passed when replaying a scan that was queued offline — the real
+    moment it happened, not the moment the sync request reached the server. Omitted, this is
+    stamped `_now()` as it always was."""
+    event = ScanEvent(set_num=set_num, scanned_at=scanned_at or _now(), price_seen_eur=price_seen_eur)
     session.add(event)
     await session.commit()
     return event

@@ -42,8 +42,9 @@ export default function PushToggle() {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') throw new Error('Notifications refusées par le navigateur.')
 
-      const registration = await navigator.serviceWorker.register('/sw.js')
-      await navigator.serviceWorker.ready
+      // main.tsx registers the worker eagerly on load now; wait for it to be active rather than
+      // registering a second time here.
+      const registration = await navigator.serviceWorker.ready
       const { publicKey } = await api.get<{ publicKey: string }>('/notifications/vapid-key')
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
