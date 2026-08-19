@@ -195,6 +195,31 @@ export function Badge({
 }
 
 /**
+ * The thin determinate progress bar used wherever a long server-side job reports how far along it
+ * is — a catalogue download, a price run, a wishlist import.
+ *
+ * Pass a fraction as `value={0.42} total={1}` where that is what the server reports.
+ *
+ * Clamped, unlike the four hand-rolled copies this replaces: `done` can briefly exceed `total` when
+ * a queue grows mid-run, which used to push the fill past the end of its track. Also the only one
+ * of them a screen reader could announce.
+ */
+export function ProgressBar({ value, total }: { value: number; total: number }) {
+  const percent = total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0
+  return (
+    <div
+      className="h-1.5 overflow-hidden rounded-full bg-line"
+      role="progressbar"
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={total}
+    >
+      <div className="h-full bg-brand transition-all" style={{ width: `${percent}%` }} />
+    </div>
+  )
+}
+
+/**
  * The iOS switch. Use this for every on/off preference — a bare checkbox reads as a form control
  * from another app entirely next to the rest of these primitives.
  *

@@ -8,7 +8,7 @@ import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import { useSetActions } from '../hooks/useSetActions'
 import Icon from '../components/Icon'
 import ListPickerSheet from '../components/ListPickerSheet'
-import { EmptyState, ErrorLabel, Sheet, Spinner } from '../components/ui'
+import { EmptyState, ErrorLabel, ProgressBar, Sheet, Spinner } from '../components/ui'
 
 interface WishlistPayload {
   sets: SetRow[]
@@ -168,14 +168,7 @@ export default function WishlistPage() {
                   {progress.data.processed} / {progress.data.total} traité(s)
                 </span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-line">
-                <div
-                  className="h-full bg-brand transition-all"
-                  style={{
-                    width: `${progress.data.total ? (progress.data.processed / progress.data.total) * 100 : 0}%`,
-                  }}
-                />
-              </div>
+              <ProgressBar value={progress.data.processed} total={progress.data.total} />
               {/* Per-set outcomes, not a single pass/fail: a set Brickset doesn't catalogue is an
                   expected result, not an error. */}
               <ul className="text-xs text-ink-muted">

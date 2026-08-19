@@ -18,7 +18,7 @@ import { api } from '../api/client'
 import type { BatchStatus, CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import ListConditionsSheet from '../components/ListConditionsSheet'
-import { EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, ProgressBar, Spinner } from '../components/ui'
 import { formatDate, formatEUR, formatEURCompact, formatNumber } from '../lib/format'
 
 /** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
@@ -205,6 +205,11 @@ export default function StatsPage() {
             </button>
           )}
         </div>
+        {/* The count alone ("38 / 499") gives no sense of how much is left; a serial price run is
+            slow by design, so the bar is what makes a long wait legible rather than stalled. */}
+        {batch.data?.isRunning && (
+          <ProgressBar value={batch.data.done} total={batch.data.total} />
+        )}
         <p className="text-[28px] font-bold text-ink">{formatEUR(data.totalValueEur)}</p>
         {/* An estimated total is only honest next to its coverage. */}
         <p className="text-[13px] text-ink-muted">

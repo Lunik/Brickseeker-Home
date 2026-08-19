@@ -6,7 +6,16 @@ import { api } from '../api/client'
 import type { BatchStatus, CatalogName, CatalogStatus } from '../api/types'
 import Icon from '../components/Icon'
 import PushToggle from '../components/PushToggle'
-import { Badge, ConfirmDialog, ErrorLabel, LoadingBlock, NavBar, Spinner, Toggle } from '../components/ui'
+import {
+  Badge,
+  ConfirmDialog,
+  ErrorLabel,
+  LoadingBlock,
+  NavBar,
+  ProgressBar,
+  Spinner,
+  Toggle,
+} from '../components/ui'
 import { offlineCatalogStore, type OfflineCatalogName } from '../lib/offline-catalog-store'
 import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
@@ -526,12 +535,8 @@ export default function SettingsPage() {
               </div>
               {running && (
                 <div className="space-y-1">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-line">
-                    <div
-                      className="h-full bg-brand transition-all"
-                      style={{ width: `${Math.round((entry?.status?.progress ?? 0) * 100)}%` }}
-                    />
-                  </div>
+                  {/* This one reports a 0..1 fraction rather than a count. */}
+                  <ProgressBar value={entry?.status?.progress ?? 0} total={1} />
                   <p className="text-xs text-ink-faint">{entry?.status?.message ?? 'Téléchargement…'}</p>
                 </div>
               )}
@@ -600,14 +605,7 @@ export default function SettingsPage() {
                 {batch.data.currentSetNum ? ` · ${batch.data.currentSetNum}` : ''}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-line">
-              <div
-                className="h-full bg-brand transition-all"
-                style={{
-                  width: `${batch.data.total ? (batch.data.done / batch.data.total) * 100 : 0}%`,
-                }}
-              />
-            </div>
+            <ProgressBar value={batch.data.done} total={batch.data.total} />
             <button
               type="button"
               className="btn-secondary w-full"
