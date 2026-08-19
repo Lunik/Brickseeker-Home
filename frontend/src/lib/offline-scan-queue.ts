@@ -63,7 +63,14 @@ function notify(): void {
 }
 
 async function refresh(): Promise<void> {
-  cache = await (await db()).getAll('pendingScans')
+  try {
+    cache = await (await db()).getAll('pendingScans')
+  } catch {
+    // Private browsing, a blocked/exhausted store, or a failed upgrade. Queueing a scan will
+    // surface its own error to the user; a *read* failing must not take the app down with an
+    // unhandled rejection, so the queue simply reads as empty.
+    cache = []
+  }
   notify()
 }
 
@@ -73,6 +80,8 @@ async function refresh(): Promise<void> {
  * `initOfflineScanSync()` — without awaiting this first, that first pass could read `cache` while
  * it's still `[]`, silently skip a queue that genuinely has items, and never be re-triggered
  * (nothing else changes afterward to prompt a second attempt).
+ *
+ * Never rejects: `refresh` swallows storage failures, so awaiting this is always safe.
  */
 export const ready: Promise<void> = refresh()
 
@@ -115,8 +124,12 @@ function snapshot(): PendingScan[] {
   return cache
 }
 
+/** A stable identity: `useSyncExternalStore` compares snapshots by reference, so returning a fresh
+ *  `[]` on each call would loop forever the moment anything renders this without a live store. */
+const EMPTY: PendingScan[] = []
+
 export function usePendingScans(): PendingScan[] {
-  return useSyncExternalStore(subscribe, snapshot, () => [])
+  return useSyncExternalStore(subscribe, snapshot, () => EMPTY)
 }
 
 export const offlineScanQueue = {

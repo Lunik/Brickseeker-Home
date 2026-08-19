@@ -83,20 +83,58 @@ async function pull(name: OfflineCatalogName): Promise<number> {
   if (!response.ok) {
     throw new Error(`Synchronisation du catalogue impossible (${response.status})`)
   }
-  const lines = (await response.text()).split('\n').filter(Boolean)
+  if (!response.body) {
+    throw new Error('Synchronisation du catalogue impossible (réponse vide)')
+  }
 
   const database = await db()
   const storeName = STORE_FOR[name]
-  for (let start = 0; start < lines.length; start += CHUNK_ROWS) {
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffered = ''
+  let chunk: (CatalogSetRow | CatalogMinifigRow)[] = []
+  let imported = 0
+
+  async function flush(): Promise<void> {
+    if (chunk.length === 0) return
     const tx = database.transaction(storeName, 'readwrite')
-    for (const line of lines.slice(start, start + CHUNK_ROWS)) {
-      void tx.store.put(JSON.parse(line))
-    }
+    // `storeName` is a union, so `tx.store` is too and its `put` narrows to the intersection of
+    // both row shapes. The row genuinely matches whichever store `name` selected.
+    const store = tx.store as unknown as { put: (row: CatalogSetRow | CatalogMinifigRow) => unknown }
+    for (const row of chunk) void store.put(row)
     await tx.done
+    imported += chunk.length
+    chunk = []
   }
 
-  await database.put('catalogMeta', { name, exportedAt: new Date().toISOString(), rowCount: lines.length })
-  return lines.length
+  // Parsed off the stream a line at a time rather than from one buffered `response.text()`: the
+  // sets export is ~28 000 rows and the minifig one carries a `containingSetNums` array per row,
+  // so materialising the whole body as a string *and* an array of every line at once is tens of
+  // megabytes held on a phone for no reason — the endpoint streams NDJSON precisely so it needn't
+  // be.
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffered += value
+    let newline = buffered.indexOf('\n')
+    while (newline !== -1) {
+      const line = buffered.slice(0, newline).trim()
+      buffered = buffered.slice(newline + 1)
+      if (line) chunk.push(JSON.parse(line))
+      if (chunk.length >= CHUNK_ROWS) await flush()
+      newline = buffered.indexOf('\n')
+    }
+  }
+  // A final line with no trailing newline is legal NDJSON.
+  const tail = buffered.trim()
+  if (tail) chunk.push(JSON.parse(tail))
+  await flush()
+
+  // Counted off the store rather than off this import: rows the server dropped from a later dump
+  // are deliberately kept (as they are server-side), so "how many entries does this device hold"
+  // is not the same number as "how many arrived just now".
+  const rowCount = await database.count(storeName)
+  await database.put('catalogMeta', { name, exportedAt: new Date().toISOString(), rowCount })
+  return imported
 }
 
 async function purgeLocal(name: OfflineCatalogName): Promise<void> {

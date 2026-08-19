@@ -1,7 +1,7 @@
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 import { ExpirationPlugin } from 'workbox-expiration'
-import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
-import { registerRoute } from 'workbox-routing'
+import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
+import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 
 // The build-time-generated, content-hashed list of the app shell (JS/CSS/HTML, icons, the
@@ -9,15 +9,36 @@ import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 
+// Every in-app route is client-side: only `/` exists as a real document, so a reload or a deep
+// link on `/history`, `/collection` or `/set/10307-1` asks the network for a path the precache has
+// no entry for, and offline that is a browser error page rather than the app. Serving the shell
+// for any navigation is the SPA counterpart of `main.py`'s own server-side fallback — without it
+// the app is offline-capable at exactly one URL.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), {
+    // `/api/...` is never a navigation, but an explicit denylist keeps a future non-SPA path
+    // (a CSV export opened in a tab) from being answered with the app shell.
+    denylist: [/^\/api\//],
+  }),
+)
+
+//: Data worth reading offline. Anchored per segment so `sets` can't also match `settings`.
+const CACHEABLE_API =
+  /^\/api\/(collection|history|wishlist|sets|minifigs|prices|alerts|stats|settings|catalog)(\/|$)/
+//: Carved back out of the above. `catalog/export` is pulled into IndexedDB by application code and
+//: has no business being duplicated in the HTTP cache; the rest are transient progress reads and
+//: file downloads, where a cached answer is actively misleading — the same reason
+//: `lib/query-persistence.ts` refuses to persist them.
+const UNCACHEABLE_API = /^\/api\/(catalog\/export|prices\/batch|wishlist\/import|stats\/export)/
+
 // Live data wins whenever the LAN server answers; a cached response serves the moment it doesn't
 // (or answers slowly — 4s is "don't let a hung request stall the UI", not a real timeout). Only
 // GET is ever matched here, so no mutation response is ever cached.
 registerRoute(
   ({ url, request }) =>
     request.method === 'GET' &&
-    /^\/api\/(collection|history|wishlist|new-sets|minifigs|prices|sets|catalog\/status)/.test(
-      url.pathname,
-    ),
+    CACHEABLE_API.test(url.pathname) &&
+    !UNCACHEABLE_API.test(url.pathname),
   new NetworkFirst({
     cacheName: 'brickseeker-api-v1',
     networkTimeoutSeconds: 4,

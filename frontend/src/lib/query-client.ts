@@ -13,6 +13,12 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 30_000,
       retry: 1,
+      // Must be >= the persister's `maxAge` (see `main.tsx`). Only queries still held in the cache
+      // are written to the persisted snapshot, and a query goes inactive the moment you navigate
+      // away from its screen — at the 5-minute default, browsing Collection and pocketing the
+      // phone for ten minutes garbage-collected it before it was ever persisted, so the offline
+      // read it exists for found nothing.
+      gcTime: 1000 * 60 * 60 * 24 * 7,
     },
   },
 })
