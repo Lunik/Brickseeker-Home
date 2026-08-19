@@ -21,9 +21,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Tags only, not full history: the `latest` decision below compares this push against
-          # every existing release tag, and a tag-push checkout otherwise carries just its own ref.
-          fetch-tags: true
+          # Full history, because the `latest` decision below needs every release tag and a
+          # tag-push checkout otherwise carries only the ref that triggered it.
+          #
+          # Not `fetch-tags: true`, which looks like the narrower tool for this and is the reason
+          # v0.2.0 failed to build the first time: on a *tag* push actions/checkout then asks git
+          # to fetch both the commit SHA and refs/tags/<tag> into that same ref, and git refuses
+          # ("Cannot fetch both … to refs/tags/v0.2.0"). It fails only on the tag pushes this step
+          # exists to serve, so a green master build says nothing about it.
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
