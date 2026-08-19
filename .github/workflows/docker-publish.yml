@@ -20,6 +20,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Tags only, not full history: the `latest` decision below compares this push against
+          # every existing release tag, and a tag-push checkout otherwise carries just its own ref.
+          fetch-tags: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -35,9 +39,28 @@ jobs:
         id: image
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
-      # Three tag strategies, all from the same build:
+      # `:latest` must only ever move *forward*. `metadata-action`'s own `latest=auto` tags any
+      # semver push as latest, which walks the tag backwards the first time a patch is cut for an
+      # older line — publishing v1.0.5 after v1.2.0 would hand every `:latest` user a downgrade,
+      # silently. Comparing against every release tag instead makes that case a no-op.
+      #
+      # Pre-releases are excluded from both sides: `v1.3.0-rc1` neither claims `:latest` nor stops
+      # `v1.2.0` from holding it, because the pattern below only ever matches a bare `vX.Y.Z`.
+      - name: Decide whether this tag is the newest release
+        id: latest
+        run: |
+          highest=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [ -n "${highest}" ] && [ "${GITHUB_REF_NAME}" = "${highest}" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ref=${GITHUB_REF_NAME} highest=${highest:-<none>}"
+
+      # Four tag strategies, all from the same build:
       #   - `nightly` on every push to master
       #   - `vX.Y.Z` on a matching git tag (kept with its `v` prefix)
+      #   - `latest` on that tag too, but only when it is the highest release (see above)
       #   - `<short sha>` on every build, regardless of which of the above applies
       - name: Extract metadata
         id: meta
@@ -49,6 +72,7 @@ jobs:
           tags: |
             type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/master' }}
             type=semver,pattern=v{{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && steps.latest.outputs.is_latest == 'true' }}
             type=sha,prefix=,format=short
 
       - name: Build and push
