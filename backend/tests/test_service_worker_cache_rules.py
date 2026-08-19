@@ -81,8 +81,7 @@ def test_offline_readable_endpoints_are_cached(path: str) -> None:
         "/api/stats/export.csv",
         "/api/stats/export.pdf",
         "/api/health",
-        # Served by their own CacheFirst rule / meaningless offline.
-        "/api/images",
+        # Meaningless offline.
         "/api/notifications",
     ],
 )

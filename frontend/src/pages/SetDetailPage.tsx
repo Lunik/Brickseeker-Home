@@ -242,6 +242,7 @@ export default function SetDetailPage() {
             <img
               src={imageUrl(data.set.setImgUrl)}
               alt={data.set.name}
+              referrerPolicy="no-referrer"
               className="h-full w-full object-contain"
               onError={() => setHeroImageFailed(true)}
             />

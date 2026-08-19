@@ -65,8 +65,6 @@ class Settings(BaseSettings):
     """Per-host request spacing, one throttler each — the hosts are unrelated and a burst to one
     shouldn't slow the others (mirrors the iOS `RequestThrottler` instances)."""
 
-    image_cache_max_bytes: int = 512 * 1024 * 1024
-
     cors_origins: str = ""
     """Comma-separated extra origins. The bundled frontend is same-origin, so this is only for
     running Vite's dev server against a container."""
@@ -85,10 +83,6 @@ class Settings(BaseSettings):
         return f"sqlite+aiosqlite:///{self.db_path}"
 
     @property
-    def image_cache_dir(self) -> Path:
-        return self.data_dir / "images"
-
-    @property
     def catalog_dir(self) -> Path:
         return self.data_dir / "catalog"
 
@@ -97,7 +91,7 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def ensure_dirs(self) -> None:
-        for path in (self.data_dir, self.image_cache_dir, self.catalog_dir):
+        for path in (self.data_dir, self.catalog_dir):
             path.mkdir(parents=True, exist_ok=True)
 
     def secret_key(self) -> str:

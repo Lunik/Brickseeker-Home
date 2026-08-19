@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from ..deps import ApiError, SessionDep, require_auth
 from ..schemas import CamelModel, OkOut
 from ..security import CredentialKey, get_bricklink_credentials, has_credential, set_credential
-from ..services import app_settings, brickset, catalog, collection_repo, image_cache, rebrickable
+from ..services import app_settings, brickset, catalog, collection_repo, rebrickable
 from ..services.price_updater import price_updater
 
 router = APIRouter(prefix="/settings", tags=["réglages"], dependencies=[Depends(require_auth)])
@@ -183,5 +183,6 @@ async def clear_cache(session: SessionDep) -> dict[str, object]:
     """Purges what can be rebuilt. Scans, prix payés, alertes, historique des prix and the daily
     collection valuations all survive — none of them can be re-fetched from anywhere."""
     await collection_repo.clear_cache(session)
-    removed_images = image_cache.clear_image_cache()
-    return {"ok": True, "removedImages": removed_images}
+    # No images to sweep: artwork is loaded straight from the catalogue CDNs by the browser and
+    # cached there, so this server never holds a copy to purge.
+    return {"ok": True}

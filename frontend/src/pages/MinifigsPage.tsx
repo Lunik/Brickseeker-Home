@@ -36,6 +36,7 @@ function MinifigTile({ row }: { row: SetRow }) {
           src={src}
           alt={row.name}
           loading="lazy"
+          referrerPolicy="no-referrer"
           className="h-full w-full object-contain p-1"
           onError={() => setFailed(true)}
         />

@@ -283,6 +283,9 @@ export function SetThumbnail({
           src={src}
           alt={alt}
           loading="lazy"
+          // The browser now reaches the CDN itself, so it would otherwise hand that CDN the URL of
+          // this instance — typically a private LAN address — with every thumbnail.
+          referrerPolicy="no-referrer"
           className="h-full w-full object-contain p-0.5"
           onError={() => setFailed(true)}
         />

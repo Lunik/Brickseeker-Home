@@ -96,12 +96,20 @@ export const api = {
 }
 
 /**
- * Rewrites a remote image URL through the caching proxy. Set images are re-downloaded on every
- * render otherwise, and the browser can't reach an origin the container can.
+ * A catalogue image URL, used as-is: the browser fetches artwork straight from Rebrickable's (or
+ * Brickset's / BrickLink's) CDN.
+ *
+ * This used to go through a `/api/images` proxy that cached to disk. Loading direct is strictly
+ * better for caching — the CDN sends `max-age=31536000`, where the proxy re-stated a week — and it
+ * costs the container no storage, no bandwidth and no request handling. The browser's own HTTP
+ * cache then serves the artwork on later visits, and offline too, since a year-fresh entry needs
+ * no revalidation.
+ *
+ * Kept as a function rather than inlining the field: it is the one place that decides where
+ * artwork comes from, and every `<img>` in the app already routes through it.
  */
 export function imageUrl(url: string | null | undefined): string | undefined {
-  if (!url) return undefined
-  return `/api/images?url=${encodeURIComponent(url)}`
+  return url || undefined
 }
 
 /** Builds a query string, dropping empty values so `?year=&theme=City` never happens. */

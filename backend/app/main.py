@@ -24,7 +24,6 @@ from .routers import (
     catalog,
     collection,
     history,
-    images,
     notifications,
     prices,
     scan,
@@ -98,7 +97,6 @@ def create_app() -> FastAPI:
         stats.router,
         catalog.router,
         scan.router,
-        images.router,
         notifications.router,
     ):
         app.include_router(router, prefix="/api")

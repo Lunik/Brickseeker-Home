@@ -1,8 +1,7 @@
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
-import { ExpirationPlugin } from 'workbox-expiration'
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
-import { CacheFirst, NetworkFirst } from 'workbox-strategies'
+import { NetworkFirst } from 'workbox-strategies'
 
 // The build-time-generated, content-hashed list of the app shell (JS/CSS/HTML, icons, the
 // tesseract assets) — this is what lets the app load with zero network after a first visit.
@@ -46,19 +45,12 @@ registerRoute(
   }),
 )
 
-// The backend already sends `Cache-Control: public, max-age=604800, immutable` for a given image
-// URL — this makes that guarantee durable under Service Worker control rather than relying on the
-// browser's plain HTTP cache, which private mode or storage pressure can evict independently.
-registerRoute(
-  ({ url, request }) => request.method === 'GET' && url.pathname === '/api/images',
-  new CacheFirst({
-    cacheName: 'brickseeker-images-v1',
-    plugins: [
-      new CacheableResponsePlugin({ statuses: [200] }),
-      new ExpirationPlugin({ maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 30 }),
-    ],
-  }),
-)
+// Catalogue artwork is deliberately *not* routed here. It is fetched by the browser straight from
+// the Rebrickable/Brickset/BrickLink CDNs, none of which send CORS headers — so a Service Worker
+// could only ever store those responses opaquely, where the quota charges far more than the bytes
+// actually weigh. The CDNs send `max-age=31536000`, so the browser's own HTTP cache already serves
+// that artwork on later visits and offline; copying it into Cache Storage as well would spend the
+// storage budget twice for the same pixels.
 
 // Push notifications only below this line — unchanged from before this file gained caching.
 //

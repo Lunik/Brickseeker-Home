@@ -708,7 +708,15 @@ export default function SettingsPage() {
           <li>• Vos identifiants tiers sont chiffrés dans la base : le fichier seul ne suffit pas à les lire.</li>
           <li>• Vos mots de passe Rebrickable et Brickset ne sont jamais enregistrés.</li>
           <li>• Aucune analytique, aucun envoi vers un service que vous n'avez pas configuré.</li>
-          <li>• Tout reste dans votre conteneur, sur votre machine.</li>
+          <li>
+            • Vos données (collection, scans, prix, alertes) restent dans votre conteneur, sur
+            votre machine.
+          </li>
+          <li>
+            • Seule exception : les visuels des sets sont chargés directement depuis Rebrickable,
+            Brickset et BrickLink par votre navigateur, qui les met en cache. Ces sites voient donc
+            votre adresse IP — mais rien de ce que vous consultez ne transite par eux.
+          </li>
         </ul>
       </Section>
 
