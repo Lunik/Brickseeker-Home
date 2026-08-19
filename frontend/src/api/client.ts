@@ -101,9 +101,9 @@ export const api = {
  *
  * This used to go through a `/api/images` proxy that cached to disk. Loading direct is strictly
  * better for caching — the CDN sends `max-age=31536000`, where the proxy re-stated a week — and it
- * costs the container no storage, no bandwidth and no request handling. The browser's own HTTP
- * cache then serves the artwork on later visits, and offline too, since a year-fresh entry needs
- * no revalidation.
+ * costs the container no storage, no bandwidth and no request handling. Offline persistence is the
+ * service worker's job now (`sw-src/sw.js`'s image route), not the browser's native HTTP cache —
+ * iOS evicts that far too aggressively to trust for artwork shown minutes earlier.
  *
  * Kept as a function rather than inlining the field: it is the one place that decides where
  * artwork comes from, and every `<img>` in the app already routes through it.

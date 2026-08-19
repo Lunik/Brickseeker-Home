@@ -1,7 +1,8 @@
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
+import { ExpirationPlugin } from 'workbox-expiration'
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
-import { NetworkFirst } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 
 // The build-time-generated, content-hashed list of the app shell (JS/CSS/HTML, icons, the
 // tesseract assets) — this is what lets the app load with zero network after a first visit.
@@ -45,12 +46,27 @@ registerRoute(
   }),
 )
 
-// Catalogue artwork is deliberately *not* routed here. It is fetched by the browser straight from
-// the Rebrickable/Brickset/BrickLink CDNs, none of which send CORS headers — so a Service Worker
-// could only ever store those responses opaquely, where the quota charges far more than the bytes
-// actually weigh. The CDNs send `max-age=31536000`, so the browser's own HTTP cache already serves
-// that artwork on later visits and offline; copying it into Cache Storage as well would spend the
-// storage budget twice for the same pixels.
+// Catalogue artwork, fetched by the browser straight from the Rebrickable/Brickset/BrickLink CDNs.
+// This used to rely on the browser's own HTTP cache instead of Cache Storage — those CDNs send
+// `max-age=31536000`, so in principle no revalidation is ever needed. In practice, iOS's WKWebView
+// HTTP cache is far smaller and evicted far more aggressively than desktop browsers': artwork shown
+// minutes earlier over Wi-Fi was already gone once the phone went offline, leaving every row in the
+// list blank. Cache Storage survives that. None of these CDNs send CORS headers, so every response
+// here is opaque (status 0) — `CacheableResponsePlugin` explicitly allows that through, since the
+// default cacheable check requires `200`.
+registerRoute(
+  ({ request, url }) => request.destination === 'image' && url.origin !== self.location.origin,
+  new CacheFirst({
+    cacheName: 'brickseeker-artwork-v1',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      // Bounded mainly by count, not age: this artwork doesn't change once a set exists, so the
+      // CDN's own year-long `max-age` is matched here rather than invented — the real limit on a
+      // large collection is disk space, not staleness.
+      new ExpirationPlugin({ maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 365 }),
+    ],
+  }),
+)
 
 // Push notifications only below this line — unchanged from before this file gained caching.
 //

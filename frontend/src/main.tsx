@@ -26,8 +26,38 @@ const persister = createAsyncStoragePersister({
 // responses apply to every visitor, not only the ones who enable notifications. Fire-and-forget on
 // `load` so it never competes with first paint.
 if ('serviceWorker' in navigator) {
+  // Whether this navigation was already under a service worker's control the instant this script
+  // ran — true for a repeat visit with nothing new to fetch, false for the very first visit ever
+  // (or the first load after the user cleared site data). Only in the former case does a later
+  // `controllerchange` mean "a newer version just took over out from under code already sitting in
+  // memory"; in the latter it's just the very first worker claiming an until-now-uncontrolled tab,
+  // and reloading a page that only just finished loading would be pure noise.
+  const hadController = Boolean(navigator.serviceWorker.controller)
+
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/sw.js').then((registration) => {
+      // A browser tab only checks for a new sw.js on its own schedule (roughly once a day, or on
+      // a fresh navigation) — for an installed PWA that can sit open for days without either, that
+      // makes "force a refresh when a new version is found" mean nothing until the browser gets
+      // around to it. Checking whenever the tab regains focus catches an update the moment there's
+      // actually someone there to see the refresh happen, rather than in the background hours
+      // later.
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) void registration.update()
+      })
+    })
+  })
+
+  // The service worker's own `skipWaiting()`/`clients.claim()` (sw-src/sw.js) hand control of this
+  // tab to the new version immediately, without waiting for it to be closed first — but that only
+  // changes which worker answers future network requests; the HTML/JS this tab already evaluated
+  // stays exactly as stale as it was. `controllerchange` is the moment that handover happens, and
+  // reloading right then is what actually gets the tab onto the new code.
+  let reloading = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return
+    reloading = true
+    window.location.reload()
   })
 }
 
