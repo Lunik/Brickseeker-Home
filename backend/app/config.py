@@ -56,9 +56,6 @@ class Settings(BaseSettings):
     background_refresh_batch_size: int = 8
     """How many overdue watched sets one scheduler tick processes (iOS: a granted BGTask wake-up)."""
 
-    ocr_enabled: bool = True
-    ocr_languages: str = "eng+fra"
-
     rebrickable_min_interval: float = 1.0
     brickset_min_interval: float = 1.0
     bricklink_min_interval: float = 1.0

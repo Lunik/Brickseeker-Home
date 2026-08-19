@@ -22,7 +22,7 @@ import Icon from '../components/Icon'
 import { SetThumbnail } from '../components/ui'
 import { EmptyState, Sheet, Spinner } from '../components/ui'
 
-/** One OCR round per 800 ms. Faster is wasted work — and here it also costs a round-trip. */
+/** One OCR round per 800 ms. Faster is wasted work processing frames the eye hasn't settled on. */
 const CAPTURE_INTERVAL_MS = 800
 /** A candidate must persist before it's worth resolving; the pulse fires immediately regardless. */
 const DEBOUNCE_MS = 1200
@@ -45,6 +45,11 @@ export default function ScannerPage() {
   const [candidate, setCandidate] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
   const [ambiguous, setAmbiguous] = useState<LegoSet[] | null>(null)
+  // What a fully offline resolution found: there is no live detail page to navigate to (no backend
+  // to answer GET /sets/:setNum, no cache for a set never seen on this device before), so this
+  // confirmation sheet is the offline equivalent of `navigate()` on the online path below — without
+  // it, a successful offline scan showed only a toast and read as if nothing had happened.
+  const [offlineFound, setOfflineFound] = useState<LegoSet | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [manual, setManual] = useState('')
   const [showManual, setShowManual] = useState(false)
@@ -58,7 +63,7 @@ export default function ScannerPage() {
 
   // Any sheet covering the camera stops it — the iOS scanner treats this as a hard rule, and
   // it is also what keeps a background resolve from yanking the user off a form they are typing.
-  const isCovered = showManual || ambiguous !== null
+  const isCovered = showManual || ambiguous !== null || offlineFound !== null
   const camera = useCamera(!isCovered)
 
   /**
@@ -86,10 +91,13 @@ export default function ScannerPage() {
     prepareFeedback()
   }, [])
 
-  // The offline OCR worker is only ever spun up lazily, on the first offline recognition attempt
-  // (see the capture loop below) — this just frees its WASM memory once the scanner is done with
-  // it, mirroring `useCamera.ts`'s own stop-on-hidden discipline.
+  // Every scan runs through the OCR worker now, not just a fallback reached after a failed network
+  // attempt — so it's started here rather than left to spin up cold inside the first capture tick,
+  // which would otherwise sit there looking unresponsive while the WASM core and both language
+  // packs load. Torn down on unmount/tab-hidden, mirroring `useCamera.ts`'s own stop-on-hidden
+  // discipline; a later `recognize` call transparently spins a fresh worker back up.
   useEffect(() => {
+    void offlineOcr.warmUp()
     function onVisibility() {
       if (document.hidden) void offlineOcr.terminateOfflineOcr()
     }
@@ -127,8 +135,9 @@ export default function ScannerPage() {
 
         // No backend to ask at all — resolve against the on-device catalogue snapshot instead. A
         // hit is queued for the sync engine (`lib/offline-scan-sync.ts`) to replay through the
-        // real `/scan/lookup` once reachable, rather than navigating to a detail page that has no
-        // cache to fall back on for a set never seen on this device before.
+        // real `/scan/lookup` once reachable; outside batch mode, `offlineFound` below stands in
+        // for the `navigate()` the online path gets, since there's no live detail page to open —
+        // no backend to answer GET /sets/:setNum, no cache for a set never seen on this device.
         async function resolveOffline(): Promise<void> {
           const found = await offlineCatalogStore.lookupSet(setNum)
           if (found) {
@@ -142,11 +151,14 @@ export default function ScannerPage() {
               longitude: coords.longitude ?? null,
               resolvedSet: found,
             })
-            // Mirrors the online batch-mode path exactly: stay on the camera, don't interrupt the
-            // sweep. Outside batch mode there is nothing to navigate to yet, so this is the whole
-            // confirmation the user gets until the item syncs.
-            if (batchMode) batchSession.add(found)
-            setMessage(`${found.setNum} — ${found.name} enregistré, en attente de connexion.`)
+            if (batchMode) {
+              // Mirrors the online batch-mode path exactly: stay on the camera, don't interrupt
+              // the sweep.
+              batchSession.add(found)
+              setMessage(`${found.setNum} ajouté à la session (hors connexion)`)
+              return
+            }
+            setOfflineFound(found)
             return
           }
           if (withFeedback) playResolutionFailed()
@@ -220,19 +232,10 @@ export default function ScannerPage() {
         const blob = await camera.captureFrame()
         if (!blob) return
 
-        // Skip the network attempt entirely once we already know the backend is unreachable —
-        // firing it anyway would just cost the 800ms cadence waiting out a doomed request every
-        // tick. `set-number-extractor.ts` is the same regex logic `/scan/ocr` runs server-side, so
-        // either path feeds the acceptance logic below identically.
-        let setNums: string[]
-        if (backendReachable) {
-          const form = new FormData()
-          form.append('file', blob, 'frame.jpg')
-          ;({ setNums } = await api.upload<{ setNums: string[] }>('/scan/ocr', form))
-        } else {
-          const candidates = await offlineOcr.recognize(blob)
-          setNums = extractSetNumbers(candidates)
-        }
+        // Always on-device — see `lib/offline-ocr.ts`. No network round trip in the capture loop
+        // at all, reachable backend or not.
+        const candidates = await offlineOcr.recognize(blob)
+        const setNums = extractSetNumbers(candidates)
         const now = Date.now()
 
         // Forget anything not seen for a while, so a number glimpsed on a neighbouring box
@@ -285,7 +288,7 @@ export default function ScannerPage() {
     }, CAPTURE_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
-  }, [backendReachable, camera, isCovered, resolve])
+  }, [camera, isCovered, resolve])
 
   return (
     <div className="relative min-h-[100dvh] bg-black">
@@ -435,6 +438,47 @@ export default function ScannerPage() {
             </li>
           ))}
         </ul>
+      </Sheet>
+
+      <Sheet
+        open={offlineFound !== null}
+        title="Trouvé hors-ligne"
+        onClose={() => setOfflineFound(null)}
+      >
+        {offlineFound && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <SetThumbnail url={offlineFound.setImgUrl} alt={offlineFound.name} />
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-ink">{offlineFound.setNum}</span>
+                <span className="block truncate text-sm text-ink-muted">{offlineFound.name}</span>
+                <span className="block text-xs text-ink-faint">
+                  {offlineFound.year} · {offlineFound.numParts} pièces
+                </span>
+              </span>
+            </div>
+            <p className="text-sm text-ink-muted">
+              Identifié via le catalogue hors-ligne. Sera enregistré dans l'Historique, avec son
+              prix, dès le retour de la connexion.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-primary flex-1"
+                onClick={() => setOfflineFound(null)}
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                onClick={() => navigate('/history')}
+              >
+                Voir l'historique
+              </button>
+            </div>
+          </div>
+        )}
       </Sheet>
 
       <Sheet open={showManual} title="Saisie manuelle" onClose={() => setShowManual(false)}>

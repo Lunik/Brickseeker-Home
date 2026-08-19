@@ -41,8 +41,9 @@ docker run -d --name brickseeker -p 8000:8000 -v "$PWD/data:/data" --network bri
 Toutes celles de l'app iOS, à l'identique sauf mention contraire.
 
 - **Scan de sets** — la caméra du navigateur (`getUserMedia`) filme le numéro sur la boîte, l'OCR
-  tourne côté serveur (tesseract), et le set est identifié. Saisie manuelle et import de photo
-  disponibles en permanence : un scanner sans porte de sortie est un cul-de-sac.
+  tourne entièrement sur l'appareil (tesseract.js), et le set est identifié — aucune connexion au
+  backend nécessaire pour cette étape. Saisie manuelle et import de photo disponibles en
+  permanence : un scanner sans porte de sortie est un cul-de-sac.
 - **Catalogue hors-ligne** — un instantané des ~28 000 sets Rebrickable téléchargé depuis les
   dumps publics, pour que l'identification marche même quand l'API est injoignable.
 - **Collection** — compte Rebrickable lié : savoir si un set est déjà possédé et dans quelle
@@ -79,7 +80,6 @@ Voir [`.env.example`](.env.example) pour la liste complète.
 | `BRICKSEEKER_DATA_DIR` | `/data` | Base SQLite, cache d'images, catalogues. |
 | `BRICKSEEKER_SCRAPING_ENABLED` | `true` | `false` = ne lance jamais Chromium. BrickLink et le reste continuent de fonctionner. |
 | `BRICKSEEKER_BACKGROUND_REFRESH_ENABLED` | `true` | Rafraîchissement périodique des sets sous alerte. |
-| `BRICKSEEKER_OCR_ENABLED` | `true` | OCR serveur pour le scan. |
 
 ### Identifiants tiers
 
@@ -116,14 +116,14 @@ brickseeker-home/
 ├── backend/            FastAPI + SQLite
 │   └── app/
 │       ├── models.py       schéma SQLite (port des @Model SwiftData)
-│       ├── services/       clients externes, dépôt local, prix, catalogue, OCR, planificateur
+│       ├── services/       clients externes, dépôt local, prix, catalogue, planificateur
 │       │   └── pricing.py  le noyau de résolution des prix — pur, sans I/O
 │       ├── routers/        surface REST sous /api
 │       └── static/         bundle Vite compilé (généré)
 ├── frontend/           React + TypeScript + Tailwind + Vite
-│   └── src/{api,components,hooks,lib,pages}
+│   └── src/{api,components,hooks,lib,pages}   OCR (tesseract.js) dans lib/offline-ocr.ts
 ├── docs/contract.md    le contrat partagé backend ↔ frontend
-├── Dockerfile          image applicative (tesseract + API + UI, sans Chromium)
+├── Dockerfile          image applicative (API + UI, sans Chromium)
 └── docker-compose.yml  service applicatif + sidecar Chromium
 ```
 
@@ -154,9 +154,6 @@ BRICKSEEKER_DATA_DIR=./.data .venv/bin/uvicorn app.main:app --reload
 cd frontend
 npm install && npm run dev
 ```
-
-L'OCR a besoin de tesseract en local (`brew install tesseract tesseract-lang` sur macOS,
-`apt install tesseract-ocr tesseract-ocr-fra` sur Debian).
 
 ---
 

@@ -106,7 +106,6 @@ def create_app() -> FastAPI:
         return {
             "status": "ok",
             "scraping": settings.scraping_enabled,
-            "ocr": settings.ocr_enabled,
             "backgroundRefresh": settings.background_refresh_enabled,
         }
 

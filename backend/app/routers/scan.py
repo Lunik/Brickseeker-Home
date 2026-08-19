@@ -1,22 +1,23 @@
-"""Camera/photo scanning: OCR, then resolution through the one shared lookup path."""
+"""Camera/photo scanning: resolution through the one shared lookup path.
+
+OCR itself is not here — it runs entirely on-device (tesseract.js, `lib/offline-ocr.ts`), never on
+the server. That used to be a server route (`POST /scan/ocr`, pytesseract); running it client-side
+instead removes a whole network round trip from the capture loop (previously one upload every
+~800ms) and means scanning needs no backend reachable at all, not even to identify a set number —
+only `/scan/lookup` below still does, and only to fetch live data once a number is already in hand."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends
 
 from ..deps import SessionDep, require_auth
 from ..schemas import CamelModel
-from ..services import collection_repo, geocoding, ocr
+from ..services import collection_repo, geocoding
 from .sets import ResolveOut, _resolve
 
 router = APIRouter(prefix="/scan", tags=["scan"], dependencies=[Depends(require_auth)])
-
-
-class OcrOut(CamelModel):
-    candidates: list[str]
-    set_nums: list[str]
 
 
 #: Sources that count as a scan. `listReopen` is deliberately absent — reopening a row from a
@@ -39,13 +40,6 @@ class LookupIn(CamelModel):
 
 class LookupOut(ResolveOut):
     scan_event_id: int | None = None
-
-
-@router.post("/ocr", response_model=OcrOut)
-async def run_ocr(file: UploadFile = File(...)) -> OcrOut:
-    payload = await file.read()
-    candidates = await ocr.recognize_text(payload)
-    return OcrOut(candidates=candidates, set_nums=ocr.extract_set_numbers(candidates))
 
 
 @router.post("/lookup", response_model=LookupOut)

@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
 import type { CollectionPayload, ResolveResult } from '../api/types'
+import * as offlineOcr from '../lib/offline-ocr'
+import { extractSetNumbers } from '../lib/set-number-extractor'
 import { useSettings } from '../lib/settings-context'
 import { formatDateTime } from '../lib/format'
 import Icon from '../components/Icon'
@@ -24,7 +26,8 @@ interface WishlistPayload {
  * reached from a tile here or from the floating scan cluster.
  *
  * Manual entry and photo import both resolve through `/scan/lookup`, the same path the camera
- * uses, rather than each having its own resolution logic.
+ * uses, rather than each having its own resolution logic. Photo import's OCR step, like the
+ * camera's, runs on-device (`lib/offline-ocr.ts`) — there is no server-side OCR left to call.
  */
 export default function HomePage() {
   const navigate = useNavigate()
@@ -90,12 +93,13 @@ export default function HomePage() {
   })
 
   const ocr = useMutation({
+    // On-device, same as the camera path (`lib/offline-ocr.ts`) — there is no server-side OCR to
+    // call at all. `File` is accepted directly; tesseract.js doesn't need it wrapped for upload.
     mutationFn: async (file: File) => {
-      const form = new FormData()
-      form.append('file', file)
-      const result = await api.upload<{ setNums: string[] }>('/scan/ocr', form)
-      if (!result.setNums.length) throw new Error('Aucun numéro de set lisible sur cette photo.')
-      return result.setNums[0]
+      const candidates = await offlineOcr.recognize(file)
+      const setNums = extractSetNumbers(candidates)
+      if (!setNums.length) throw new Error('Aucun numéro de set lisible sur cette photo.')
+      return setNums[0]
     },
     onSuccess: (setNum) => lookup.mutate({ setNum, source: 'photoImport' }),
     onError: (error: Error) => setLookupError(error.message),

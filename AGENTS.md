@@ -110,8 +110,12 @@ Elles sont peu nombreuses et chacune a une raison :
   (présent/absent/indéterminé) parce qu'iOS peut refuser une lecture appareil verrouillé. Côté
   serveur ce cas n'existe pas : « ligne absente » signifie vraiment « non configuré », donc le
   message « non configuré » est sûr ici.
-- **Vision → tesseract**, côté serveur. Le navigateur envoie une image par seconde environ ; la
-  boucle de capture reste bridée comme sur iOS, où c'était déjà du gâchis de traiter chaque image.
+- **Vision → tesseract.js, sur l'appareil.** Une première version de ce port faisait tourner
+  tesseract côté serveur (un aller-retour réseau par image) ; la reconnaissance tourne maintenant
+  entièrement dans le navigateur, comme sur iOS — seul le moteur diffère (WASM plutôt que le
+  framework système), pas l'endroit où il s'exécute. Conséquence directe : scanner ne demande
+  aucune connexion au backend, pas même pour identifier un numéro. La boucle de capture reste
+  bridée à ~800 ms comme sur iOS, où traiter chaque trame était déjà du gâchis.
 - **WKWebView → Playwright/Chromium.** Même mécanique : charger la page, attendre que le défi JS
   soit passé, extraire du DOM. Les sélecteurs et regex sont portés quasi tels quels — chacun encode
   un bug trouvé uniquement en testant contre les vrais sites.
@@ -153,7 +157,8 @@ Tout ce qui recouvre la caméra doit l'arrêter. `isCovered`, dans `pages/Scanne
 seule source de vérité et alimente `useCamera`. Une feuille de plus, un champ de saisie de plus :
 ajoute son état à `isCovered`, pas un `useEffect` de plus.
 
-La boucle OCR envoie une image toutes les ~800 ms et **compte les apparitions de chaque numéro**.
+La boucle OCR traite une image toutes les ~800 ms, entièrement sur l'appareil, et **compte les
+apparitions de chaque numéro**.
 Elle ne se fie jamais au premier candidat d'une image : l'OCR en renvoie un différent à chaque prise
 (un nombre de pièces, un âge, le vrai numéro), si bien qu'exiger deux fois de suite le même premier
 candidat ne déclenchait jamais rien — la caméra détectait et il ne se passait rien. Gagne celui qui

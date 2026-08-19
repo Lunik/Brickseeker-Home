@@ -37,11 +37,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     BRICKSEEKER_DATA_DIR=/data
 
-# tesseract replaces iOS's Vision framework for reading the set number off a box photo;
-# the -fra pack matters because French packaging is the common case for this user.
+# No tesseract here: OCR runs entirely on-device (tesseract.js, bundled into the frontend build),
+# never server-side — see frontend/src/lib/offline-ocr.ts.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng \
         curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 

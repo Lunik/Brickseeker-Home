@@ -1,10 +1,9 @@
 /**
- * Picking a set number out of OCR text.
- *
- * A straight port of `backend/app/services/ocr.py`'s `extract_set_numbers`/`_is_plausible` — used
- * for the offline OCR path (`lib/offline-ocr.ts`), so a box photographed with no backend reachable
- * gets the exact same "found some digits" vs "found a set number" filtering as the live path: a
- * barcode, a phone number, a copyright year, an age rating all show up in OCR output too.
+ * Picking a set number out of OCR text — the regex layer that used to live server-side, in
+ * `backend/app/services/ocr.py`, before OCR moved entirely on-device and that file was deleted.
+ * This is now the only copy. Used by every OCR path (`lib/offline-ocr.ts`, the camera loop and
+ * photo import both): a set number is never the only thing OCR reads off a box — a barcode, a
+ * phone number, a copyright year, an age rating all show up in the same output.
  */
 
 /** 4-6 digits, optionally with Rebrickable's `-N` variant suffix. */
