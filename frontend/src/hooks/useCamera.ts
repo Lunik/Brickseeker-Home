@@ -123,8 +123,24 @@ export function useCamera(enabled: boolean): CameraHandle {
       const canvas = (canvasRef.current ??= document.createElement('canvas'))
       // Only the reticle region is sent: OCR on the full frame picks up every other number on the
       // packaging, and the upload is ~4× larger for no gain.
-      const width = Math.round(video.videoWidth * crop.widthRatio)
-      const height = Math.round(video.videoHeight * crop.heightRatio)
+      //
+      // The ratios are of what is *on screen*, not of the raw frame, because the element is
+      // `object-cover`: the source is scaled up and centre-cropped to fill it, so the visible
+      // picture is a sub-rectangle of the frame. Taking the same ratios off the raw frame instead
+      // is not the reticle at all — on a 390×844 element showing a 1920×1080 stream the reticle
+      // covers 399 source px across while that crop sent 1536, i.e. 3.85× too wide, over a
+      // thousand of them never on screen. Everything the user had deliberately framed out came
+      // along, and the number they aimed at shrank to a fraction of the image OCR then read.
+      const elementWidth = video.clientWidth || video.videoWidth
+      const elementHeight = video.clientHeight || video.videoHeight
+      // How `object-cover` sizes the source against the element; the crop it applies is centred,
+      // and so is the reticle, so only the size has to be mapped back.
+      const cover = Math.max(elementWidth / video.videoWidth, elementHeight / video.videoHeight)
+      const visibleWidth = elementWidth / cover
+      const visibleHeight = elementHeight / cover
+
+      const width = Math.round(visibleWidth * crop.widthRatio)
+      const height = Math.round(visibleHeight * crop.heightRatio)
       canvas.width = width
       canvas.height = height
 

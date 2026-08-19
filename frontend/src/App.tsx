@@ -53,7 +53,13 @@ function Chrome() {
   return (
     <div className="mx-auto min-h-full w-full max-w-2xl">
       <OfflineBanner />
-      <main className={isScanner ? '' : 'px-4 pb-16 pt-2'}>
+      {/* `apple-mobile-web-app-status-bar-style: black-translucent` (index.html) runs the web view
+          under the iOS status bar once installed to the home screen, so the top row of controls
+          landed behind the clock and the battery. The inset is what the status bar actually
+          occupies on this device — zero in a browser tab, ~47px on a notched iPhone. */}
+      <main
+        className={isScanner ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'}
+      >
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
