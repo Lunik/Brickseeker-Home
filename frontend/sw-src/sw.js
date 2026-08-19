@@ -78,7 +78,9 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/favicon.svg',
+      icon: '/icons/icon-192.png',
+      // Deliberately still the plain mark, not the artwork: a badge is flattened to a silhouette,
+      // so a detailed illustration arrives as a solid blob.
       badge: '/favicon.svg',
       tag: payload.setNum ? `set-${payload.setNum}` : 'brickseeker',
       data: { url: payload.setNum ? `/set/${encodeURIComponent(payload.setNum)}` : '/' },
