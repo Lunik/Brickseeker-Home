@@ -12,6 +12,13 @@ import { Badge, Spinner } from './ui'
  */
 
 const ROW_ORDER: PriceSourceKey[] = ['bricklinkNew', 'bricklinkUsed', 'amazon', 'cdiscount']
+/**
+ * A minifig is only ever sold on BrickLink — never at retail, which is why `resolve_minifig_price`
+ * reads BrickLink alone. The backend already declines to scrape lego.com/Amazon/Cdiscount for one
+ * (`services/prices.py`), so those rows could never fill: they stood there reading « Indisponible »
+ * for good, three dead lines implying a price might turn up.
+ */
+const MINIFIG_ROW_ORDER: PriceSourceKey[] = ['bricklinkNew', 'bricklinkUsed']
 
 interface PriceCardProps {
   detail: SetDetail
@@ -95,7 +102,8 @@ export default function PriceCard({
   onRefresh,
 }: PriceCardProps) {
   const bySource = new Map(detail.quotes.map((quote) => [quote.source, quote]))
-  const storePrice = detail.storePriceEur
+  // A minifig has no retail price, so there is nothing for the ± badges to compare against either.
+  const storePrice = detail.isMinifig ? null : detail.storePriceEur
 
   const reference = detail.valuation.currentValueEur ?? storePrice
   const pricePerPart = reference && detail.set.numParts > 0 ? reference / detail.set.numParts : null
@@ -120,6 +128,7 @@ export default function PriceCard({
       </div>
 
       <ul className="divide-y divide-line">
+        {!detail.isMinifig && (
         <li className="flex items-start justify-between gap-3 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">lego.com (officiel)</p>
@@ -146,6 +155,7 @@ export default function PriceCard({
             {storePrice !== null ? formatEUR(storePrice) : 'Indisponible'}
           </span>
         </li>
+        )}
 
         {/* Directly under the retail price it is derived from, as on iOS — at the bottom of the
             list it read as a summary of every source, which it is not. */}
@@ -167,7 +177,7 @@ export default function PriceCard({
           </li>
         )}
 
-        {ROW_ORDER.map((source) => (
+        {(detail.isMinifig ? MINIFIG_ROW_ORDER : ROW_ORDER).map((source) => (
           <QuoteRow
             key={source}
             label={SOURCE_LABEL[source]}
