@@ -1,8 +1,11 @@
 name: Purge old GHCR builds
 
-# Deliberately `workflow_dispatch` only for now — no `schedule:` trigger until a real dry run
-# (and, ideally, one real deletion) has been watched end to end. Add `schedule:` once that's done.
+# Proven end to end before this schedule was added: dry run and a real, watched deletion both ran
+# manually first, checked against the live API afterwards (version count dropped by exactly the
+# planned amount, every protected tag still pulled). See the commit that added `schedule:` below.
 on:
+  schedule:
+    - cron: "0 3 * * 0" # Sunday 03:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:
@@ -26,8 +29,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
           PACKAGE: brickseeker-home
-          DRY_RUN: ${{ inputs.dry_run }}
-          KEEP_EPHEMERAL: ${{ inputs.keep_ephemeral }}
+          # Raw, unbranched values only — `inputs.*` is an empty context on a `schedule` trigger,
+          # and GitHub Actions' `${{ }}` expressions treat the *string* "false" as truthy, so an
+          # `inputs.dry_run || 'false'`-style ternary here would silently do the wrong thing on
+          # whichever branch wasn't exercised by hand before shipping. The trigger-based default
+          # (schedule = live run, dispatch = whatever was asked for) is decided below in Python
+          # instead, with a plain `==` this file's own test run already exercised for real.
+          EVENT_NAME: ${{ github.event_name }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          KEEP_EPHEMERAL_INPUT: ${{ inputs.keep_ephemeral }}
         run: |
           python3 <<'PY'
           import json
@@ -37,8 +47,15 @@ jobs:
 
           owner = os.environ["OWNER"].lower()
           package = os.environ["PACKAGE"]
-          dry_run = os.environ["DRY_RUN"] != "false"
-          keep_ephemeral = int(os.environ["KEEP_EPHEMERAL"])
+          if os.environ["EVENT_NAME"] == "workflow_dispatch":
+              dry_run = os.environ["DRY_RUN_INPUT"] != "false"
+              keep_ephemeral = int(os.environ["KEEP_EPHEMERAL_INPUT"] or "15")
+          else:
+              # `schedule` (or any future trigger this file doesn't special-case yet): always a
+              # live run at the standing default — an unattended run that only ever printed a plan
+              # would defeat the point of scheduling it at all.
+              dry_run = False
+              keep_ephemeral = 15
 
           # Every build here pushes 3 manifests to the registry: the real (tagged) image plus two
           # untagged referrer manifests — provenance/SBOM attestations that `docker/build-push-
