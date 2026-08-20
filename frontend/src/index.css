@@ -5,10 +5,13 @@
 /*
  * Design tokens, matched to the iOS app measured side by side in the simulator.
  *
- * Dark mode is **pure black** (SwiftUI's `.systemBackground`) with `.secondarySystemBackground`
- * cards and no borders — the card reads as raised purely by being lighter than the page. Light
- * mode is the inverse grouped style: a grey page, white cards. Getting these two backgrounds wrong
- * is what made the first pass look like a different app.
+ * Dark mode started as **pure black** (SwiftUI's `.systemBackground`) with
+ * `.secondarySystemBackground` cards and no borders — the card reads as raised purely by being
+ * lighter than the page. On an actual phone screen that read as too harsh, so the page background
+ * is a very dark grey instead; the card stays exactly where it was, so the same "raised by being
+ * lighter" hierarchy still holds, just against a less extreme base. Light mode is the inverse
+ * grouped style: a grey page, white cards. Getting these two backgrounds wrong is what made the
+ * first pass look like a different app.
  *
  * `--brand` is rewritten at runtime by lib/theme.ts, so nothing hardcodes which of the three LEGO
  * colours is active.
@@ -36,7 +39,7 @@
 .dark {
   --brand-soft: 60 20 22;
 
-  --surface: 0 0 0;
+  --surface: 18 18 18;
   --surface-raised: 28 28 30;
   --surface-sunken: 44 44 46;
 
