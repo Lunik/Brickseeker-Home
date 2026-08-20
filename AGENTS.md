@@ -138,6 +138,31 @@ L'état de filtre survit à la navigation (magasin module-level, pas du `useStat
 réinitialise qu'au rechargement complet — un filtre qui se perd chaque fois qu'on ferme un set est
 insupportable à l'usage.
 
+## Les boutons de commande d'un écran restent flottants au scroll
+
+Filtre, actualiser, fermer, retour : ces contrôles ne doivent jamais disparaître pendant que le
+contenu défile. Rien ne l'impose par construction — il n'existe pas de composant « barre de
+commandes » unique — donc chaque écran reprend `sticky`/`fixed` à la main, et tout nouvel écran doit
+faire pareil plutôt que redécouvrir la règle au cas par cas :
+
+- `NavBar` (`components/ui.tsx`) porte le bouton retour et les `actions` de `SetListScreen`, donc
+  Collection, Historique, Liste cadeaux, Nouveaux sets, Alertes et Paramètres en héritent. `sticky`
+  seul ne suffit pas : voir la note sur `env(safe-area-inset-top)` juste au-dessus.
+- L'en-tête du pager de `SetDetailPage` (chevrons + « Fermer ») reprend le même traitement.
+- La barre de sélection multiple (`components/SelectionBar.tsx`) : `fixed inset-x-0 bottom-0`.
+- Le bouton flottant « Sélectionner » (`SetListScreen.tsx`) : `fixed bottom-8 right-5`.
+- L'en-tête « Fermer » d'un `Sheet` : placé hors de la zone `overflow-y-auto` qui scrolle, donc
+  visible par construction, sans classe de positionnement à part.
+- Sur le scanner, « Fermer le scanner » est en `absolute inset-x-0 top-0` — correct seulement parce
+  que cet écran plein cadre n'a aucune zone qui défile sous ce bandeau.
+
+`sticky` combiné à un fond flouté (`backdrop-blur`) et une marge négative (`-mx-4`, pour que la
+barre morde jusqu'au bord de l'écran) est un déclencheur connu de bug moteur sur WebKit — l'élément
+peut se dé-« sticky » ou clignoter pendant l'inertie du scroll, un comportement qui ne se reproduit
+pas forcément dans les devtools en mode responsive. C'est pour ça que ces en-têtes n'ont plus de
+fond flouté du tout, pas seulement un fond opaque : à vérifier sur un vrai iPhone avant de
+réintroduire l'un ou l'autre.
+
 ## L'ordre de déclaration des routes est une règle, pas un détail
 
 Starlette teste les routes **dans l'ordre de déclaration**, sans préférence pour les chemins
