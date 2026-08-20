@@ -43,8 +43,16 @@ export default function NewSetsPage() {
   const [page, setPage] = useState(0)
   const [includeAll, setIncludeAll] = useState(false)
 
+  // Two distinct screen ids, not one: "nouveautés" defaults to `dateAdded` (what just appeared is
+  // the point), but that same field means "when this install happened to see the entry in a
+  // snapshot" while browsing the full ~28 000-row catalogue, where `year` is what's actually
+  // useful. `useFilterState`'s store keys purely on screen id and locks in whichever `defaultSort`
+  // its first call passed — a single id couldn't hold two defaults.
+  const screenId = includeAll ? 'new-sets-catalog' : 'new-sets'
+  const defaultSort = includeAll ? 'year' : 'dateAdded'
+
   // The shared filter state drives the *request* here rather than a client-side pass.
-  const { filter } = useFilterState('new-sets', 'dateAdded')
+  const { filter } = useFilterState(screenId, defaultSort)
 
   useEffect(() => {
     setPage(0)
@@ -160,8 +168,8 @@ export default function NewSetsPage() {
     <>
       <SetListScreen
         title="Nouveaux sets"
-        screenId="new-sets"
-        defaultSort="dateAdded"
+        screenId={screenId}
+        defaultSort={defaultSort}
         // A catalogue entry was never scanned, so that sort would mean nothing here.
         excludedSorts={['dateScanned']}
         showOwnedFilter
