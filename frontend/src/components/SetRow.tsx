@@ -58,7 +58,10 @@ export default function SetRow({
       onPointerMove={longPress.onPointerMove}
       onPointerUp={longPress.onPointerUp}
       onPointerCancel={longPress.onPointerCancel}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-sunken"
+      // Without this, a long-press on iOS also runs its own text-selection callout ("Copier /
+      // Chercher / Traduire") over the whole gesture, on top of the quick-action sheet it was
+      // supposed to replace.
+      className="flex w-full select-none items-center gap-3 px-4 py-3 text-left [-webkit-touch-callout:none] active:bg-surface-sunken"
       aria-pressed={selecting ? selected : undefined}
     >
       <SetThumbnail url={row.setImgUrl} alt={row.name} />

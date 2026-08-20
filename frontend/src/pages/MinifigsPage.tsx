@@ -65,7 +65,9 @@ function MinifigGridItem({ row, selection }: { row: SetRow; selection: RenderSel
     >
       <button
         type="button"
-        className="block w-full text-left"
+        // select-none/-webkit-touch-callout: without these, a long-press on iOS also runs its own
+        // text-selection callout on top of the quick-action sheet it was supposed to replace.
+        className="block w-full select-none text-left [-webkit-touch-callout:none]"
         // The shared screen decides what a tap means. This tile used to decide for itself and
         // always opened the minifig, so selection mode did nothing here.
         onClick={() => {

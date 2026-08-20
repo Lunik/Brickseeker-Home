@@ -11,7 +11,8 @@ const MOVE_TOLERANCE_PX = 10
  * SwiftUI's `.contextMenu`, which is itself long-press on a touch device — there is no such
  * built-in on the web, so it has to be hand-rolled from Pointer Events.
  *
- * Returns `onContextMenu` unchanged (desktop) plus the touch pointer handlers, and a
+ * Returns the touch pointer handlers plus `onContextMenu` (desktop right-click, kept as a
+ * fallback — see the `pointerdown` comment below for why it isn't the primary trigger), and a
  * `consumeIfFired()` for the row's own `onClick` to call first — a `click` still follows the
  * `touchend` that ends a long press, and whether the browser actually suppresses it after
  * `pointerup`'s `preventDefault()` is exactly the kind of cross-browser detail not worth trusting;
@@ -26,6 +27,9 @@ export function useLongPress<T>(item: T, onTrigger: (item: T) => void, enabled =
   const timerRef = useRef<number | null>(null)
   const start = useRef<{ x: number; y: number } | null>(null)
   const fired = useRef(false)
+  // Set the instant a right-click is caught on `pointerdown`, so the `contextmenu` event that
+  // follows it doesn't trigger a second time.
+  const suppressNextContextMenu = useRef(false)
 
   const clear = useCallback(() => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
@@ -36,6 +40,16 @@ export function useLongPress<T>(item: T, onTrigger: (item: T) => void, enabled =
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (!enabled) return
+      // The right mouse button fires here too, ahead of `contextmenu`. Triggering from it directly
+      // — rather than trusting `contextmenu`'s own `preventDefault()` to reliably beat Safari's
+      // native menu to the punch — is what actually made this work on desktop Safari; `contextmenu`
+      // stays wired below only as a fallback for a browser that skips this event for the secondary
+      // button, deduped so a browser that fires both doesn't open the sheet twice.
+      if (event.pointerType === 'mouse' && event.button === 2) {
+        suppressNextContextMenu.current = true
+        onTrigger(item)
+        return
+      }
       if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
       start.current = { x: event.clientX, y: event.clientY }
       timerRef.current = window.setTimeout(() => {
@@ -60,6 +74,10 @@ export function useLongPress<T>(item: T, onTrigger: (item: T) => void, enabled =
     (event: React.MouseEvent) => {
       if (!enabled) return
       event.preventDefault()
+      if (suppressNextContextMenu.current) {
+        suppressNextContextMenu.current = false
+        return
+      }
       onTrigger(item)
     },
     [enabled, item, onTrigger],
