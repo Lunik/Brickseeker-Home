@@ -87,7 +87,12 @@ export function NavBar({
 }) {
   const navigate = useNavigate()
   return (
-    <div className="sticky top-0 z-30 -mx-4 mb-3 flex items-center gap-2 bg-surface/90 px-4 py-2 backdrop-blur">
+    // `top-0` alone isn't enough: sticky pins to the *viewport*, not to `<main>`'s padded content
+    // box, so once actually stuck (any scroll past the very top) it snaps flush under the notch —
+    // `<main>`'s own safe-area padding only delays that moment, it doesn't survive it. Repeating the
+    // same offset here means the stuck position lands exactly where the unstuck one already was, so
+    // there's no jump either.
+    <div className="sticky top-[calc(0.5rem_+_env(safe-area-inset-top))] z-30 -mx-4 mb-3 flex items-center gap-2 bg-surface/90 px-4 py-2 backdrop-blur">
       <button
         type="button"
         className="nav-circle shrink-0"

@@ -187,8 +187,9 @@ export default function SetDetailPage() {
   return (
     <div className="space-y-5 pb-8">
       {/* The pager header, matching the iOS sheet: chevrons grouped in one pill on the left, the
-          position centred, "Fermer" on the right. */}
-      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-2 bg-surface/90 px-4 py-2 backdrop-blur">
+          position centred, "Fermer" on the right. `top-0` alone would snap under the notch once
+          actually stuck, the same issue `NavBar` had — see the comment there. */}
+      <div className="sticky top-[calc(0.5rem_+_env(safe-area-inset-top))] z-30 -mx-4 flex items-center gap-2 bg-surface/90 px-4 py-2 backdrop-blur">
         {siblings.length > 1 && index >= 0 ? (
           <div className="flex items-center rounded-full bg-surface-raised">
             <button
