@@ -15,6 +15,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { api, setUnauthorizedHandler } from './api/client'
+import { useScrollRestoration } from './lib/scroll-restoration'
 import { SettingsProvider, useSettings } from './lib/settings-context'
 import { LoadingBlock } from './components/ui'
 import OfflineBanner from './components/OfflineBanner'
@@ -41,6 +42,7 @@ interface AuthStatus {
 function Chrome() {
   const location = useLocation()
   const { preferences } = useSettings()
+  useScrollRestoration()
 
   // The walkthrough runs once, on the same `hasSeenOnboarding` flag the iOS app uses.
   const needsOnboarding =
