@@ -303,14 +303,7 @@ export default function SetListScreen({
                       selecting={selecting}
                       selected={selected.has(row.setNum)}
                       onClick={() => (selecting ? toggle(row.setNum) : onOpenSet?.(row, visible))}
-                      onContextMenu={
-                        selecting || bulkActions.length === 0
-                          ? undefined
-                          : (event) => {
-                              event.preventDefault()
-                              setMenuFor(row)
-                            }
-                      }
+                      onQuickAction={selecting || bulkActions.length === 0 ? undefined : setMenuFor}
                     />
                   </div>
                 </li>

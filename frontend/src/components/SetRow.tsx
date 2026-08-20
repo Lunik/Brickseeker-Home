@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import type { SetRow as SetRowData } from '../api/types'
+import { useLongPress } from '../hooks/useLongPress'
 import { baseSetNum, formatEUR } from '../lib/format'
 import Icon from './Icon'
 import { SetThumbnail } from './ui'
@@ -30,7 +31,8 @@ export interface SetRowProps {
   selecting?: boolean
   selected?: boolean
   onClick?: () => void
-  onContextMenu?: (event: React.MouseEvent) => void
+  /** Right-click on desktop, long-press on touch — both open the same quick-action sheet. */
+  onQuickAction?: (row: SetRowData) => void
   trailing?: ReactNode
 }
 
@@ -40,14 +42,22 @@ export default function SetRow({
   selecting = false,
   selected = false,
   onClick,
-  onContextMenu,
+  onQuickAction,
   trailing,
 }: SetRowProps) {
+  const longPress = useLongPress(row, onQuickAction ?? (() => undefined), Boolean(onQuickAction))
+
   return (
     <button
       type="button"
-      onClick={onClick}
-      onContextMenu={onContextMenu}
+      onClick={() => {
+        if (!longPress.consumeIfFired()) onClick?.()
+      }}
+      onContextMenu={longPress.onContextMenu}
+      onPointerDown={longPress.onPointerDown}
+      onPointerMove={longPress.onPointerMove}
+      onPointerUp={longPress.onPointerUp}
+      onPointerCancel={longPress.onPointerCancel}
       className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-sunken"
       aria-pressed={selecting ? selected : undefined}
     >

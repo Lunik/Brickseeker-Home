@@ -5,9 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, imageUrl, query } from '../api/client'
 import type { CatalogStatus, MinifigRow, SetRow } from '../api/types'
 import Icon from '../components/Icon'
-import SetListScreen from '../components/SetListScreen'
+import SetListScreen, { type RenderSelection } from '../components/SetListScreen'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFilterState } from '../hooks/useFilterState'
+import { useLongPress } from '../hooks/useLongPress'
 import { EmptyState, ErrorLabel, MinifigPlaceholder, Spinner } from '../components/ui'
 import { formatEUR } from '../lib/format'
 
@@ -44,6 +45,54 @@ function MinifigTile({ row }: { row: SetRow }) {
         <MinifigPlaceholder className="p-2" />
       )}
     </div>
+  )
+}
+
+/**
+ * One grid tile, its own component rather than an inline `.map()` body: `useLongPress` is a hook,
+ * and every row needs its own independent press-timer state, which only works if each is a
+ * distinct component instance rather than one hook call shared across a loop.
+ */
+function MinifigGridItem({ row, selection }: { row: SetRow; selection: RenderSelection }) {
+  // Disabled during selection mode: `openMenu` already no-ops then, but the gesture itself must
+  // not start either, or a hold that lands just past the threshold silently eats the tap that was
+  // meant to toggle this tile's selection.
+  const longPress = useLongPress(row, selection.openMenu, !selection.selecting)
+
+  return (
+    <li
+      className={`card space-y-2 p-2 ${selection.isSelected(row.setNum) ? 'ring-2 ring-brand' : ''}`}
+    >
+      <button
+        type="button"
+        className="block w-full text-left"
+        // The shared screen decides what a tap means. This tile used to decide for itself and
+        // always opened the minifig, so selection mode did nothing here.
+        onClick={() => {
+          if (!longPress.consumeIfFired()) selection.activate(row)
+        }}
+        onContextMenu={longPress.onContextMenu}
+        onPointerDown={longPress.onPointerDown}
+        onPointerMove={longPress.onPointerMove}
+        onPointerUp={longPress.onPointerUp}
+        onPointerCancel={longPress.onPointerCancel}
+        aria-pressed={selection.selecting ? selection.isSelected(row.setNum) : undefined}
+      >
+        <MinifigTile row={row} />
+        <div className="mt-2 space-y-0.5">
+          <p className="truncate text-[13px] font-semibold text-ink" title={row.name}>
+            {row.name}
+          </p>
+          <p className="truncate text-[11px] text-ink-faint">
+            {row.setNum}
+            {row.quantity > 1 ? ` · ×${row.quantity}` : ''}
+          </p>
+          {row.resolvedPrice !== null && (
+            <p className="text-[13px] font-bold text-ink">{formatEUR(row.resolvedPrice)}</p>
+          )}
+        </div>
+      </button>
+    </li>
   )
 }
 
@@ -277,39 +326,7 @@ export default function MinifigsPage() {
       renderItems={(visible, selection) => (
         <ul className="grid grid-cols-3 gap-2">
           {visible.map((row) => (
-            <li
-              key={row.setNum}
-              className={`card space-y-2 p-2 ${
-                selection.isSelected(row.setNum) ? 'ring-2 ring-brand' : ''
-              }`}
-            >
-              <button
-                type="button"
-                className="block w-full text-left"
-                // The shared screen decides what a tap means. This tile used to decide for itself
-                // and always opened the minifig, so selection mode did nothing here.
-                onClick={() => selection.activate(row)}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  selection.openMenu(row)
-                }}
-                aria-pressed={selection.selecting ? selection.isSelected(row.setNum) : undefined}
-              >
-                <MinifigTile row={row} />
-                <div className="mt-2 space-y-0.5">
-                  <p className="truncate text-[13px] font-semibold text-ink" title={row.name}>
-                    {row.name}
-                  </p>
-                  <p className="truncate text-[11px] text-ink-faint">
-                    {row.setNum}
-                    {row.quantity > 1 ? ` · ×${row.quantity}` : ''}
-                  </p>
-                  {row.resolvedPrice !== null && (
-                    <p className="text-[13px] font-bold text-ink">{formatEUR(row.resolvedPrice)}</p>
-                  )}
-                </div>
-              </button>
-            </li>
+            <MinifigGridItem key={row.setNum} row={row} selection={selection} />
           ))}
         </ul>
       )}
