@@ -95,6 +95,13 @@ Elle ne pose **pas** `prices_fetched_at` : elle n'a interrogé qu'une source, et
 « tout a été essayé » ferait sortir le set de « Compléter les prix manquants » sans que lego.com ou
 Amazon aient jamais été interrogés.
 
+Un troisième mécanisme, distinct de celui-ci et du lot manuel, existe : ouvrir la fiche d'un set ou
+d'une minifig planifie une actualisation en tâche de fond si `prices_fetched_at` a plus de 7 jours
+(`routers/sets.py`, `services/prices.is_price_stale`). Contrairement à la passe de fond ci-dessus,
+elle **pose** `prices_fetched_at` — c'est un vrai `refresh_set_prices`, toutes sources pour un set,
+BrickLink seul pour une minifig — et son périmètre est « ce que l'utilisateur a réellement ouvert »,
+pas une liste entière : aucun risque de boucle Chromium sur toute une collection.
+
 ## Le scraping est lent exprès
 
 `price_updater` traite les sets **strictement en série**, avec un délai entre chacun. Ce n'est pas

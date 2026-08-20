@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,21 @@ from .scraping.lego_store import LegoStoreError, StorePrice
 from .scraping.lego_store import fetch_store_price as scrape_store_price
 
 logger = logging.getLogger(__name__)
+
+#: How old `CachedSet.prices_fetched_at` can be before opening the set/minifig's detail page
+#: triggers a background refresh (see `is_price_stale` and its caller in `routers/sets.py`).
+STALE_PRICE_THRESHOLD = timedelta(days=7)
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def is_price_stale(prices_fetched_at: datetime | None) -> bool:
+    """`None` means every source was never even tried once — that is staler than any threshold."""
+    if prices_fetched_at is None:
+        return True
+    return datetime.now(UTC) - _aware(prices_fetched_at) > STALE_PRICE_THRESHOLD
 
 
 async def fetch_prices(

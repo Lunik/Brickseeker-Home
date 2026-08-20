@@ -137,6 +137,9 @@ export interface SetDetail {
   instructionsUrl: string | null
   isMinifig: boolean
   isOfflineResult: boolean
+  /** `prices_fetched_at` was more than 7 days old (or never set), so the backend already kicked
+   *  off a background refresh for this item — see `SetDetailPage`'s one-shot delayed refetch. */
+  pricesRefreshing: boolean
 }
 
 export type ResolveStatus = 'found' | 'ambiguous' | 'notFound' | 'offline'

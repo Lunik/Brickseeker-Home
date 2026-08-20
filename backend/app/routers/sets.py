@@ -1,16 +1,22 @@
 """Set resolution and the detail payload.
 
-`/sets/{setNum}` deliberately answers from the cache alone and never triggers a live scrape — a
-detail screen that spun up a browser on every open would be unusable. Live work is explicit, via
-`/prices/{setNum}/refresh`.
+`/sets/{setNum}` answers from the cache alone, never blocking on a live scrape — a detail screen
+that spun up a browser on every open would be unusable. It does still *schedule* one in the
+background when `prices_fetched_at` is more than `prices.STALE_PRICE_THRESHOLD` old, so a set
+nobody has looked at in a week gets a live price without the user having to remember to ask for
+one via the explicit `/prices/{setNum}/refresh`. The response says so (`pricesRefreshing`) so the
+frontend can pick up the fresh numbers once the background task finishes, rather than requiring a
+manual reload to notice.
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 
+from ..db import session_scope
 from ..deps import ApiError, SessionDep, not_found, require_auth
 from ..schemas import (
     CamelModel,
@@ -20,7 +26,7 @@ from ..schemas import (
     ScanEventOut,
     ValuationOut,
 )
-from ..services import catalog, collection_repo, rebrickable
+from ..services import catalog, collection_repo, prices, rebrickable
 from ..services.alerts import effective_threshold
 from ..services.pricing import (
     StoreAvailability,
@@ -32,6 +38,7 @@ from ..services.rebrickable import Ambiguous, Found, NotFound
 from ..services.scraping.lego_store import instructions_url, store_url
 
 router = APIRouter(tags=["sets"], dependencies=[Depends(require_auth)])
+logger = logging.getLogger(__name__)
 
 
 class ResolveOut(CamelModel):
@@ -81,6 +88,7 @@ class SetDetailOut(CamelModel):
     instructions_url: str | None
     is_minifig: bool
     is_offline_result: bool = False
+    prices_refreshing: bool = False
 
 
 async def _resolve(session, query: str) -> ResolveOut:
@@ -166,7 +174,7 @@ async def search_sets(
 
 
 @router.get("/sets/{set_num}", response_model=SetDetailOut)
-async def set_detail(set_num: str, session: SessionDep) -> SetDetailOut:
+async def set_detail(set_num: str, session: SessionDep, background: BackgroundTasks) -> SetDetailOut:
     cached = await collection_repo.cached_set(session, set_num)
     lego_set = None
     is_offline = False
@@ -198,6 +206,27 @@ async def set_detail(set_num: str, session: SessionDep) -> SetDetailOut:
             list_name=None,
             mark_as_scanned=False,
         )
+
+    # Scheduled, not awaited: the response below answers from the cache regardless, so a stale set
+    # is never the reason this request is slow. `refresh_set_prices` already resolves per-item
+    # (minifig -> BrickLink only, a set -> every source) — nothing to branch on here.
+    refreshing = prices.is_price_stale(cached.prices_fetched_at)
+    if refreshing:
+        target = lego_set
+
+        async def run() -> None:
+            try:
+                async with session_scope() as bg_session:
+                    await prices.refresh_set_prices(bg_session, target)
+            except Exception:  # noqa: BLE001 - see below
+                # Individual source failures are already swallowed inside `refresh_set_prices`; only
+                # a genuinely unexpected error (a DB hiccup, say) reaches here, and it must not leave
+                # `prices_fetched_at` unstamped — the frontend polls on `pricesRefreshing` exactly as
+                # long as that stays unset, and re-opening the same still-stale set would otherwise
+                # schedule another live scrape on top of a first one that never finished.
+                logger.warning("Actualisation en tâche de fond échouée pour %s", set_num, exc_info=True)
+
+        background.add_task(run)
 
     quotes = await collection_repo.cached_prices(session, set_num)
     conditions = await collection_repo.condition_by_list_id(session)
@@ -265,6 +294,7 @@ async def set_detail(set_num: str, session: SessionDep) -> SetDetailOut:
         instructions_url=None if minifig else instructions_url(set_num),
         is_minifig=minifig,
         is_offline_result=is_offline,
+        prices_refreshing=refreshing,
     )
 
 

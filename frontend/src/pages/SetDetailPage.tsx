@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -49,9 +49,12 @@ interface RelatedSet {
 /**
  * The set sheet.
  *
- * `GET /sets/:setNum` returns everything in one call; live work (a price refresh) is always an
- * explicit action. When the user arrived from a list, that list's set numbers ride along in
- * router state so previous/next can page through it — a snapshot of what was on screen, so
+ * `GET /sets/:setNum` returns everything in one call; a manual price refresh is still an explicit
+ * action (the button below), but the backend also schedules one itself, in the background, when
+ * the cached price is more than 7 days old — `pricesRefreshing` on the response says so, and the
+ * `refetchInterval` below polls until it clears rather than leaving a stale price on screen until
+ * the next unrelated reload. When the user arrived from a list, that list's set numbers ride along
+ * in router state so previous/next can page through it — a snapshot of what was on screen, so
  * removing the current set from the collection doesn't renumber what's under the user's finger.
  */
 export default function SetDetailPage() {
@@ -78,10 +81,28 @@ export default function SetDetailPage() {
   const [heroImageFailed, setHeroImageFailed] = useState(false)
   useEffect(() => setHeroImageFailed(false), [setNum])
 
+  // When the background refresh a stale set's `GET` triggers hasn't landed yet, tracks how long
+  // it's been polling for — paging (`replace`) reuses this component, so this must reset per set
+  // rather than accumulate across every set the pager has passed through.
+  const refreshingSince = useRef<number | null>(null)
+  useEffect(() => {
+    refreshingSince.current = null
+  }, [setNum])
+
   const key = ['set', setNum]
   const { data, isLoading, error } = useQuery({
     queryKey: key,
     queryFn: () => api.get<SetDetail>(`/sets/${encodeURIComponent(setNum)}`),
+    refetchInterval: (query) => {
+      if (!query.state.data?.pricesRefreshing) {
+        refreshingSince.current = null
+        return false
+      }
+      if (refreshingSince.current === null) refreshingSince.current = Date.now()
+      // A refresh still not done after a full minute isn't coming back soon enough to keep
+      // polling for — the next visit will pick it up whenever it does finish.
+      return Date.now() - refreshingSince.current > 60_000 ? false : 3000
+    },
   })
 
   const collection = useQuery({
