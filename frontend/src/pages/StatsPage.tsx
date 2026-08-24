@@ -59,6 +59,11 @@ export default function StatsPage() {
     refetchInterval: (q) => (q.state.data?.isRunning ? 2000 : false),
   })
 
+  const cancelBatch = useMutation({
+    mutationFn: () => api.post('/prices/batch/cancel'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['priceBatch'] }),
+  })
+
   if (isLoading) return <LoadingBlock />
   if (error) return <ErrorLabel message={(error as Error).message} />
   if (!data || data.setCount === 0) {
@@ -208,7 +213,19 @@ export default function StatsPage() {
         {/* The count alone ("38 / 499") gives no sense of how much is left; a serial price run is
             slow by design, so the bar is what makes a long wait legible rather than stalled. */}
         {batch.data?.isRunning && (
-          <ProgressBar value={batch.data.done} total={batch.data.total} />
+          <>
+            <ProgressBar value={batch.data.done} total={batch.data.total} />
+            {/* A run that looks stuck (a slow set, a stalled scrape) had no way out of this
+                screen short of Réglages — the same "interrompre" here, progress kept. */}
+            <button
+              type="button"
+              className="btn-ghost w-full justify-start px-0 text-left text-[13px]"
+              onClick={() => cancelBatch.mutate()}
+              disabled={cancelBatch.isPending}
+            >
+              Interrompre (la progression est conservée)
+            </button>
+          </>
         )}
         <p className="text-[28px] font-bold text-ink">{formatEUR(data.totalValueEur)}</p>
         {/* An estimated total is only honest next to its coverage. */}
