@@ -123,15 +123,27 @@ async def _ensure_stack() -> tuple[Browser, BrowserContext]:
     if _playwright is None:
         _playwright = await async_playwright().start()
     if _browser is None:
-        if settings.browser_ws_endpoint:
-            separator = "&" if "?" in settings.browser_ws_endpoint else "?"
-            endpoint = (
-                f"{settings.browser_ws_endpoint}{separator}"
-                f"launch={quote(_LAUNCH_OPTIONS_JSON)}"
-            )
-            _browser = await _playwright.chromium.connect_over_cdp(endpoint)
-        else:
-            _browser = await _playwright.chromium.launch(headless=True, args=_LAUNCH_ARGS)
+        try:
+            if settings.browser_ws_endpoint:
+                separator = "&" if "?" in settings.browser_ws_endpoint else "?"
+                endpoint = (
+                    f"{settings.browser_ws_endpoint}{separator}"
+                    f"launch={quote(_LAUNCH_OPTIONS_JSON)}"
+                )
+                _browser = await asyncio.wait_for(
+                    _playwright.chromium.connect_over_cdp(endpoint),
+                    timeout=settings.scrape_timeout_seconds,
+                )
+            else:
+                _browser = await asyncio.wait_for(
+                    _playwright.chromium.launch(headless=True, args=_LAUNCH_ARGS),
+                    timeout=settings.scrape_timeout_seconds,
+                )
+        except TimeoutError as exc:
+            # An unresponsive sidecar (container restarting, network partition…) must not hang
+            # this forever under `_lock`: that would freeze every scrape, and — because the manual
+            # batch awaits one set at a time — the whole collection price batch right along with it.
+            raise ScrapeError(f"Chromium indisponible : délai de connexion dépassé ({exc})") from exc
     if _context is None:
         _context = await _browser.new_context(
             user_agent=_user_agent(_browser),
