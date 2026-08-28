@@ -477,7 +477,12 @@ def evaluate_deal(
     if store_amount and store_amount > 0 and (store_currency or currency) == currency:
         add("lego.com (officiel)", store_amount, store_fetched_at)
 
-    for source in (PriceSource.BRICKLINK_NEW, PriceSource.AMAZON, PriceSource.BRICKLINK_USED):
+    for source in (
+        PriceSource.BRICKLINK_NEW,
+        PriceSource.AMAZON,
+        PriceSource.CDISCOUNT,
+        PriceSource.BRICKLINK_USED,
+    ):
         quote = _quote(quotes, source)
         if quote is None or quote.currency != currency:
             continue

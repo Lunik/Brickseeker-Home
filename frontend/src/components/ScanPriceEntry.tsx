@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
 import { api } from '../api/client'
@@ -47,6 +47,12 @@ export default function ScanPriceEntry({
 
   const amount = Number(price.replace(',', '.'))
   const valid = amount > 0
+
+  useEffect(() => {
+    if (!open) return
+    setPrice('')
+    setVerdict(null)
+  }, [open, setNum])
 
   return (
     <Sheet
