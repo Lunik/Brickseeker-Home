@@ -74,6 +74,11 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         await asyncio.sleep(0.30)
         return None
 
+    async def fake_fnac(target):
+        del target
+        await asyncio.sleep(0.08)
+        return PriceQuote(source=PriceSource.FNAC, amount=26.0, fetched_at=datetime.now(UTC))
+
     async def fake_alerts(session_arg, target):
         del session_arg, target
         return []
@@ -82,6 +87,13 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         patch.object(prices.bricklink, 'fetch_prices', side_effect=fake_bricklink),
         patch.object(prices.amazon, 'fetch_price', side_effect=fake_amazon),
         patch.object(prices.cdiscount, 'fetch_price', side_effect=fake_cdiscount),
+        patch.object(prices.cultura, 'fetch_price', new=AsyncMock(return_value=None)),
+        patch.object(prices.fnac, 'fetch_price', side_effect=fake_fnac),
+        patch.object(prices.king_jouet, 'fetch_price', new=AsyncMock(return_value=None)),
+        patch.object(prices.la_grande_recre, 'fetch_price', new=AsyncMock(return_value=None)),
+        patch.object(prices.joueclub, 'fetch_price', new=AsyncMock(return_value=None)),
+        patch.object(prices.carrefour, 'fetch_price', new=AsyncMock(return_value=None)),
+        patch.object(prices.intermarche, 'fetch_price', new=AsyncMock(return_value=None)),
         patch.object(prices.collection_repo, 'cache_prices', side_effect=cache_prices),
         patch.object(prices.alerts, 'evaluate_alerts', new=fake_alerts),
         patch.object(prices.collection_repo, 'mark_prices_fetched', new=AsyncMock()),
@@ -91,4 +103,6 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         )
         await asyncio.sleep(0.05)
         assert any({'amazon'} <= sources for sources in persisted)
-        await task
+        result = await task
+        assert any({'fnac'} <= sources for sources in persisted)
+        assert {quote.source for quote in result['quotes']} >= {PriceSource.AMAZON, PriceSource.FNAC, PriceSource.BRICKLINK_NEW}
