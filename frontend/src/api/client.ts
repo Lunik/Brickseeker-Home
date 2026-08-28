@@ -96,8 +96,9 @@ export const api = {
 }
 
 /**
- * A catalogue image URL, used as-is: the browser fetches artwork straight from Rebrickable's (or
- * Brickset's / BrickLink's) CDN.
+ * A catalogue image URL. Normal `<img>` elements load direct from the source CDN; canvas export
+ * (share card) opts into a same-origin proxy URL so drawing stays exportable on browsers where the
+ * remote CDN omits CORS headers.
  *
  * This used to go through a `/api/images` proxy that cached to disk. Loading direct is strictly
  * better for caching — the CDN sends `max-age=31536000`, where the proxy re-stated a week — and it
@@ -108,8 +109,15 @@ export const api = {
  * Kept as a function rather than inlining the field: it is the one place that decides where
  * artwork comes from, and every `<img>` in the app already routes through it.
  */
-export function imageUrl(url: string | null | undefined): string | undefined {
-  return url || undefined
+export function imageUrl(
+  url: string | null | undefined,
+  options?: { forCanvas?: boolean },
+): string | undefined {
+  if (!url) return undefined
+  if (options?.forCanvas) {
+    return `/api/images/proxy?url=${encodeURIComponent(url)}`
+  }
+  return url
 }
 
 /** Builds a query string, dropping empty values so `?year=&theme=City` never happens. */

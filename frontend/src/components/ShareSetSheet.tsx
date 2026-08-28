@@ -222,7 +222,7 @@ async function drawCard(canvas: HTMLCanvasElement | null, detail: SetDetail, leg
   ctx.fill()
 
   // ─── Set image ─────────────────────────────────────────────────────────────
-  const imgSrc = imageUrl(detail.set.setImgUrl)
+  const imgSrc = imageUrl(detail.set.setImgUrl, { forCanvas: true })
   if (imgSrc) {
     try {
       const img = await loadImage(imgSrc)
