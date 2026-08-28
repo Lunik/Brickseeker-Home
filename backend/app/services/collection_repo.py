@@ -233,6 +233,11 @@ async def scanned_sets(session: AsyncSession) -> list[CachedSet]:
     return list(rows.scalars().all())
 
 
+async def all_cached_sets(session: AsyncSession) -> list[CachedSet]:
+    rows = await session.execute(select(CachedSet))
+    return list(rows.scalars().all())
+
+
 async def wishlist_sets(session: AsyncSession) -> list[CachedSet]:
     rows = await session.execute(select(CachedSet).where(CachedSet.is_in_wishlist).order_by(_BY_NAME))
     return list(rows.scalars().all())
