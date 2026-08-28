@@ -168,8 +168,7 @@ async def new_sets(
         query = query.where(CatalogSet.first_seen_at > baseline)
     rows = (await session.execute(query)).scalars().all()
     owned = {cached.set_num: cached for cached in await collection_repo.owned_sets(session)}
-    cached_by_num = {row.set_num: row for row in await collection_repo.scanned_sets(session)}
-    cached_by_num.update(owned)
+    cached_by_num = {row.set_num: row for row in await collection_repo.all_cached_sets(session)}
 
     needle = (search or "").strip().lower()
     results: list[CatalogSetOut] = []
