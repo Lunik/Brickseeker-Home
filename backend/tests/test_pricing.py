@@ -207,6 +207,12 @@ class TestDealVerdict:
         result = evaluate_deal(45.0, 50.0, "EUR", [BL_NEW_40])
         assert result is not None and result.verdict.value == "fair"
 
+    def test_cdiscount_is_included_in_the_verdict(self) -> None:
+        result = evaluate_deal(20.0, None, None, [CDISCOUNT_25])
+        assert result is not None
+        assert result.verdict.value == "good"
+        assert [comparison.label for comparison in result.comparisons] == ["Cdiscount (neuf)"]
+
     def test_no_reference_at_all_yields_no_verdict(self) -> None:
         assert evaluate_deal(45.0, None, None, []) is None
 
