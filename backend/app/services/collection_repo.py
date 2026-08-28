@@ -304,6 +304,11 @@ async def cached_set_nums(session: AsyncSession) -> set[str]:
     return set(rows.scalars().all())
 
 
+async def all_cached_sets(session: AsyncSession) -> list[CachedSet]:
+    rows = await session.execute(select(CachedSet))
+    return list(rows.scalars().all())
+
+
 async def cache_wishlist_set(session: AsyncSession, lego_set: LegoSet) -> None:
     """Inserts a wishlist-only row for a set never scanned or owned — without it a wanted set
     would appear nowhere in the app. No-ops when a row already exists."""

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 import type { SetRow as SetRowData } from '../api/types'
 import { useLongPress } from '../hooks/useLongPress'
-import { baseSetNum, formatEUR } from '../lib/format'
+import { baseSetNum, formatEUR, formatPercent, SOURCE_LABEL } from '../lib/format'
 import Icon from './Icon'
 import { SetThumbnail } from './ui'
 
@@ -46,6 +46,10 @@ export default function SetRow({
   trailing,
 }: SetRowProps) {
   const longPress = useLongPress(row, onQuickAction ?? (() => undefined), Boolean(onQuickAction))
+  const promoLabel =
+    row.dealPercent !== null && row.dealPercent < 0 && row.dealSource
+      ? `${SOURCE_LABEL[row.dealSource]} · ${formatPercent(row.dealPercent)}`
+      : null
 
   return (
     <button
@@ -83,6 +87,11 @@ export default function SetRow({
           )}
         </span>
         <span className="block truncate text-[17px] text-ink-muted">{row.name}</span>
+        {promoLabel && (
+          <span className="mt-1 inline-flex max-w-full items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <span className="truncate">{promoLabel}</span>
+          </span>
+        )}
         {subtitle && <span className="block truncate text-[13px] text-ink-faint">{subtitle}</span>}
       </span>
 

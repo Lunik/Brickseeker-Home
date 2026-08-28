@@ -158,6 +158,12 @@ class PriceQuote:
         return _now() - _aware(self.fetched_at) > STALE_AFTER
 
 
+@dataclass(slots=True, frozen=True)
+class BestDeal:
+    percent: int
+    source: PriceSource
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -493,6 +499,38 @@ def evaluate_deal(
     else:
         verdict = DealVerdict.FAIR
     return DealVerdictResult(verdict=verdict, comparisons=comparisons)
+
+
+def best_deal(
+    store_amount: float | None,
+    quotes: Sequence[PriceQuote],
+    *,
+    store_currency: str | None = "EUR",
+    currency: str = "EUR",
+) -> BestDeal | None:
+    """Best "versus lego.com" comparison for browse lists.
+
+    New-source comparisons win outright: a used quote being cheaper than retail is not the same
+    message as a discounted new one. BrickLink used is therefore a last resort, mirroring the UI's
+    batch-session ranking.
+    """
+
+    def best_in(sources: Sequence[PriceSource]) -> BestDeal | None:
+        best: BestDeal | None = None
+        for source in sources:
+            quote = _quote(quotes, source)
+            if quote is None:
+                continue
+            percent = percent_vs_store(quote.amount, quote.currency, store_amount, store_currency or currency)
+            if percent is None:
+                continue
+            if best is None or percent < best.percent:
+                best = BestDeal(percent=percent, source=source)
+        return best
+
+    return best_in((PriceSource.BRICKLINK_NEW, PriceSource.AMAZON, PriceSource.CDISCOUNT)) or best_in(
+        (PriceSource.BRICKLINK_USED,)
+    )
 
 
 def percent_vs_store(

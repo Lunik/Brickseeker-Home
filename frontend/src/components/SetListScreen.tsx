@@ -49,6 +49,7 @@ export interface SetListScreenProps {
   screenId: string
   defaultSort?: SortOption
   excludedSorts?: SortOption[]
+  sortOptions?: SortOption[]
   showOwnedFilter?: boolean
   showAvailabilityFilter?: boolean
   showLists?: boolean
@@ -87,6 +88,7 @@ export default function SetListScreen({
   screenId,
   defaultSort = 'dateScanned',
   excludedSorts = [],
+  sortOptions,
   showOwnedFilter = false,
   showAvailabilityFilter = true,
   showLists = false,
@@ -332,6 +334,7 @@ export default function SetListScreen({
         years={years}
         lists={lists}
         excludedSorts={excludedSorts}
+        sortOptions={sortOptions}
         showOwnedFilter={showOwnedFilter}
         showAvailabilityFilter={showAvailabilityFilter}
         unknownAvailabilityCount={unknownAvailability}

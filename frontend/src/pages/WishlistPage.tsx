@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
-import type { SetRow } from '../api/types'
-import SetListScreen, { type BulkAction } from '../components/SetListScreen'
+import type { SetRow, SortOption } from '../api/types'
 import { useSetActions } from '../hooks/useSetActions'
 import Icon from '../components/Icon'
+import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import ListPickerSheet from '../components/ListPickerSheet'
 import { EmptyState, ErrorLabel, ProgressBar, Sheet, Spinner } from '../components/ui'
+
+const WISHLIST_SORTS: SortOption[] = ['deal', 'price', 'name', 'year', 'partCount']
 
 interface WishlistPayload {
   sets: SetRow[]
@@ -83,6 +85,8 @@ export default function WishlistPage() {
       <SetListScreen
         title="Liste cadeaux"
         screenId="wishlist"
+        defaultSort="deal"
+        sortOptions={WISHLIST_SORTS}
         rows={data?.sets ?? []}
         isLoading={isLoading}
         error={error ? (error as Error).message : null}

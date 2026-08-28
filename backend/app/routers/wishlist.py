@@ -15,7 +15,7 @@ from ..db import session_scope
 from ..deps import ApiError, SessionDep, require_auth
 from ..schemas import CamelModel, OkOut, SetRowOut
 from ..services import brickset, catalog, collection_repo, rebrickable, wishlist_sync
-from ..services.pricing import ListCondition, resolve_wishlist_price_detailed
+from ..services.pricing import ListCondition, best_deal, resolve_wishlist_price_detailed
 
 router = APIRouter(prefix="/wishlist", tags=["liste cadeaux"], dependencies=[Depends(require_auth)])
 
@@ -57,6 +57,7 @@ async def read_wishlist(session: SessionDep) -> WishlistOut:
                 price_condition=resolved[1].value if resolved else None,
                 price_label=_WISHLIST_PRICE_LABEL[resolved[1]] if resolved else None,
                 has_price_alert=cached.set_num in alerted,
+                deal=best_deal(cached.store_price_eur, quotes_by_set.get(cached.set_num, [])),
             )
         )
 

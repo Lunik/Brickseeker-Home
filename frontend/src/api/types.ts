@@ -66,6 +66,8 @@ export interface SetRow {
   resolvedPrice: number | null
   priceCondition: ListCondition | null
   priceLabel: string | null
+  dealPercent: number | null
+  dealSource: PriceSourceKey | null
 }
 
 export interface ScanEvent {
@@ -320,7 +322,7 @@ export interface DealVerdictResult {
   comparisons: DealComparison[]
 }
 
-export type SortOption = 'dateScanned' | 'year' | 'name' | 'partCount' | 'price' | 'dateAdded'
+export type SortOption = 'dateScanned' | 'year' | 'name' | 'partCount' | 'price' | 'dateAdded' | 'deal'
 
 export interface FilterState {
   search: string

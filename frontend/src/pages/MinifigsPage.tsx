@@ -204,6 +204,8 @@ export default function MinifigsPage() {
         resolvedPrice: minifig.resolvedPrice,
         priceCondition: null,
         priceLabel: null,
+        dealPercent: null,
+        dealSource: null,
       })),
     [data],
   )

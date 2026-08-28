@@ -21,6 +21,7 @@ import type { FilterState, SortOption, StoreAvailability } from '../api/types'
 export const SORT_DEFAULT_ASCENDING: Record<SortOption, boolean> = {
   dateScanned: false,
   dateAdded: false,
+  deal: false,
   year: false,
   name: true,
   partCount: false,
@@ -31,6 +32,7 @@ export const SORT_DEFAULT_ASCENDING: Record<SortOption, boolean> = {
 export const ALL_SORT_OPTIONS: SortOption[] = [
   'dateScanned',
   'dateAdded',
+  'deal',
   'year',
   'name',
   'partCount',
@@ -168,6 +170,7 @@ export interface BrowsableRow {
   /** When this install first saw the entry in a catalogue snapshot — `dateAdded` sort. */
   firstSeenAt?: string | null
   resolvedPrice?: number | null
+  dealPercent?: number | null
   setImgUrl?: string | null
   quantity?: number
   isInWishlist?: boolean
@@ -211,6 +214,7 @@ export function filterAndSort<T extends BrowsableRow>(
   const { filter } = options
   const themeNameOf = options.themeName ?? ((row: T) => row.themeName ?? '')
   const priceOf = options.price ?? ((row: T) => row.resolvedPrice ?? null)
+  const dealOf = (row: T) => (row.dealPercent ?? null) === null ? null : -(row.dealPercent ?? 0)
   const ownedOf = options.owned ?? ((row: T) => row.isInCollection === true)
   const listNameOf = options.listName ?? ((row: T) => row.currentListName ?? null)
   const availabilityOf = options.availability ?? ((row: T) => row.availability ?? 'unknown')
@@ -271,6 +275,12 @@ export function filterAndSort<T extends BrowsableRow>(
       const priced = result.map((row) => ({ row, value: priceOf(row) }))
       priced.sort((a, b) => compareNullable(a.value, b.value, ascending))
       result = priced.map((entry) => entry.row)
+      break
+    }
+    case 'deal': {
+      const deals = result.map((row) => ({ row, value: dealOf(row) }))
+      deals.sort((a, b) => compareNullable(a.value, b.value, ascending))
+      result = deals.map((entry) => entry.row)
       break
     }
     case 'dateScanned': {
