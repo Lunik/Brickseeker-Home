@@ -152,7 +152,7 @@ async def refresh_prices(set_num: str, session: SessionDep) -> PricesOut:
 @router.post("/{set_num}/store-refresh", response_model=PricesOut)
 async def refresh_store_price(set_num: str, session: SessionDep) -> PricesOut:
     """lego.com alone — the slowest source, isolated so the retail price can be re-read without
-    paying for the other three.
+    paying for every external retail source.
 
     No screen calls it any more: the set sheet used to carry a "lego.com" button beside the refresh
     icon, and two controls for overlapping work needed more explaining than they saved. Kept because

@@ -4,7 +4,18 @@
  */
 
 export type ListCondition = 'newSet' | 'used'
-export type PriceSourceKey = 'bricklinkUsed' | 'bricklinkNew' | 'amazon' | 'cdiscount'
+export type PriceSourceKey =
+  | 'bricklinkUsed'
+  | 'bricklinkNew'
+  | 'amazon'
+  | 'cdiscount'
+  | 'cultura'
+  | 'fnac'
+  | 'kingJouet'
+  | 'laGrandeRecre'
+  | 'joueclub'
+  | 'carrefour'
+  | 'intermarche'
 export type StoreAvailability = 'available' | 'outOfStock' | 'retired' | 'unknown'
 export type NonSetKind = 'merchandise' | 'book' | 'exclusive' | 'catalogArtifact'
 

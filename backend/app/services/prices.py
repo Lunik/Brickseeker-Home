@@ -18,7 +18,17 @@ from ..db import session_scope
 from . import alerts, bricklink, collection_repo
 from .pricing import PriceQuote, is_minifig
 from .rebrickable import LegoSet
-from .scraping import amazon, cdiscount
+from .scraping import (
+    amazon,
+    carrefour,
+    cdiscount,
+    cultura,
+    fnac,
+    intermarche,
+    joueclub,
+    king_jouet,
+    la_grande_recre,
+)
 from .scraping.lego_store import LegoStoreError, StorePrice
 from .scraping.lego_store import fetch_store_price as scrape_store_price
 
@@ -45,8 +55,9 @@ async def fetch_prices(
 ) -> list[PriceQuote]:
     """Every marketplace quote for a set, fetched concurrently.
 
-    A minifig (`fig-…`) skips lego.com/Amazon/Cdiscount entirely: it is never sold at retail on its
-    own, so scraping them would only burn requests and produce misleading "Indisponible" rows.
+    A minifig (`fig-…`) skips lego.com and every external retail source entirely: it is never sold
+    at retail on its own, so scraping them would only burn requests and produce misleading
+    "Indisponible" rows.
     `bricklink_only` is the background-pass mode — there is no browser to drive from a scheduler
     tick, and BrickLink is a plain signed API call.
     """
@@ -74,6 +85,13 @@ async def fetch_prices(
         bricklink_quotes(),
         scraped(amazon.fetch_price),
         scraped(cdiscount.fetch_price),
+        scraped(cultura.fetch_price),
+        scraped(fnac.fetch_price),
+        scraped(king_jouet.fetch_price),
+        scraped(la_grande_recre.fetch_price),
+        scraped(joueclub.fetch_price),
+        scraped(carrefour.fetch_price),
+        scraped(intermarche.fetch_price),
         return_exceptions=True,
     )
     for result in results:

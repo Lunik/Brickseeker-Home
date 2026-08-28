@@ -1,11 +1,11 @@
 """The one browser code path — Playwright/Chromium replacing the iOS app's hidden `WKWebView`.
 
-lego.com, Amazon and Cdiscount all sit behind a JS bot challenge (lego.com's was confirmed to be a
-Cloudflare Managed Challenge via `cf-mitigated: challenge` and the "Just a moment..." interstitial).
-No plain HTTP client passes them: it was verified with `curl` from several networks under several
-realistic User-Agents that the block is identical every time. It is not a header/UA/cookie problem —
-the challenge requires executing the page's JavaScript. Do not spend time re-trying `httpx` variants
-against these hosts.
+lego.com and most external retail sites sit behind a JS bot challenge (lego.com's was confirmed to
+be a Cloudflare Managed Challenge via `cf-mitigated: challenge` and the "Just a moment..."
+interstitial). No plain HTTP client passes them: it was verified with `curl` from several networks
+under several realistic User-Agents that the block is identical every time. It is not a
+header/UA/cookie problem — the challenge requires executing the page's JavaScript. Do not spend time
+re-trying `httpx` variants against these hosts.
 
 The iOS app drove a per-call `WKWebView` sharing one `WKProcessPool` and the default data store.
 The equivalent here is one lazily launched Chromium plus **one long-lived context**: the context is

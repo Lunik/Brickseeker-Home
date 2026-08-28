@@ -7,15 +7,17 @@ evaluator from ever disagreeing about what one set is worth — the drift issue 
 
 The chains are **not** interchangeable and each exists for a stated reason:
 
-* `resolve_new_price` — History: lego.com retail → cheapest(Amazon, Cdiscount) → BrickLink neuf.
+* `resolve_new_price` — History: lego.com retail → cheapest(external retail sources) →
+  BrickLink neuf.
 * `resolve_collection_price` — Collection row *and* the Statistics total (one function, #194),
   condition-driven with a last-resort cross-fallback to the other condition. Uses the
-  **pricier** of Amazon/Cdiscount so the collection's value doesn't dip based on which
+  **pricier** external retail source so the collection's value doesn't dip based on which
   marketplace happened to be cheaper that day.
-* `resolve_wishlist_price` — Liste cadeaux: cheapest(Amazon, Cdiscount) **before** lego.com,
+* `resolve_wishlist_price` — Liste cadeaux: cheapest(external retail sources) **before**
+  lego.com,
   deliberately reversed from `resolve_new_price` (#109/#121).
-* `resolve_minifig_price` — a minifig only ever has BrickLink quotes (#175), so retail/Amazon/
-  Cdiscount never enter.
+* `resolve_minifig_price` — a minifig only ever has BrickLink quotes (#175), so retail never
+  enters.
 
 A `.retired` lego.com availability gates the retail step out of the *value* chains (#243):
 lego.com keeps serving a residual `product:price:amount` for sets it no longer sells, and
@@ -44,6 +46,13 @@ class PriceSource(StrEnum):
     BRICKLINK_NEW = "bricklinkNew"
     AMAZON = "amazon"
     CDISCOUNT = "cdiscount"
+    CULTURA = "cultura"
+    FNAC = "fnac"
+    KING_JOUET = "kingJouet"
+    LA_GRANDE_RECRE = "laGrandeRecre"
+    JOUECLUB = "joueclub"
+    CARREFOUR = "carrefour"
+    INTERMARCHE = "intermarche"
 
     @property
     def is_used(self) -> bool:
@@ -56,6 +65,13 @@ class PriceSource(StrEnum):
             PriceSource.BRICKLINK_NEW: "BrickLink (neuf)",
             PriceSource.AMAZON: "Amazon (neuf)",
             PriceSource.CDISCOUNT: "Cdiscount (neuf)",
+            PriceSource.CULTURA: "Cultura (neuf)",
+            PriceSource.FNAC: "Fnac (neuf)",
+            PriceSource.KING_JOUET: "King Jouet (neuf)",
+            PriceSource.LA_GRANDE_RECRE: "La Grande Récré (neuf)",
+            PriceSource.JOUECLUB: "JouéClub (neuf)",
+            PriceSource.CARREFOUR: "Carrefour (neuf)",
+            PriceSource.INTERMARCHE: "Intermarché (neuf)",
         }[self]
 
 
@@ -179,27 +195,52 @@ def _amount(quotes: Iterable[PriceQuote], source: PriceSource) -> float | None:
 
 
 # --------------------------------------------------------------------------------------
-# Amazon / Cdiscount are one comparison point everywhere except SetDetail
+# External retail sources are one comparison point everywhere except SetDetail
 # --------------------------------------------------------------------------------------
 
 
-def _amazon_or_cdiscount(quotes: Sequence[PriceQuote], pick: Callable[[float, float], float]) -> float | None:
-    amazon = _amount(quotes, PriceSource.AMAZON)
-    cdiscount = _amount(quotes, PriceSource.CDISCOUNT)
-    if amazon is not None and cdiscount is not None:
-        return pick(amazon, cdiscount)
-    return amazon if amazon is not None else cdiscount
+RETAIL_SOURCES = (
+    PriceSource.AMAZON,
+    PriceSource.CDISCOUNT,
+    PriceSource.CULTURA,
+    PriceSource.FNAC,
+    PriceSource.KING_JOUET,
+    PriceSource.LA_GRANDE_RECRE,
+    PriceSource.JOUECLUB,
+    PriceSource.CARREFOUR,
+    PriceSource.INTERMARCHE,
+)
+
+
+def _best_retail(quotes: Sequence[PriceQuote], pick: Callable[[float, float], float]) -> float | None:
+    values = [_amount(quotes, source) for source in RETAIL_SOURCES]
+    found = [value for value in values if value is not None]
+    if not found:
+        return None
+    selected = found[0]
+    for value in found[1:]:
+        selected = pick(selected, value)
+    return selected
+
+
+def best_external_retail(quotes: Sequence[PriceQuote]) -> float | None:
+    """Cheapest external retail quote, for buy-now chains (History, Wishlist)."""
+    return _best_retail(quotes, min)
+
+
+def most_expensive_external_retail(quotes: Sequence[PriceQuote]) -> float | None:
+    """Priciest external retail quote, for collection valuation."""
+    return _best_retail(quotes, max)
 
 
 def best_amazon_or_cdiscount(quotes: Sequence[PriceQuote]) -> float | None:
-    """The cheaper of the two — for chains about the best deal to buy at (History, Wishlist)."""
-    return _amazon_or_cdiscount(quotes, min)
+    """Compatibility shim: now covers every external retail source."""
+    return best_external_retail(quotes)
 
 
 def most_expensive_amazon_or_cdiscount(quotes: Sequence[PriceQuote]) -> float | None:
-    """The pricier of the two — for collection valuation (#124): the total estimated value
-    shouldn't drop just because one marketplace happened to be cheaper that day."""
-    return _amazon_or_cdiscount(quotes, max)
+    """Compatibility shim: now covers every external retail source."""
+    return most_expensive_external_retail(quotes)
 
 
 # --------------------------------------------------------------------------------------
@@ -215,7 +256,7 @@ def resolve_new_price(
     """History's chain. Never returns a used price."""
     if availability is not StoreAvailability.RETIRED and store_price_eur is not None:
         return store_price_eur
-    market = best_amazon_or_cdiscount(quotes)
+    market = best_external_retail(quotes)
     if market is not None:
         return market
     return _amount(quotes, PriceSource.BRICKLINK_NEW)
@@ -226,10 +267,10 @@ def _resolve_new_price_for_valuation(
     availability: StoreAvailability,
     quotes: Sequence[PriceQuote],
 ) -> float | None:
-    """Same chain, taking the pricier of Amazon/Cdiscount (#124)."""
+    """Same chain, taking the priciest external retail quote (#124)."""
     if availability is not StoreAvailability.RETIRED and store_price_eur is not None:
         return store_price_eur
-    market = most_expensive_amazon_or_cdiscount(quotes)
+    market = most_expensive_external_retail(quotes)
     if market is not None:
         return market
     return _amount(quotes, PriceSource.BRICKLINK_NEW)
@@ -296,7 +337,7 @@ def resolve_minifig_price(condition: ListCondition | None, quotes: Sequence[Pric
 def resolve_wishlist_price_detailed(
     store_price_eur: float | None, quotes: Sequence[PriceQuote]
 ) -> tuple[float, ListCondition] | None:
-    market = best_amazon_or_cdiscount(quotes)
+    market = best_external_retail(quotes)
     if market is not None:
         return market, ListCondition.NEW
     if store_price_eur is not None:
@@ -479,8 +520,7 @@ def evaluate_deal(
 
     for source in (
         PriceSource.BRICKLINK_NEW,
-        PriceSource.AMAZON,
-        PriceSource.CDISCOUNT,
+        *RETAIL_SOURCES,
         PriceSource.BRICKLINK_USED,
     ):
         quote = _quote(quotes, source)
