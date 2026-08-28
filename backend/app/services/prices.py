@@ -110,6 +110,10 @@ async def refresh_set_prices(
 ) -> dict[str, object]:
     """One set's full refresh: every source, persisted, then alerts evaluated once.
 
+    The price rows are written incrementally as each source answers so the UI can start showing a
+    retailer price before the last browser scrape finishes. Live refreshes still reconcile the final
+    result set once all sources are done, but a partial commit is never delayed until the last one.
+
     `reconcile=True` is correct only for a genuine live fetch — it deletes cached sources absent
     from this result, so a source that went silent stops showing its last known price. A cache-only
     or partial write must pass False, where an empty result can't be told apart from a hiccup.
@@ -117,16 +121,56 @@ async def refresh_set_prices(
     set_num = lego_set.set_num
 
     async def isolated_store_price() -> StorePrice | None:
-        # Own session: this task runs concurrently with `fetch_prices` below, and an AsyncSession
-        # cannot be shared across concurrent operations (SQLAlchemy raises, or worse, doesn't).
+        # Own session: this task runs concurrently with the per-source fetches below, and an
+        # AsyncSession cannot be shared across concurrent operations.
         async with session_scope() as store_session:
             return await fetch_store_price(store_session, set_num)
 
+    async def persist_quotes(quotes: list[PriceQuote]) -> None:
+        if not quotes:
+            return
+        await collection_repo.cache_prices(session, quotes, set_num, reconcile=False)
+
+    async def fetch_live_quotes() -> list[PriceQuote]:
+        async def bricklink_quotes() -> list[PriceQuote]:
+            try:
+                return await bricklink.fetch_prices(session, lego_set)
+            except Exception:  # noqa: BLE001 - one source failing must not hide the others
+                logger.debug("BrickLink indisponible pour %s", lego_set.set_num, exc_info=True)
+                return []
+
+        if is_minifig(lego_set.set_num) or not settings.scraping_enabled:
+            quotes = await bricklink_quotes()
+            await persist_quotes(quotes)
+            return quotes
+
+        async def scraped(fetch) -> list[PriceQuote]:  # noqa: ANN001 - browser scraper signature
+            try:
+                quote = await fetch(lego_set)
+            except Exception:  # noqa: BLE001
+                logger.debug("Source web indisponible pour %s", lego_set.set_num, exc_info=True)
+                return []
+            return [quote] if quote else []
+
+        tasks = [
+            asyncio.create_task(bricklink_quotes()),
+            asyncio.create_task(scraped(amazon.fetch_price)),
+            asyncio.create_task(scraped(cdiscount.fetch_price)),
+        ]
+        quotes: list[PriceQuote] = []
+        for completed in asyncio.as_completed(tasks):
+            source_quotes = await completed
+            if source_quotes:
+                await persist_quotes(source_quotes)
+            quotes.extend(source_quotes)
+        return quotes
+
     store_task = asyncio.create_task(isolated_store_price()) if include_store else None
-    quotes = await fetch_prices(session, lego_set)
+    quotes = await fetch_live_quotes()
     store_price = await store_task if store_task else None
 
-    await collection_repo.cache_prices(session, quotes, set_num, reconcile=reconcile)
+    if reconcile:
+        await collection_repo.cache_prices(session, quotes, set_num, reconcile=True)
     if mark_fetched:
         # Stamped whether or not anything was found: a set that stays unpriced after every source
         # was asked is "introuvable", not "pas encore essayé" (#194).
