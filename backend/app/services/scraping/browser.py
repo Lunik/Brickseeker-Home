@@ -198,15 +198,16 @@ async def _acquire_page() -> Page:
         try:
             _, context = await _ensure_stack()
             return await context.new_page()
-        except PlaywrightError as first_error:
+        except (PlaywrightError, ScrapeError) as first_error:
             # The context can outlive its usefulness without the browser reporting a disconnect
             # (a crashed renderer, a context closed from outside). One clean relaunch, then give up.
+            # ScrapeError can also be raised if _ensure_stack() timeouts, so we retry on that too.
             logger.warning("Contexte Chromium inutilisable (%s), redémarrage", first_error)
             await _dispose()
             try:
                 _, context = await _ensure_stack()
                 return await context.new_page()
-            except PlaywrightError as exc:
+            except (PlaywrightError, ScrapeError) as exc:
                 raise ScrapeError(f"Chromium indisponible : {exc}") from exc
 
 
