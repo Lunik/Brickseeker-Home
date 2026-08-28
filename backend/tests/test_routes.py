@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 import pytest
+
 from app.main import app
 
 
@@ -57,6 +58,7 @@ def test_no_literal_route_is_shadowed_by_an_earlier_parameterised_one() -> None:
         ("POST", "/api/prices/batch/start"),
         ("POST", "/api/prices/batch/cancel"),
         ("POST", "/api/prices/deal-verdict"),
+        ("GET", "/api/images/proxy"),
         ("GET", "/api/sets/resolve"),
         ("GET", "/api/sets/search"),
         ("GET", "/api/collection/lists"),
