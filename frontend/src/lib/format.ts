@@ -87,6 +87,7 @@ export const NON_SET_LABEL: Record<string, string> = {
 
 export const SORT_LABEL: Record<string, string> = {
   dateScanned: 'Date de scan',
+  deal: 'Promo',
   year: 'Année',
   name: 'Nom',
   partCount: 'Nombre de pièces',

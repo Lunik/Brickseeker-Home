@@ -18,9 +18,20 @@ from ..deps import ApiError, SessionDep, require_auth
 from ..models import CatalogMinifig, CatalogMinifigSet, CatalogSet
 from ..schemas import CamelModel, OkOut
 from ..services import app_settings, catalog, collection_repo
-from ..services.pricing import ListCondition, StoreAvailability, resolve_minifig_price
+from ..services.pricing import (
+    ListCondition,
+    StoreAvailability,
+    best_deal,
+    resolve_minifig_price,
+    resolve_wishlist_price_detailed,
+)
 
 router = APIRouter(prefix="/catalog", tags=["catalogue"], dependencies=[Depends(require_auth)])
+
+_BROWSE_PRICE_LABEL = {
+    ListCondition.NEW: "Meilleure offre",
+    ListCondition.USED: "Meilleure offre (occasion)",
+}
 
 
 class CatalogSetOut(CamelModel):
@@ -34,7 +45,12 @@ class CatalogSetOut(CamelModel):
     first_seen_at: datetime | None
     is_owned: bool
     availability: str
+    store_price_eur: float | None
     resolved_price: float | None
+    price_condition: str | None = None
+    price_label: str | None = None
+    deal_percent: int | None = None
+    deal_source: str | None = None
 
 
 class MinifigOut(CamelModel):
@@ -161,6 +177,7 @@ async def new_sets(
     """
     hide_enabled = bool(await app_settings.get_setting(session, "hide_wearables_enabled"))
     theme_names = await catalog.theme_names(session)
+    quotes_by_set = await collection_repo.all_cached_prices(session)
 
     query = select(CatalogSet)
     baseline = (await session.execute(select(func.min(CatalogSet.first_seen_at)))).scalar_one_or_none()
@@ -187,6 +204,7 @@ async def new_sets(
             continue
 
         cached = cached_by_num.get(row.set_num)
+        quotes = quotes_by_set.get(row.set_num, [])
         status_value = (
             StoreAvailability.from_raw(cached.store_availability) if cached else StoreAvailability.UNKNOWN
         )
@@ -195,6 +213,12 @@ async def new_sets(
         if availability is not None and status_value.value != availability:
             continue
 
+        resolved = (
+            resolve_wishlist_price_detailed(cached.store_price_eur, quotes)
+            if cached is not None
+            else None
+        )
+        deal = best_deal(cached.store_price_eur, quotes) if cached is not None else None
         results.append(
             CatalogSetOut(
                 set_num=row.set_num,
@@ -207,7 +231,12 @@ async def new_sets(
                 first_seen_at=row.first_seen_at,
                 is_owned=is_owned,
                 availability=status_value.value,
-                resolved_price=cached.store_price_eur if cached else None,
+                store_price_eur=cached.store_price_eur if cached else None,
+                resolved_price=resolved[0] if resolved else None,
+                price_condition=resolved[1].value if resolved else None,
+                price_label=_BROWSE_PRICE_LABEL[resolved[1]] if resolved else None,
+                deal_percent=deal.percent if deal else None,
+                deal_source=deal.source.value if deal else None,
             )
         )
 
@@ -250,6 +279,12 @@ def _sort_results(results: list, sort: str, ascending: bool) -> list:
             return results
         case "price":
             return _sort_nulls_last(results, lambda row: row.resolved_price, ascending=ascending)
+        case "deal":
+            return _sort_nulls_last(
+                results,
+                lambda row: -row.deal_percent if row.deal_percent is not None else None,
+                ascending=ascending,
+            )
         case _:
             return _sort_nulls_last(results, lambda row: row.first_seen_at, ascending=ascending)
 

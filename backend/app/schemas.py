@@ -14,6 +14,7 @@ from pydantic.alias_generators import to_camel
 
 from .models import CachedSet, ScanEvent
 from .services.pricing import (
+    BestDeal,
     PriceQuote,
     SetValuation,
     StoreAvailability,
@@ -113,6 +114,8 @@ class SetRowOut(CamelModel):
     resolved_price: float | None = None
     price_condition: str | None = None
     price_label: str | None = None
+    deal_percent: int | None = None
+    deal_source: str | None = None
     is_minifig: bool = False
 
     @classmethod
@@ -125,6 +128,7 @@ class SetRowOut(CamelModel):
         price_condition: str | None = None,
         price_label: str | None = None,
         has_price_alert: bool = False,
+        deal: BestDeal | None = None,
     ) -> SetRowOut:
         return cls(
             set_num=cached.set_num,
@@ -147,6 +151,8 @@ class SetRowOut(CamelModel):
             resolved_price=resolved_price,
             price_condition=price_condition,
             price_label=price_label,
+            deal_percent=deal.percent if deal else None,
+            deal_source=deal.source.value if deal else None,
             is_minifig=is_minifig(cached.set_num),
         )
 

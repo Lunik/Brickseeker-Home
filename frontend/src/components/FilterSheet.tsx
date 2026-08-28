@@ -15,6 +15,7 @@ interface FilterSheetProps {
   lists?: string[]
   /** Sorts that make no sense on this screen — e.g. "date de scan" on a catalogue browser. */
   excludedSorts?: SortOption[]
+  sortOptions?: SortOption[]
   showOwnedFilter?: boolean
   showAvailabilityFilter?: boolean
   /** How many rows have never had their lego.com availability checked. This is why "Inconnue" is
@@ -73,11 +74,12 @@ export default function FilterSheet({
   years,
   lists = [],
   excludedSorts = [],
+  sortOptions,
   showOwnedFilter = false,
   showAvailabilityFilter = true,
   unknownAvailabilityCount = 0,
 }: FilterSheetProps) {
-  const sorts = ALL_SORT_OPTIONS.filter((option) => !excludedSorts.includes(option))
+  const sorts = (sortOptions ?? ALL_SORT_OPTIONS).filter((option) => !excludedSorts.includes(option))
 
   return (
     <Sheet

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, query } from '../api/client'
-import type { CatalogStatus, SetRow, StoreAvailability } from '../api/types'
+import type { CatalogStatus, ListCondition, PriceSourceKey, SetRow, SortOption, StoreAvailability } from '../api/types'
 import Icon from '../components/Icon'
 import ListPickerSheet from '../components/ListPickerSheet'
 import SetListScreen from '../components/SetListScreen'
@@ -23,10 +23,16 @@ interface CatalogSetRow {
   firstSeenAt: string | null
   isOwned: boolean
   availability: StoreAvailability
+  storePriceEur: number | null
   resolvedPrice: number | null
+  priceCondition: ListCondition | null
+  priceLabel: string | null
+  dealPercent: number | null
+  dealSource: PriceSourceKey | null
 }
 
 const PAGE_SIZE = 60
+const NEW_SETS_SORTS: SortOption[] = ['dateAdded', 'deal', 'price', 'year', 'name', 'partCount']
 
 /**
  * The catalogue browser.
@@ -154,11 +160,13 @@ export default function NewSetsPage() {
     lastScannedAt: row.firstSeenAt,
     currentListId: null,
     currentListName: null,
-    storePriceEur: row.resolvedPrice,
+    storePriceEur: row.storePriceEur,
     availability: row.availability,
     resolvedPrice: row.resolvedPrice,
-    priceCondition: null,
-    priceLabel: null,
+    priceCondition: row.priceCondition,
+    priceLabel: row.priceLabel,
+    dealPercent: row.dealPercent,
+    dealSource: row.dealSource,
   }))
 
   const total = data?.count ?? 0
@@ -170,6 +178,7 @@ export default function NewSetsPage() {
         title="Nouveaux sets"
         screenId={screenId}
         defaultSort={defaultSort}
+        sortOptions={NEW_SETS_SORTS}
         // A catalogue entry was never scanned, so that sort would mean nothing here.
         excludedSorts={['dateScanned']}
         showOwnedFilter

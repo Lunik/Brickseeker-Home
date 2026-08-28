@@ -20,6 +20,7 @@ from app.services.pricing import (
     ValuationBasis,
     base_set_num,
     best_amazon_or_cdiscount,
+    best_deal,
     evaluate_deal,
     is_minifig,
     make_valuation,
@@ -138,6 +139,29 @@ class TestMinifigPrice:
 
     def test_cross_falls_back_when_the_preferred_side_is_missing(self) -> None:
         assert resolve_minifig_price(ListCondition.USED, [BL_NEW_40]) == 40.0
+
+
+class TestBestDeal:
+    def test_prefers_the_biggest_new_discount(self) -> None:
+        deal = best_deal(100.0, [AMAZON_30, CDISCOUNT_25, BL_NEW_40])
+        assert deal is not None
+        assert deal.source is PriceSource.CDISCOUNT
+        assert deal.percent == -75
+
+    def test_used_is_only_a_last_resort(self) -> None:
+        deal = best_deal(100.0, [AMAZON_30, BL_USED_20])
+        assert deal is not None
+        assert deal.source is PriceSource.AMAZON
+        assert deal.percent == -70
+
+    def test_falls_back_to_used_when_no_new_comparison_exists(self) -> None:
+        deal = best_deal(100.0, [BL_USED_20])
+        assert deal is not None
+        assert deal.source is PriceSource.BRICKLINK_USED
+        assert deal.percent == -80
+
+    def test_returns_none_without_a_retail_reference(self) -> None:
+        assert best_deal(None, [AMAZON_30]) is None
 
 
 class TestValuation:
