@@ -53,6 +53,8 @@ export type IconName =
   | 'trash'
   | 'ellipsis'
   | 'minifig'
+  | 'share'
+  | 'copy'
 
 /** Path data only — the shared stroke attributes live on the `<svg>` below. */
 const PATHS: Record<IconName, string> = {
@@ -106,6 +108,10 @@ const PATHS: Record<IconName, string> = {
   ellipsis: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12v.01M12 12v.01M16 12v.01',
   // The stand-in for a minifig with no artwork — Rebrickable has plenty. A recognisable figure
   // beats the generic person glyph, which read as "user account" in a grid of minifigures.
+  // iOS share sheet icon: box with upward arrow
+  share: 'M8.5 6.5 12 3l3.5 3.5M12 3v13M4.5 12.5v7h15v-7',
+  // Two overlapping squares — "copy to clipboard"
+  copy: 'M8 8H4.5A1.5 1.5 0 0 0 3 9.5v10A1.5 1.5 0 0 0 4.5 21h10a1.5 1.5 0 0 0 1.5-1.5V16M9.5 3h10A1.5 1.5 0 0 1 21 4.5v10A1.5 1.5 0 0 1 19.5 16H9.5A1.5 1.5 0 0 1 8 14.5V4.5A1.5 1.5 0 0 1 9.5 3Z',
   minifig:
     'M10.2 2.5h3.6v1.4M8.9 3.9h6.2v4.2H8.9zM7.2 8.1h9.6v6H7.2zM4.6 9.2h2.6v4.6M16.8 9.2h2.6v4.6M9.4 14.1v7.4h2.1v-7.4M12.5 14.1v7.4h2.1v-7.4',
   inbox:
