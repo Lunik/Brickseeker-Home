@@ -6,17 +6,29 @@ import { Badge, Spinner } from './ui'
 /**
  * The price card: every source as a consistent row.
  *
- * Amazon and Cdiscount are **separate rows here** — this is the per-set comparison screen, where
- * the user wants to see both. They collapse into one comparison point everywhere else (the list
- * screens and the valuation), which is a different question.
+ * External retail sources are **separate rows here** — this is the per-set comparison screen, where
+ * the user wants to see each quote. They collapse into one comparison point everywhere else (the
+ * list screens and the valuation), which is a different question.
  */
 
-const ROW_ORDER: PriceSourceKey[] = ['bricklinkNew', 'bricklinkUsed', 'amazon', 'cdiscount']
+const ROW_ORDER: PriceSourceKey[] = [
+  'bricklinkNew',
+  'bricklinkUsed',
+  'amazon',
+  'cdiscount',
+  'cultura',
+  'fnac',
+  'kingJouet',
+  'laGrandeRecre',
+  'joueclub',
+  'carrefour',
+  'intermarche',
+]
 /**
  * A minifig is only ever sold on BrickLink — never at retail, which is why `resolve_minifig_price`
- * reads BrickLink alone. The backend already declines to scrape lego.com/Amazon/Cdiscount for one
+ * reads BrickLink alone. The backend already declines to scrape lego.com/retail sites for one
  * (`services/prices.py`), so those rows could never fill: they stood there reading « Indisponible »
- * for good, three dead lines implying a price might turn up.
+ * for good, dead lines implying a price might turn up.
  */
 const MINIFIG_ROW_ORDER: PriceSourceKey[] = ['bricklinkNew', 'bricklinkUsed']
 

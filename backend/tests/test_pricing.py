@@ -44,10 +44,13 @@ AMAZON_30 = quote(PriceSource.AMAZON, 30.0)
 CDISCOUNT_25 = quote(PriceSource.CDISCOUNT, 25.0)
 BL_NEW_40 = quote(PriceSource.BRICKLINK_NEW, 40.0)
 BL_USED_20 = quote(PriceSource.BRICKLINK_USED, 20.0)
+CULTURA_28 = quote(PriceSource.CULTURA, 28.0)
+FNAC_27 = quote(PriceSource.FNAC, 27.0)
+KING_JOUET_35 = quote(PriceSource.KING_JOUET, 35.0)
 
 
 class TestMarketplacePair:
-    """Amazon and Cdiscount are one comparison point everywhere except the detail screen."""
+    """External retail sites are one comparison point everywhere except the detail screen."""
 
     def test_buying_takes_the_cheaper(self) -> None:
         assert best_amazon_or_cdiscount([AMAZON_30, CDISCOUNT_25]) == 25.0
@@ -60,6 +63,12 @@ class TestMarketplacePair:
         assert best_amazon_or_cdiscount([AMAZON_30]) == 30.0
         assert best_amazon_or_cdiscount([CDISCOUNT_25]) == 25.0
         assert best_amazon_or_cdiscount([BL_NEW_40]) is None
+
+    def test_new_external_sites_participate_in_the_cheapest_pick(self) -> None:
+        assert best_amazon_or_cdiscount([AMAZON_30, FNAC_27, CULTURA_28]) == 27.0
+
+    def test_new_external_sites_participate_in_the_priciest_pick(self) -> None:
+        assert most_expensive_amazon_or_cdiscount([AMAZON_30, FNAC_27, KING_JOUET_35]) == 35.0
 
 
 class TestNewPriceChain:
@@ -236,6 +245,12 @@ class TestDealVerdict:
         assert result is not None
         assert result.verdict.value == "good"
         assert [comparison.label for comparison in result.comparisons] == ["Cdiscount (neuf)"]
+
+    def test_fnac_is_included_in_the_verdict(self) -> None:
+        result = evaluate_deal(20.0, None, None, [FNAC_27])
+        assert result is not None
+        assert result.verdict.value == "good"
+        assert [comparison.label for comparison in result.comparisons] == ["Fnac (neuf)"]
 
     def test_no_reference_at_all_yields_no_verdict(self) -> None:
         assert evaluate_deal(45.0, None, None, []) is None

@@ -1,14 +1,15 @@
 # BrickSeeker (auto-hébergé)
 
 Scanne des sets LEGO®, gère ta collection Rebrickable et ta liste cadeaux Brickset, et compare
-ce que vaut un set entre lego.com, BrickLink, Amazon et Cdiscount — avec Docker Compose, chez toi.
+ce que vaut un set entre lego.com, BrickLink et plusieurs sites marchands — avec Docker Compose,
+chez toi.
 
 Portage web de l'app iOS [BrickSeeker](../brickseeker-app) : mêmes fonctionnalités, mêmes règles
 métier, mêmes textes — accessible depuis n'importe quel navigateur du réseau local plutôt que
 depuis un iPhone.
 
 > Projet personnel, sous licence MIT. Sans affiliation avec le groupe LEGO, Rebrickable,
-> BrickLink, Brickset, Amazon ou Cdiscount. « LEGO » est une marque du groupe LEGO.
+> BrickLink, Brickset ou des sites marchands tiers. « LEGO » est une marque du groupe LEGO.
 
 ---
 
@@ -21,7 +22,7 @@ docker compose up -d
 Puis ouvre <http://localhost:8000> et va dans **Réglages** pour saisir ta clé API Rebrickable.
 C'est tout : la base SQLite, le cache d'images et les catalogues hors-ligne se créent dans `./data`.
 
-Sans Compose : possible, mais les prix lego.com/Amazon/Cdiscount ont besoin d'un Chromium
+Sans Compose : possible, mais les prix lego.com/sites marchands ont besoin d'un Chromium
 joignable en CDP (voir [Chromium tourne à part](#chromium-tourne-à-part)) — sans lui, BrickLink,
 la collection, l'historique et les statistiques continuent de fonctionner, le reste non.
 Pour tout avoir sans Compose :
@@ -54,7 +55,8 @@ Toutes celles de l'app iOS, à l'identique sauf mention contraire.
   - le prix officiel **lego.com**,
   - la moyenne **BrickLink** des ventes réalisées sur 6 mois, neuf et occasion, via l'API Price
     Guide officielle (identifiants BrickLink requis),
-  - **Amazon** et **Cdiscount** (vraies annonces, accessoires filtrés),
+  - des sites marchands (**Amazon**, **Cdiscount**, **Cultura**, **Fnac**, **King Jouet**,
+    **La Grande Récré**, **JouéClub**, **Carrefour**, **Intermarché**) avec accessoires filtrés,
   - avec l'écart en % face au prix lego.com, et un objectif €/pièce configurable qui colore le
     prix en vert ou en rouge.
 - **Historique** des scans, avec carte des lieux si tu actives la capture de position.
@@ -147,7 +149,7 @@ re-téléchargent nulle part.
 # API
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/playwright install chromium          # uniquement pour les prix lego.com/Amazon/Cdiscount
+.venv/bin/playwright install chromium          # uniquement pour les prix lego.com/sites marchands
 BRICKSEEKER_DATA_DIR=./.data .venv/bin/uvicorn app.main:app --reload
 
 # UI (proxy vers http://localhost:8000)
@@ -159,7 +161,8 @@ npm install && npm run dev
 
 ## Chromium tourne à part
 
-lego.com est derrière un Cloudflare Managed Challenge, Amazon et Cdiscount derrière leurs propres
+lego.com est derrière un Cloudflare Managed Challenge, et les sites marchands derrière leurs
+propres protections anti-bot.
 protections anti-bot. Aucun client HTTP simple ne passe, quels que soient les en-têtes : le défi
 exige d'exécuter du vrai JavaScript, donc un vrai moteur de navigateur. `BRICKSEEKER_SCRAPING_ENABLED=false`
 permet de s'en passer entièrement — les prix BrickLink, la collection, l'historique et les

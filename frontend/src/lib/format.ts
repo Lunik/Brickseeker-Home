@@ -75,6 +75,13 @@ export const SOURCE_LABEL: Record<string, string> = {
   bricklinkUsed: 'BrickLink (occasion)',
   amazon: 'Amazon (neuf)',
   cdiscount: 'Cdiscount (neuf)',
+  cultura: 'Cultura (neuf)',
+  fnac: 'Fnac (neuf)',
+  kingJouet: 'King Jouet (neuf)',
+  laGrandeRecre: 'La Grande Récré (neuf)',
+  joueclub: 'JouéClub (neuf)',
+  carrefour: 'Carrefour (neuf)',
+  intermarche: 'Intermarché (neuf)',
   legoStore: 'lego.com (officiel)',
 }
 

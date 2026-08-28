@@ -16,7 +16,18 @@
 import type { PriceSourceKey } from '../api/types'
 
 /** Fixed order, so equal percentages always resolve to the same winner. */
-const NEW_SOURCES: PriceSourceKey[] = ['bricklinkNew', 'amazon', 'cdiscount']
+const NEW_SOURCES: PriceSourceKey[] = [
+  'bricklinkNew',
+  'amazon',
+  'cdiscount',
+  'cultura',
+  'fnac',
+  'kingJouet',
+  'laGrandeRecre',
+  'joueclub',
+  'carrefour',
+  'intermarche',
+]
 const USED_SOURCES: PriceSourceKey[] = ['bricklinkUsed']
 
 export interface Deal {

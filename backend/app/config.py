@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # --- Behaviour -----------------------------------------------------------------
     scraping_enabled: bool = True
-    """Master switch for the headless-browser price sources (lego.com/Amazon/Cdiscount).
+    """Master switch for the headless-browser price sources (lego.com + external retail sites).
     Turning it off leaves BrickLink (a plain signed API call) working and keeps the image
     from ever launching Chromium."""
 
