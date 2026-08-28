@@ -23,7 +23,8 @@ services:
     environment:
       - BRICKSEEKER_BROWSER_WS_ENDPOINT=ws://chromium:3000
     depends_on:
-      - chromium
+      chromium:
+        condition: service_healthy  # Wait for Chromium to be ready, not just started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
       interval: 30s
@@ -45,3 +46,12 @@ services:
     # Chromium had when it ran inside that container's own process.
     # Chromium needs more than Docker's default 64 MB of shared memory or it crashes mid-page.
     shm_size: "1gb"
+    # Health check ensures Chromium is actually ready to accept connections before `brickseeker`
+    # starts scraping. Without this, `depends_on: chromium` only waits for the container to start,
+    # not for the CDP endpoint to be reachable — leading to 30s timeouts on first scrape attempts.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/json/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
