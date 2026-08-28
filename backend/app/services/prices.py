@@ -174,6 +174,13 @@ async def refresh_set_prices(
             asyncio.create_task(bricklink_quotes()),
             asyncio.create_task(scraped(amazon.fetch_price)),
             asyncio.create_task(scraped(cdiscount.fetch_price)),
+            asyncio.create_task(scraped(cultura.fetch_price)),
+            asyncio.create_task(scraped(fnac.fetch_price)),
+            asyncio.create_task(scraped(king_jouet.fetch_price)),
+            asyncio.create_task(scraped(la_grande_recre.fetch_price)),
+            asyncio.create_task(scraped(joueclub.fetch_price)),
+            asyncio.create_task(scraped(carrefour.fetch_price)),
+            asyncio.create_task(scraped(intermarche.fetch_price)),
         ]
         quotes: list[PriceQuote] = []
         for completed in asyncio.as_completed(tasks):
