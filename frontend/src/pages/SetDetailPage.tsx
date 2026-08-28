@@ -8,6 +8,7 @@ import PriceAlertEditor from '../components/PriceAlertEditor'
 import PriceCard from '../components/PriceCard'
 import PriceHistoryChart from '../components/PriceHistoryChart'
 import ScanPriceEntry from '../components/ScanPriceEntry'
+import ShareSetSheet from '../components/ShareSetSheet'
 import Icon from '../components/Icon'
 import ValuationCard from '../components/ValuationCard'
 import {
@@ -74,6 +75,7 @@ export default function SetDetailPage() {
   const [showPaidPrice, setShowPaidPrice] = useState(false)
   const [showScanPrice, setShowScanPrice] = useState(false)
   const [showLists, setShowLists] = useState(false)
+  const [showShare, setShowShare] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [paidPriceValue, setPaidPriceValue] = useState('')
   // Paging through siblings reuses this component (the route has no `key`), so a broken image on
@@ -348,6 +350,14 @@ export default function SetDetailPage() {
               {data.isInWishlist ? 'Retirer' : 'Cadeaux'}
             </button>
           </div>
+          <button
+            type="button"
+            className="btn-secondary w-full"
+            onClick={() => setShowShare(true)}
+          >
+            <Icon name="share" className="h-5 w-5" />
+            Partager
+          </button>
 
           <div className="list-card">
             {/* One row for both conditions, carrying their state — as on iOS, where the same row
@@ -613,6 +623,14 @@ export default function SetDetailPage() {
         }}
         onCancel={() => setConfirmRemove(false)}
       />
+
+      {data && (
+        <ShareSetSheet
+          open={showShare}
+          onClose={() => setShowShare(false)}
+          detail={data}
+        />
+      )}
     </div>
   )
 }
