@@ -109,6 +109,20 @@ une limite technique à optimiser : lancer des dizaines de navigateurs headless 
 mêmes sites est ce qui fait passer pour du trafic abusif. Si quelqu'un demande « pourquoi c'est si
 lent », la réponse est celle-là, pas un bug.
 
+## CAPTCHA : la page et le cookie restent côté serveur
+
+Un CAPTCHA de retailer ne devient interactif que lors d'un rafraîchissement explicitement lancé
+depuis la fiche d'un set. `InteractivePriceManager` ouvre la page concernée dans le BrowserContext
+Playwright partagé ; le frontend ne reçoit qu'un viewer same-origin (captures JPEG et événements
+souris/clavier), jamais l'URL CDP ni les cookies. Après validation, seule la source bloquée est
+rejouée et les cookies du domaine sont conservés chiffrés via `Credential`.
+
+Un lot manuel, une actualisation automatique de fiche et la passe de surveillance n'ouvrent jamais
+de fenêtre : ils marquent la source `captchaRequired`, conservent son ancien prix éventuel et
+continuent. Ne transforme pas un job sans utilisateur en session interactive, et ne tente pas de
+lire les cookies d'un onglet retailer ouvert directement dans le navigateur : la politique
+same-origin l'interdit et contournerait précisément l'isolation recherchée.
+
 ## Différences assumées avec l'app iOS
 
 Elles sont peu nombreuses et chacune a une raison :

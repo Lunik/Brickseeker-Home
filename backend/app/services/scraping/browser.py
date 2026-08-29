@@ -61,6 +61,15 @@ class ScrapeChallengeUnsolved(ScrapeError):
     """Readiness never went truthy inside the timeout."""
 
 
+class ScrapeBlocked(ScrapeError):
+    """The retailer explicitly rejected this automated browser session."""
+
+    def __init__(self, reason: str, url: str) -> None:
+        super().__init__(f"Accès refusé par le retailer ({reason}) : {url}")
+        self.reason = reason
+        self.url = url
+
+
 class ScrapeDisabled(ScrapeError):
     """`scraping_enabled` is off. A `ScrapeError` subclass on purpose: every existing caller already
     omits the source on `ScrapeError`, so turning scraping off needs no new handling anywhere."""
@@ -76,7 +85,7 @@ _DISABLED_MESSAGE = "Scraping désactivé (BRICKSEEKER_SCRAPING_ENABLED=false)"
 #: Realistic desktop Chrome, built around the engine's real major version — a UA claiming a Chrome
 #: release far from the one actually rendering is itself a bot signal.
 _USER_AGENT_TEMPLATE = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36"
 )
 _FALLBACK_CHROME_MAJOR = "131"
@@ -93,13 +102,27 @@ _LAUNCH_ARGS = [
 ]
 #: Same flags, applied whether Chromium is launched in-process or remotely: `connect_over_cdp`
 #: takes launch options as a `launch=<json>` query parameter, not as Python kwargs.
-_LAUNCH_OPTIONS_JSON = json.dumps({"headless": True, "args": _LAUNCH_ARGS})
+_LAUNCH_OPTIONS_JSON = json.dumps({"headless": True, "stealth": True, "args": _LAUNCH_ARGS})
 
 _POLL_INTERVAL = 0.4
+_CLOSE_TIMEOUT_SECONDS = 10.0
+_BLOCKED_JS = """
+(() => {
+  if (document.querySelector('iframe[src*="captcha-delivery.com"]')) return 'DataDome CAPTCHA';
+  const title = document.title || '';
+  const text = document.body ? document.body.innerText : '';
+  if (/accès bloqué/i.test(title) || /^accès bloqué/i.test(text.trim())) return 'accès bloqué';
+  if (/Malheureusement notre site n'est actuellement pas disponible/i.test(text)) {
+    return 'site indisponible pour cette session';
+  }
+  return null;
+})()
+"""
 
 _playwright: Playwright | None = None
 _browser: Browser | None = None
 _context: BrowserContext | None = None
+_restored_cookies: dict[tuple[str, str, str], dict] = {}
 #: Serialises launch/teardown only. Pages are created under it but *used* outside it, which is what
 #: keeps parallel scrapes parallel.
 _lock = asyncio.Lock()
@@ -108,6 +131,21 @@ _lock = asyncio.Lock()
 def _user_agent(browser: Browser) -> str:
     major = (browser.version or "").split(".")[0] or _FALLBACK_CHROME_MAJOR
     return _USER_AGENT_TEMPLATE.format(major=major)
+
+
+def remember_cookies(cookies: list[dict]) -> None:
+    """Keeps encrypted-on-disk retailer cookies available after a Chromium relaunch."""
+    for cookie in cookies:
+        name = cookie.get("name")
+        domain = cookie.get("domain")
+        path = cookie.get("path")
+        if all(isinstance(value, str) and value for value in (name, domain, path)):
+            _restored_cookies[(domain, path, name)] = dict(cookie)
+
+
+def configure_restored_cookies(cookies: list[dict]) -> None:
+    """Startup hook. Values came from encrypted credential storage, never from the frontend."""
+    remember_cookies(cookies)
 
 
 async def _ensure_stack() -> tuple[Browser, BrowserContext]:
@@ -121,7 +159,13 @@ async def _ensure_stack() -> tuple[Browser, BrowserContext]:
         await _dispose()
 
     if _playwright is None:
-        _playwright = await async_playwright().start()
+        try:
+            _playwright = await asyncio.wait_for(
+                async_playwright().start(),
+                timeout=settings.scrape_timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise ScrapeError("Playwright indisponible : délai de démarrage dépassé") from exc
     if _browser is None:
         try:
             if settings.browser_ws_endpoint:
@@ -145,12 +189,23 @@ async def _ensure_stack() -> tuple[Browser, BrowserContext]:
             # batch awaits one set at a time — the whole collection price batch right along with it.
             raise ScrapeError(f"Chromium indisponible : délai de connexion dépassé ({exc})") from exc
     if _context is None:
-        _context = await _browser.new_context(
-            user_agent=_user_agent(_browser),
-            viewport=_VIEWPORT,
-            locale="fr-FR",
-            timezone_id="Europe/Paris",
-        )
+        try:
+            _context = await asyncio.wait_for(
+                _browser.new_context(
+                    user_agent=_user_agent(_browser),
+                    viewport=_VIEWPORT,
+                    locale="fr-FR",
+                    timezone_id="Europe/Paris",
+                ),
+                timeout=settings.scrape_timeout_seconds,
+            )
+            if _restored_cookies:
+                await asyncio.wait_for(
+                    _context.add_cookies(list(_restored_cookies.values())),
+                    timeout=settings.scrape_timeout_seconds,
+                )
+        except TimeoutError as exc:
+            raise ScrapeError("Chromium indisponible : délai de création du contexte dépassé") from exc
     return _browser, _context
 
 
@@ -170,7 +225,9 @@ async def _dispose() -> None:
         if close is None:
             continue
         try:
-            await close()
+            await asyncio.wait_for(close(), timeout=_CLOSE_TIMEOUT_SECONDS)
+        except TimeoutError:
+            logger.warning("Fermeture Chromium abandonnée après %.0f s", _CLOSE_TIMEOUT_SECONDS)
         except Exception:  # noqa: BLE001 - teardown must not mask the caller's own failure
             logger.debug("Fermeture Chromium partielle", exc_info=True)
 
@@ -197,7 +254,10 @@ async def _acquire_page() -> Page:
     async with _lock:
         try:
             _, context = await _ensure_stack()
-            return await context.new_page()
+            return await asyncio.wait_for(
+                context.new_page(),
+                timeout=settings.scrape_timeout_seconds,
+            )
         except (PlaywrightError, ScrapeError) as first_error:
             # The context can outlive its usefulness without the browser reporting a disconnect
             # (a crashed renderer, a context closed from outside). One clean relaunch, then give up.
@@ -206,16 +266,58 @@ async def _acquire_page() -> Page:
             await _dispose()
             try:
                 _, context = await _ensure_stack()
-                return await context.new_page()
+                return await asyncio.wait_for(
+                    context.new_page(),
+                    timeout=settings.scrape_timeout_seconds,
+                )
             except (PlaywrightError, ScrapeError) as exc:
                 raise ScrapeError(f"Chromium indisponible : {exc}") from exc
+            except TimeoutError as exc:
+                raise ScrapeError("Chromium indisponible : délai de création de page dépassé") from exc
+        except TimeoutError as exc:
+            raise ScrapeError("Chromium indisponible : délai de création de page dépassé") from exc
 
 
 async def _close_page(page: Page) -> None:
     try:
-        await page.close()
+        await asyncio.wait_for(page.close(), timeout=_CLOSE_TIMEOUT_SECONDS)
+    except TimeoutError:
+        logger.warning("Fermeture d'une page Chromium abandonnée après %.0f s", _CLOSE_TIMEOUT_SECONDS)
     except PlaywrightError:
         logger.debug("Page déjà fermée", exc_info=True)
+
+
+async def open_interactive_page(url: str) -> Page:
+    """Opens the challenged URL in the shared context for human interaction."""
+    page = await _acquire_page()
+    try:
+        await page.goto(
+            url,
+            wait_until="domcontentloaded",
+            timeout=settings.scrape_timeout_seconds * 1000,
+        )
+    except PlaywrightTimeoutError:
+        # A challenge can keep subresources pending while its visible controls are already usable.
+        logger.debug("Page CAPTCHA partiellement chargée : %s", url)
+    except PlaywrightError as error:
+        await _close_page(page)
+        raise ScrapeError(f"Ouverture du CAPTCHA impossible : {url} ({error})") from error
+    return page
+
+
+async def close_interactive_page(page: Page) -> None:
+    await _close_page(page)
+
+
+async def cookies_for_url(url: str) -> list[dict]:
+    async with _lock:
+        _, context = await _ensure_stack()
+        return list(
+            await asyncio.wait_for(
+                context.cookies([url]),
+                timeout=settings.scrape_timeout_seconds,
+            )
+        )
 
 
 # --------------------------------------------------------------------------------------
@@ -229,6 +331,7 @@ async def load_and_extract(
     extract_js: str,
     timeout: float | None = None,
     fails_on_http_404: bool = False,
+    retry_empty_extraction: bool = False,
 ) -> str:
     """Load `url`, wait for `readiness_js` to go truthy, then return `extract_js`'s string result.
 
@@ -244,8 +347,9 @@ async def load_and_extract(
         raise ScrapeDisabled(_DISABLED_MESSAGE)
 
     limit = settings.scrape_timeout_seconds if timeout is None else timeout
-    page = await _acquire_page()
+    page: Page | None = None
     last_status: int | None = None
+    saw_ready_page = False
 
     def record_status(response: PlaywrightResponse) -> None:
         # Every navigation response, not just the first: after a Cloudflare interstitial (403/503)
@@ -258,40 +362,68 @@ async def load_and_extract(
         except PlaywrightError:
             logger.debug("Réponse sans frame associée, ignorée", exc_info=True)
 
-    page.on("response", record_status)
     try:
-        try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=limit * 1000)
-        except PlaywrightTimeoutError as exc:
-            # A page that never even reaches DOMContentLoaded is the same user-visible outcome as a
-            # challenge that never clears, and the callers' messages say exactly that.
-            raise ScrapeChallengeUnsolved(f"Chargement expiré : {url}") from exc
-        except PlaywrightError as exc:
-            raise ScrapeError(f"Navigation échouée : {url} ({exc})") from exc
-
-        deadline = time.monotonic() + limit
-        while time.monotonic() < deadline:
-            if fails_on_http_404 and last_status == 404:
-                raise ScrapeHttpNotFound(f"HTTP 404 : {url}")
+        async with asyncio.timeout(limit):
+            page = await _acquire_page()
+            page.on("response", record_status)
             try:
-                ready = await page.evaluate(readiness_js)
-            except PlaywrightError:
-                # The challenge's own reload destroys the execution context mid-evaluation; that is
-                # a "not ready yet", not a failure.
-                ready = None
-            if ready:
-                try:
-                    extracted = await page.evaluate(extract_js)
-                except PlaywrightError as exc:
-                    raise ScrapeError(f"Extraction impossible : {url} ({exc})") from exc
-                if not isinstance(extracted, str) or not extracted or extracted == "null":
-                    raise ScrapeNotFound(f"Rien à extraire : {url}")
-                return extracted
-            await asyncio.sleep(_POLL_INTERVAL)
+                await page.goto(url, wait_until="domcontentloaded", timeout=limit * 1000)
+            except PlaywrightTimeoutError as exc:
+                # A page that never even reaches DOMContentLoaded is the same user-visible outcome as a
+                # challenge that never clears, and the callers' messages say exactly that.
+                raise ScrapeChallengeUnsolved(f"Chargement expiré : {url}") from exc
+            except PlaywrightError as exc:
+                raise ScrapeError(f"Navigation échouée : {url} ({exc})") from exc
 
-        raise ScrapeChallengeUnsolved(f"Page jamais prête : {url}")
+            deadline = time.monotonic() + limit
+            while time.monotonic() < deadline:
+                try:
+                    blocked = await page.evaluate(_BLOCKED_JS)
+                except PlaywrightError:
+                    blocked = None
+                if isinstance(blocked, str) and blocked:
+                    raise ScrapeBlocked(blocked, url)
+                if last_status == 403:
+                    try:
+                        body_is_empty = await page.evaluate(
+                            "() => !document.body || !(document.body.innerText || '').trim()"
+                        )
+                    except PlaywrightError:
+                        body_is_empty = False
+                    if body_is_empty:
+                        raise ScrapeBlocked("HTTP 403 vide", url)
+                if fails_on_http_404 and last_status == 404:
+                    raise ScrapeHttpNotFound(f"HTTP 404 : {url}")
+                try:
+                    ready = await page.evaluate(readiness_js)
+                except PlaywrightError:
+                    # The challenge's own reload destroys the execution context mid-evaluation; that is
+                    # a "not ready yet", not a failure.
+                    ready = None
+                if ready:
+                    saw_ready_page = True
+                    try:
+                        extracted = await page.evaluate(extract_js)
+                    except PlaywrightError as exc:
+                        raise ScrapeError(f"Extraction impossible : {url} ({exc})") from exc
+                    if not isinstance(extracted, str) or not extracted or extracted == "null":
+                        if retry_empty_extraction:
+                            await asyncio.sleep(_POLL_INTERVAL)
+                            continue
+                        raise ScrapeNotFound(f"Rien à extraire : {url}")
+                    return extracted
+                await asyncio.sleep(_POLL_INTERVAL)
+
+            if saw_ready_page:
+                raise ScrapeNotFound(f"Rien à extraire avant l'échéance : {url}")
+            raise ScrapeChallengeUnsolved(f"Page jamais prête : {url}")
+    except TimeoutError as exc:
+        if saw_ready_page:
+            raise ScrapeNotFound(f"Rien à extraire avant l'échéance : {url}") from exc
+        raise ScrapeChallengeUnsolved(f"Délai global dépassé : {url}") from exc
     finally:
-        await _close_page(page)
+        if page is not None:
+            await _close_page(page)
 
 
 # --------------------------------------------------------------------------------------

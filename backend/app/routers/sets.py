@@ -89,6 +89,7 @@ class SetDetailOut(CamelModel):
     is_minifig: bool
     is_offline_result: bool = False
     prices_refreshing: bool = False
+    captcha_required_sources: list[str]
 
 
 async def _resolve(session, query: str) -> ResolveOut:
@@ -210,8 +211,9 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
     # Scheduled, not awaited: the response below answers from the cache regardless, so a stale set
     # is never the reason this request is slow. `refresh_set_prices` already resolves per-item
     # (minifig -> BrickLink only, a set -> every source) — nothing to branch on here.
-    refreshing = prices.is_price_stale(cached.prices_fetched_at)
-    if refreshing:
+    stale_prices = prices.is_price_stale(cached.prices_fetched_at)
+    refreshing = stale_prices or prices.is_background_refreshing(set_num)
+    if stale_prices and prices.claim_background_refresh(set_num):
         target = lego_set
 
         async def run() -> None:
@@ -220,11 +222,12 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
                     await prices.refresh_set_prices(bg_session, target)
             except Exception:  # noqa: BLE001 - see below
                 # Individual source failures are already swallowed inside `refresh_set_prices`; only
-                # a genuinely unexpected error (a DB hiccup, say) reaches here, and it must not leave
-                # `prices_fetched_at` unstamped — the frontend polls on `pricesRefreshing` exactly as
-                # long as that stays unset, and re-opening the same still-stale set would otherwise
-                # schedule another live scrape on top of a first one that never finished.
+                # a genuinely unexpected error (a DB hiccup, say) reaches here. The claim below still
+                # gets released, so a later visit may retry without the current polling loop stacking
+                # another ten browser pages on top of a refresh already in flight.
                 logger.warning("Actualisation en tâche de fond échouée pour %s", set_num, exc_info=True)
+            finally:
+                prices.release_background_refresh(set_num)
 
         background.add_task(run)
 
@@ -295,6 +298,7 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
         is_minifig=minifig,
         is_offline_result=is_offline,
         prices_refreshing=refreshing,
+        captcha_required_sources=prices.captcha_required_sources(),
     )
 
 

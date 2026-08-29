@@ -14,6 +14,7 @@ import secrets
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,7 +47,17 @@ class Settings(BaseSettings):
     dev flow (`uvicorn --reload` against a local Playwright install), not the packaged image,
     which no longer bundles a browser at all. See browser.py."""
 
-    scrape_timeout_seconds: float = 30.0
+    scrape_timeout_seconds: float = Field(default=30.0, gt=0)
+    scrape_max_concurrency: int = Field(default=2, ge=1, le=4)
+    """Maximum browser-backed price sources active at once across the whole process."""
+    price_source_timeout_seconds: float = Field(default=45.0, gt=0)
+    """Hard deadline for one price source, including BrickLink cross-reference work."""
+    price_refresh_timeout_seconds: float = Field(default=240.0, gt=0)
+    """Hard deadline for the complete refresh of one set, persistence included."""
+    captcha_interactive_timeout_seconds: float = Field(default=300.0, gt=0)
+    """How long an explicit refresh waits for the user to solve one retailer challenge."""
+    captcha_operation_retention_seconds: float = Field(default=600.0, gt=0)
+    """How long a completed interactive operation remains readable by its polling client."""
     scrape_delay_between_sets: float = 1.5
     """Politeness delay between two sets in a batch price refresh — mirrors the iOS app's
     `CollectionPriceUpdater.delayBetweenSets`."""

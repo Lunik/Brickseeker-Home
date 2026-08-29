@@ -35,6 +35,7 @@ from .routers import (
 from .routers import (
     settings as settings_router,
 )
+from .services.interactive_prices import interactive_price_manager
 from .services.price_updater import price_updater
 from .services.scheduler import shutdown_scheduler, start_scheduler
 from .services.scraping.browser import shutdown_browser
@@ -56,11 +57,14 @@ async def lifespan(_app: FastAPI):
     # shows it. Reload it before serving, or a restart claims the prices were never refreshed.
     async with session_scope() as session:
         await price_updater.restore(session)
+        await interactive_price_manager.restore(session)
     logger.info("BrickSeeker démarré — données dans %s", settings.data_dir)
     if settings.background_refresh_enabled:
         start_scheduler()
     yield
     shutdown_scheduler()
+    await interactive_price_manager.shutdown()
+    await price_updater.shutdown()
     await shutdown_browser()
 
 

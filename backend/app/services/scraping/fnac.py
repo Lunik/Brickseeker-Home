@@ -8,7 +8,7 @@ from ..pricing import PriceQuote, PriceSource, set_digits
 from ..rebrickable import LegoSet
 from .retail_search import fetch_retail_price
 
-_CARD_SELECTOR = "article, li, [data-prid], [data-product-id], [itemtype*='Product']"
+_CARD_SELECTOR = ".f-productCard__article"
 _NO_RESULT_PATTERN = "aucun\\s+r[ée]sultat|0\\s+r[ée]sultat"
 
 
@@ -23,4 +23,7 @@ async def fetch_price(lego_set: LegoSet) -> PriceQuote | None:
         digits=digits,
         card_selector=_CARD_SELECTOR,
         no_result_pattern=_NO_RESULT_PATTERN,
+        price_selector=".f-priceList__price .f-price, .f-priceList__price",
+        link_selector="a.f-productCard__link[href]",
+        title_selector=".f-productCard__title",
     )

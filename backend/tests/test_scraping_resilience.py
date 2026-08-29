@@ -7,7 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.scraping.browser import ScrapeError, _acquire_page, _ensure_stack
+from app.services.scraping.browser import (
+    ScrapeBlocked,
+    ScrapeChallengeUnsolved,
+    ScrapeError,
+    _acquire_page,
+    load_and_extract,
+)
 
 
 @pytest.mark.asyncio
@@ -51,3 +57,64 @@ async def test_acquire_page_fails_after_two_scrape_errors() -> None:
             assert "Chromium indisponible" in str(exc_info.value)
             assert mock_ensure_stack.call_count == 2
             assert mock_dispose.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_total_scrape_deadline_includes_page_acquisition() -> None:
+    cancelled = asyncio.Event()
+
+    async def stalled_page():
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    with (
+        patch("app.services.scraping.browser._acquire_page", side_effect=stalled_page),
+        pytest.raises(ScrapeChallengeUnsolved, match="Délai global dépassé"),
+    ):
+        await asyncio.wait_for(
+            load_and_extract(
+                "https://example.test",
+                readiness_js="true",
+                extract_js="'ok'",
+                timeout=0.01,
+            ),
+            timeout=0.2,
+        )
+
+    await asyncio.wait_for(cancelled.wait(), timeout=0.2)
+
+
+@pytest.mark.asyncio
+async def test_dynamic_page_retries_an_empty_extraction() -> None:
+    page = MagicMock()
+    page.goto = AsyncMock(return_value=None)
+    page.evaluate = AsyncMock(
+        side_effect=[None, True, "null", None, True, '{"price":"49.99"}']
+    )
+
+    with (
+        patch(
+            "app.services.scraping.browser._acquire_page",
+            new=AsyncMock(return_value=page),
+        ),
+        patch("app.services.scraping.browser._close_page", new=AsyncMock()),
+    ):
+        result = await load_and_extract(
+            "https://example.test",
+            readiness_js="ready",
+            extract_js="extract",
+            timeout=1,
+            retry_empty_extraction=True,
+        )
+
+    assert result == '{"price":"49.99"}'
+    assert page.evaluate.await_count == 6
+
+
+def test_datadome_challenge_is_recognized_as_explicit_block() -> None:
+    from app.services.scraping.browser import _BLOCKED_JS
+
+    assert "captcha-delivery.com" in _BLOCKED_JS
+    assert ScrapeBlocked.__mro__[1] is ScrapeError

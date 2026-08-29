@@ -58,10 +58,12 @@ function QuoteRow({
   label,
   quote,
   storePrice,
+  captchaRequired,
 }: {
   label: string
   quote: PriceQuote | undefined
   storePrice: number | null
+  captchaRequired: boolean
 }) {
   return (
     <li className="flex items-start justify-between gap-3 py-2.5">
@@ -74,6 +76,9 @@ function QuoteRow({
                 {formatEUR(quote.minAmount)} – {formatEUR(quote.maxAmount)}
                 {quote.lotCount !== null ? ` · ${quote.lotCount} lot(s)` : ''}
               </>
+            )}
+            {captchaRequired && (
+              <p className="text-xs text-amber-600">CAPTCHA requis pour actualiser cette source</p>
             )}
             {/* A quote resting on ≤2 lots *is* one atypical sale — worth saying so rather than
                 presenting it as a market rate. */}
@@ -99,6 +104,8 @@ function QuoteRow({
               <span className="text-sm font-bold text-ink">{formatEUR(quote.amount)}</span>
             )}
           </>
+        ) : captchaRequired ? (
+          <span className="text-sm font-medium text-amber-600">CAPTCHA requis</span>
         ) : (
           <span className="text-sm text-ink-faint">Indisponible</span>
         )}
@@ -195,6 +202,7 @@ export default function PriceCard({
             label={SOURCE_LABEL[source]}
             quote={bySource.get(source)}
             storePrice={storePrice}
+            captchaRequired={detail.captchaRequiredSources?.includes(source) ?? false}
           />
         ))}
       </ul>

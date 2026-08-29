@@ -7,6 +7,9 @@ The completion date is written on the way out and has to be read back on the way
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.db import init_db, session_scope
@@ -65,3 +68,86 @@ async def test_restore_never_overwrites_a_run_that_just_finished() -> None:
         await updater.restore(session)
 
     assert updater.state["lastCompletedAt"] == first
+
+
+@pytest.mark.asyncio
+async def test_immediate_cancel_cannot_leave_batch_stuck_running() -> None:
+    updater = PriceUpdater()
+    with patch.object(updater, "_build_queue", new=AsyncMock(return_value=["12345"])):
+        assert await updater.start(["12345"]) == "started"
+        await updater.cancel_preserving_progress()
+
+    assert updater.state["isRunning"] is False
+    assert updater.state["currentSetNum"] is None
+    assert updater.state["hasPendingQueue"] is True
+
+
+def test_source_timeout_is_reported_as_non_fatal_warning() -> None:
+    updater = PriceUpdater()
+
+    updater._on_source_progress("amazon", "started")
+    assert updater.state["pendingSources"] == ["amazon"]
+
+    updater._on_source_progress("amazon", "timed_out")
+    assert updater.state["pendingSources"] == []
+    assert updater.state["sourceFailures"] == 1
+    assert "Amazon" in str(updater.state["warning"])
+    assert updater.state["error"] is None
+
+
+def test_captcha_is_reported_without_counting_as_source_failure() -> None:
+    updater = PriceUpdater()
+
+    updater._on_source_progress("fnac", "started")
+    updater._on_source_progress("fnac", "captcha_required")
+
+    assert updater.state["pendingSources"] == []
+    assert updater.state["captchaRequiredSources"] == ["fnac"]
+    assert updater.state["sourceFailures"] == 0
+    assert "CAPTCHA" in str(updater.state["warning"])
+
+
+@pytest.mark.asyncio
+async def test_cancelled_batch_resumes_without_resetting_progress() -> None:
+    updater = PriceUpdater()
+    second_started = asyncio.Event()
+    second_cancelled = asyncio.Event()
+
+    async def first_run(_session, lego_set, **_kwargs):
+        if lego_set.set_num == "first":
+            return {}
+        second_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            second_cancelled.set()
+
+    with (
+        patch.object(updater, "_build_queue", new=AsyncMock(return_value=["first", "second"])),
+        patch("app.services.price_updater.prices.refresh_set_prices", side_effect=first_run),
+        patch("app.services.price_updater.settings.scrape_delay_between_sets", 0),
+    ):
+        assert await updater.start(["first", "second"]) == "started"
+        await asyncio.wait_for(second_started.wait(), timeout=0.5)
+        await updater.cancel_preserving_progress()
+
+    await asyncio.wait_for(second_cancelled.wait(), timeout=0.2)
+    assert updater.state["done"] == 1
+    assert updater.state["total"] == 2
+    assert updater.state["hasPendingQueue"] is True
+
+    finish = AsyncMock()
+    with (
+        patch("app.services.price_updater.prices.refresh_set_prices", new=AsyncMock(return_value={})),
+        patch.object(updater, "_finish", new=finish),
+    ):
+        assert await updater.start() == "started"
+        task = updater._task
+        assert task is not None
+        await task
+
+    assert updater.state["done"] == 2
+    assert updater.state["total"] == 2
+    assert updater.state["hasPendingQueue"] is False
+    assert updater.state["isRunning"] is False
+    finish.assert_awaited_once()

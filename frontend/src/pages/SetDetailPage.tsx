@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, imageUrl } from '../api/client'
-import type { CollectionPayload, SetDetail } from '../api/types'
+import type { CollectionPayload, InteractivePriceRefresh, SetDetail } from '../api/types'
 import PriceAlertEditor from '../components/PriceAlertEditor'
 import PriceCard from '../components/PriceCard'
 import PriceHistoryChart from '../components/PriceHistoryChart'
@@ -72,6 +72,10 @@ export default function SetDetailPage() {
 
   const [alertCondition, setAlertCondition] = useState<'newSet' | 'used' | null>(null)
   const [refreshBlocked, setRefreshBlocked] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [interactiveOperationId, setInteractiveOperationId] = useState<string | null>(null)
+  const captchaWindow = useRef<Window | null>(null)
+  const displayedChallengeId = useRef<string | null>(null)
   const [showPaidPrice, setShowPaidPrice] = useState(false)
   const [showScanPrice, setShowScanPrice] = useState(false)
   const [showLists, setShowLists] = useState(false)
@@ -101,9 +105,9 @@ export default function SetDetailPage() {
         return false
       }
       if (refreshingSince.current === null) refreshingSince.current = Date.now()
-      // A refresh still not done after a full minute isn't coming back soon enough to keep
-      // polling for — the next visit will pick it up whenever it does finish.
-      return Date.now() - refreshingSince.current > 60_000 ? false : 3000
+      // Ten browser-backed sources run through two slots to keep Chromium healthy. A worst-case
+      // refresh is bounded server-side at four minutes, so keep polling slightly beyond that bound.
+      return Date.now() - refreshingSince.current > 300_000 ? false : 3000
     },
   })
 
@@ -136,9 +140,90 @@ export default function SetDetailPage() {
   })
 
   const refresh = useMutation({
-    mutationFn: () => api.post(`/prices/${encodeURIComponent(setNum)}/refresh`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+    mutationFn: () =>
+      api.post<InteractivePriceRefresh>(`/prices/interactive/start/${encodeURIComponent(setNum)}`),
+    onSuccess: (operation) => {
+      setInteractiveOperationId(operation.operationId)
+      const returnTo = `/set/${encodeURIComponent(setNum)}`
+      const waitingUrl = (
+        `/captcha/waiting?operationId=${encodeURIComponent(operation.operationId)}`
+        + `&returnTo=${encodeURIComponent(returnTo)}`
+      )
+      if (captchaWindow.current && !captchaWindow.current.closed) {
+        captchaWindow.current.location.replace(waitingUrl)
+      } else {
+        window.location.assign(waitingUrl)
+      }
+    },
+    onError: (caught) => {
+      captchaWindow.current?.close()
+      captchaWindow.current = null
+      setRefreshError(caught instanceof Error ? caught.message : 'Actualisation impossible')
+    },
   })
+
+  const interactiveRefresh = useQuery({
+    queryKey: ['interactive-price-refresh', interactiveOperationId],
+    queryFn: () =>
+      api.get<InteractivePriceRefresh>(
+        `/prices/interactive/${encodeURIComponent(interactiveOperationId ?? '')}`,
+      ),
+    enabled: Boolean(interactiveOperationId),
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'completed'
+      || query.state.data?.status === 'failed'
+      || query.state.data?.status === 'cancelled'
+        ? false
+        : 800,
+  })
+
+  useEffect(() => {
+    const operation = interactiveRefresh.data
+    if (!operation) return
+
+    if (
+      operation.status !== 'completed'
+      && operation.status !== 'failed'
+      && operation.status !== 'cancelled'
+      && captchaWindow.current?.closed
+    ) {
+      captchaWindow.current = null
+      displayedChallengeId.current = null
+      setRefreshError('La fenêtre CAPTCHA a été fermée. Relancez l’actualisation pour réessayer.')
+      void api.post(`/prices/interactive/${encodeURIComponent(operation.operationId)}/cancel`)
+      setInteractiveOperationId(null)
+      return
+    }
+
+    const challengeId = operation.challenge?.challengeId
+    if (challengeId && displayedChallengeId.current !== challengeId) {
+      if (!captchaWindow.current || captchaWindow.current.closed) {
+        setRefreshError(
+          'La fenêtre CAPTCHA a été fermée. Relancez l’actualisation pour reprendre la validation.',
+        )
+        void api.post(`/prices/interactive/${encodeURIComponent(operation.operationId)}/cancel`)
+        return
+      }
+      displayedChallengeId.current = challengeId
+      captchaWindow.current.location.replace(`/captcha/${encodeURIComponent(challengeId)}`)
+    }
+
+    if (
+      operation.status !== 'completed'
+      && operation.status !== 'failed'
+      && operation.status !== 'cancelled'
+    ) {
+      return
+    }
+
+    captchaWindow.current?.close()
+    captchaWindow.current = null
+    displayedChallengeId.current = null
+    if (operation.error) setRefreshError(operation.error)
+    void queryClient.invalidateQueries({ queryKey: key })
+    setInteractiveOperationId(null)
+  }, [interactiveRefresh.data, queryClient, setNum])
   const setWishlist = useMutation({
     mutationFn: (wanted: boolean) =>
       wanted
@@ -409,7 +494,11 @@ export default function SetDetailPage() {
       <PriceCard
         detail={data}
         pricePerPartTarget={Number(preferences?.['appTheme.preferredPricePerPart'] ?? 0.12)}
-        isRefreshing={refresh.isPending}
+        isRefreshing={
+          refresh.isPending
+          || interactiveRefresh.data?.status === 'running'
+          || interactiveRefresh.data?.status === 'captchaRequired'
+        }
         onRefresh={() => {
           // Skip the attempt entirely rather than firing it and waiting out a timeout — the
           // backend is a self-hosted LAN server, not a CDN, and won't answer any faster for
@@ -419,10 +508,19 @@ export default function SetDetailPage() {
             return
           }
           setRefreshBlocked(false)
+          setRefreshError(null)
+          const popup = window.open(
+            '/captcha/waiting',
+            'brickseeker-price-captcha',
+            'popup,width=1100,height=820,resizable=yes,scrollbars=no',
+          )
+          captchaWindow.current = popup
+          displayedChallengeId.current = null
           refresh.mutate()
         }}
       />
       {refreshBlocked && <ErrorLabel message="Hors-ligne : actualisation impossible pour le moment." />}
+      {refreshError && <ErrorLabel message={refreshError} />}
 
       <PriceHistoryChart history={data.priceHistory} soldListings={data.soldListings} />
 
