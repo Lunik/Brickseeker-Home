@@ -70,6 +70,10 @@ class ScrapeBlocked(ScrapeError):
         self.url = url
 
 
+class InteractiveChallengeUnavailable(ScrapeError):
+    """The retailer refused this browser without exposing a human-solvable challenge."""
+
+
 class ScrapeDisabled(ScrapeError):
     """`scraping_enabled` is off. A `ScrapeError` subclass on purpose: every existing caller already
     omits the source on `ScrapeError`, so turning scraping off needs no new handling anywhere."""
@@ -100,9 +104,13 @@ _LAUNCH_ARGS = [
     # The container runs unprivileged and without user namespaces, so the sandbox can't start.
     "--no-sandbox",
 ]
-#: Same flags, applied whether Chromium is launched in-process or remotely: `connect_over_cdp`
-#: takes launch options as a `launch=<json>` query parameter, not as Python kwargs.
-_LAUNCH_OPTIONS_JSON = json.dumps({"headless": True, "stealth": True, "args": _LAUNCH_ARGS})
+#: DataDome accepts the slider in a headless session but rejects the fingerprint after the human
+#: completes it. The Browserless sidecar owns an Xvfb display, so its long-lived browser runs
+#: headful; bare local development keeps the in-process browser headless because no display is
+#: guaranteed there. `connect_over_cdp` takes these options in the URL, not as Python kwargs.
+_REMOTE_LAUNCH_OPTIONS_JSON = json.dumps(
+    {"headless": False, "stealth": False, "args": _LAUNCH_ARGS}
+)
 
 _POLL_INTERVAL = 0.4
 _CLOSE_TIMEOUT_SECONDS = 10.0
@@ -172,7 +180,7 @@ async def _ensure_stack() -> tuple[Browser, BrowserContext]:
                 separator = "&" if "?" in settings.browser_ws_endpoint else "?"
                 endpoint = (
                     f"{settings.browser_ws_endpoint}{separator}"
-                    f"launch={quote(_LAUNCH_OPTIONS_JSON)}"
+                    f"launch={quote(_REMOTE_LAUNCH_OPTIONS_JSON)}"
                 )
                 _browser = await asyncio.wait_for(
                     _playwright.chromium.connect_over_cdp(endpoint),
@@ -190,13 +198,17 @@ async def _ensure_stack() -> tuple[Browser, BrowserContext]:
             raise ScrapeError(f"Chromium indisponible : délai de connexion dépassé ({exc})") from exc
     if _context is None:
         try:
+            context_options = {
+                "viewport": _VIEWPORT,
+                "locale": "fr-FR",
+                "timezone_id": "Europe/Paris",
+            }
+            if not settings.browser_ws_endpoint:
+                # A local headless browser would otherwise advertise HeadlessChrome. The remote
+                # headful browser keeps its own native Linux fingerprint coherent end-to-end.
+                context_options["user_agent"] = _user_agent(_browser)
             _context = await asyncio.wait_for(
-                _browser.new_context(
-                    user_agent=_user_agent(_browser),
-                    viewport=_VIEWPORT,
-                    locale="fr-FR",
-                    timezone_id="Europe/Paris",
-                ),
+                _browser.new_context(**context_options),
                 timeout=settings.scrape_timeout_seconds,
             )
             if _restored_cookies:
@@ -302,7 +314,74 @@ async def open_interactive_page(url: str) -> Page:
     except PlaywrightError as error:
         await _close_page(page)
         raise ScrapeError(f"Ouverture du CAPTCHA impossible : {url} ({error})") from error
+    await _retry_blocked_datadome_frame(page)
+    if await _datadome_challenge_state(page) == "blocked":
+        await _close_page(page)
+        raise InteractiveChallengeUnavailable(
+            "DataDome refuse cette session sans proposer de défi résolvable"
+        )
     return page
+
+
+async def _datadome_challenge_state(page: Page) -> str | None:
+    for frame in page.frames:
+        if "captcha-delivery.com" not in frame.url:
+            continue
+        try:
+            return await frame.evaluate(
+                """
+() => {
+  const text = document.body ? document.body.innerText : '';
+  if (/glisser vers la droite|slide to the right|vérification audio|audio verification/i.test(text)) {
+    return 'solvable';
+  }
+  if (Array.from(document.querySelectorAll('button'))
+    .some((button) => /retry|réessayer|try again/i.test(button.innerText || ''))) {
+    return 'retry';
+  }
+  if (/you have been blocked|vous avez été bloqué|accès temporairement restreint/i.test(text)) {
+    return 'blocked';
+  }
+  return null;
+}
+"""
+            )
+        except PlaywrightError:
+            continue
+    return None
+
+
+async def _retry_blocked_datadome_frame(page: Page) -> bool:
+    """Turns DataDome's terminal-looking landing state into its actual human challenge.
+
+    This only presses DataDome's own Retry button. The slider/audio verification itself remains a
+    human action in the interactive viewer.
+    """
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        for frame in page.frames:
+            if "captcha-delivery.com" not in frame.url:
+                continue
+            try:
+                clicked = await frame.evaluate(
+                    """
+() => {
+  const retry = Array.from(document.querySelectorAll('button'))
+    .find((button) => /retry|réessayer|try again/i.test(button.innerText || ''));
+  if (!retry) return false;
+  retry.click();
+  return true;
+}
+"""
+                )
+            except PlaywrightError:
+                continue
+            if clicked:
+                await asyncio.sleep(1)
+                return True
+            return False
+        await asyncio.sleep(_POLL_INTERVAL)
+    return False
 
 
 async def close_interactive_page(page: Page) -> None:

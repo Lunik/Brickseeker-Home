@@ -24,6 +24,7 @@ export default function CaptchaPage() {
   const [knownOperationId, setKnownOperationId] = useState<string | null>(waitingOperationId)
   const pointerDown = useRef(false)
   const lastPointerMove = useRef(0)
+  const frameTimer = useRef<number | null>(null)
 
   const challenge = useQuery({
     queryKey: ['captcha-session', challengeId],
@@ -40,10 +41,19 @@ export default function CaptchaPage() {
   const operationId = knownOperationId ?? waitingOperationId
 
   useEffect(() => {
-    if (waiting || submitted) return
-    const timer = window.setInterval(() => setFrameVersion((value) => value + 1), FRAME_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [waiting, submitted])
+    return () => {
+      if (frameTimer.current !== null) window.clearTimeout(frameTimer.current)
+    }
+  }, [])
+
+  function scheduleNextFrame(delay = FRAME_INTERVAL_MS) {
+    if (submitted) return
+    if (frameTimer.current !== null) window.clearTimeout(frameTimer.current)
+    frameTimer.current = window.setTimeout(() => {
+      frameTimer.current = null
+      setFrameVersion((value) => value + 1)
+    }, delay)
+  }
 
   useEffect(() => {
     if (!operationId) return
@@ -248,6 +258,8 @@ export default function CaptchaPage() {
               alt={`Page ${challenge.data?.sourceName ?? 'retailer'} à valider`}
               className="h-full w-full select-none object-contain"
               draggable={false}
+              onLoad={() => scheduleNextFrame()}
+              onError={() => scheduleNextFrame(1000)}
             />
           </div>
         )}

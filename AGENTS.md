@@ -123,6 +123,13 @@ continuent. Ne transforme pas un job sans utilisateur en session interactive, et
 lire les cookies d'un onglet retailer ouvert directement dans le navigateur : la politique
 same-origin l'interdit et contournerait précisément l'isolation recherchée.
 
+Le Browserless distant doit rester **headful avec son fingerprint natif** sur l'affichage virtuel :
+pas de plugin stealth ni d'UA Windows forgé. DataDome sait afficher le slider en headless mais
+rejette ensuite le fingerprint quand l'utilisateur le termine — le symptôme est exactement le
+passage à « You have been blocked » après un slider réussi. Le fallback Playwright local reste
+headless faute de display garanti ; ne généralise pas ce fallback au sidecar. Une page DataDome sans
+slider, audio ni Retry est terminale pour cette session : ne la présente jamais comme résolvable.
+
 ## Différences assumées avec l'app iOS
 
 Elles sont peu nombreuses et chacune a une raison :

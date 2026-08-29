@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.scraping.browser import (
+    _REMOTE_LAUNCH_OPTIONS_JSON,
     ScrapeBlocked,
     ScrapeChallengeUnsolved,
     ScrapeError,
     _acquire_page,
+    _datadome_challenge_state,
+    _retry_blocked_datadome_frame,
     load_and_extract,
 )
 
@@ -118,3 +122,34 @@ def test_datadome_challenge_is_recognized_as_explicit_block() -> None:
 
     assert "captcha-delivery.com" in _BLOCKED_JS
     assert ScrapeBlocked.__mro__[1] is ScrapeError
+
+
+@pytest.mark.asyncio
+async def test_interactive_datadome_page_clicks_retry_but_not_the_challenge() -> None:
+    normal_frame = MagicMock(url="https://www.king-jouet.com/search")
+    captcha_frame = MagicMock(url="https://geo.captcha-delivery.com/captcha/")
+    captcha_frame.evaluate = AsyncMock(return_value=True)
+    page = MagicMock(frames=[normal_frame, captcha_frame])
+
+    assert await _retry_blocked_datadome_frame(page) is True
+
+    captcha_frame.evaluate.assert_awaited_once()
+    script = captcha_frame.evaluate.await_args.args[0]
+    assert "retry" in script.lower()
+    assert "drag" not in script.lower()
+
+
+def test_remote_browser_is_headful_for_datadome_validation() -> None:
+    options = json.loads(_REMOTE_LAUNCH_OPTIONS_JSON)
+
+    assert options["headless"] is False
+    assert options["stealth"] is False
+
+
+@pytest.mark.asyncio
+async def test_terminal_datadome_block_is_not_presented_as_solvable() -> None:
+    frame = MagicMock(url="https://geo.captcha-delivery.com/captcha/")
+    frame.evaluate = AsyncMock(return_value="blocked")
+    page = MagicMock(frames=[frame])
+
+    assert await _datadome_challenge_state(page) == "blocked"
