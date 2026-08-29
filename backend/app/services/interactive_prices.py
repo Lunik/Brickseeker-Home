@@ -28,7 +28,7 @@ from . import collection_repo, prices
 from .pricing import RETAIL_SOURCES, source_display_name
 from .rebrickable import LegoSet
 from .scraping import browser
-from .scraping.browser import ScrapeBlocked
+from .scraping.browser import InteractiveChallengeUnavailable, ScrapeBlocked
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +339,11 @@ class InteractivePriceManager:
                     await self._resolve_source(operation, lego_set, source, challenge)
                 except asyncio.CancelledError:
                     raise
+                except InteractiveChallengeUnavailable:
+                    label = source_display_name(source)
+                    operation.warning = (
+                        f"{label} refuse cette session interactive ; réessayez plus tard."
+                    )
                 except Exception as error:  # noqa: BLE001 - one retailer must not hide the next
                     label = source_display_name(source)
                     operation.warning = f"{label} n'a pas pu ouvrir sa validation."

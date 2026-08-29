@@ -193,6 +193,13 @@ expiration, et borne chaque source et chaque set avec des délais bien plus cour
 ne rend jamais plus de deux pages marchandes à la fois : au-delà, les sites lourds s'affament
 mutuellement et peuvent tous échouer alors que chacun répond correctement seul.
 
+Le Chromium distant utilise le fingerprint natif de l'affichage virtuel Browserless (mode headful,
+sans plugin stealth) : DataDome laisse afficher son slider en headless mais rejette ensuite ce
+fingerprint au moment de la validation humaine. Le fallback Playwright lancé directement en
+développement reste headless, puisqu'aucune session graphique n'y est garantie. Si DataDome refuse
+l'IP sans proposer de slider/audio/Retry, BrickSeeker le signale et ne présente pas cette page
+terminale comme un CAPTCHA que l'utilisateur pourrait résoudre.
+
 Browserless OSS ne fournit pas de lien interactif vers une page existante. Le viewer CAPTCHA est
 donc servi par l'API authentifiée de BrickSeeker (captures JPEG et événements souris/clavier) :
 le port CDP reste privé au réseau Compose et aucun jeton de contrôle Chromium n'est exposé au LAN.
