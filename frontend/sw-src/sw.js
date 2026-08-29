@@ -29,7 +29,8 @@ const CACHEABLE_API =
 //: has no business being duplicated in the HTTP cache; the rest are transient progress reads and
 //: file downloads, where a cached answer is actively misleading — the same reason
 //: `lib/query-persistence.ts` refuses to persist them.
-const UNCACHEABLE_API = /^\/api\/(catalog\/export|prices\/batch|wishlist\/import|stats\/export)/
+const UNCACHEABLE_API =
+  /^\/api\/(catalog\/export|prices\/(batch|interactive|captcha)|wishlist\/import|stats\/export)/
 
 // Live data wins whenever the LAN server answers; a cached response serves the moment it doesn't
 // (or answers slowly — 4s is "don't let a hung request stall the UI", not a real timeout). Only

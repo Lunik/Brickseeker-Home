@@ -76,6 +76,8 @@ def test_offline_readable_endpoints_are_cached(path: str) -> None:
         # Transient progress reads — a cached "63 % done" from yesterday is worse than no answer,
         # the same reason `lib/query-persistence.ts` refuses to persist them.
         "/api/prices/batch/status",
+        "/api/prices/interactive/operation",
+        "/api/prices/captcha/challenge/frame",
         "/api/wishlist/import/status",
         # File downloads, and the reachability probe.
         "/api/stats/export.csv",

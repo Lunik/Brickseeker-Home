@@ -71,6 +71,7 @@ export const AVAILABILITY_LABEL: Record<string, string> = {
 }
 
 export const SOURCE_LABEL: Record<string, string> = {
+  bricklink: 'BrickLink',
   bricklinkNew: 'BrickLink (neuf)',
   bricklinkUsed: 'BrickLink (occasion)',
   amazon: 'Amazon (neuf)',
@@ -83,6 +84,12 @@ export const SOURCE_LABEL: Record<string, string> = {
   carrefour: 'Carrefour (neuf)',
   intermarche: 'Intermarché (neuf)',
   legoStore: 'lego.com (officiel)',
+}
+
+export function formatPriceSources(sources: string[]): string {
+  const labels = sources.map((source) => SOURCE_LABEL[source] ?? source)
+  if (labels.length <= 3) return labels.join(', ')
+  return `${labels.slice(0, 3).join(', ')} et ${labels.length - 3} autre(s)`
 }
 
 export const NON_SET_LABEL: Record<string, string> = {

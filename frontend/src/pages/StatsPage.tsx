@@ -19,7 +19,7 @@ import type { BatchStatus, CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import ListConditionsSheet from '../components/ListConditionsSheet'
 import { EmptyState, ErrorLabel, LoadingBlock, NavBar, ProgressBar, Spinner } from '../components/ui'
-import { formatDate, formatEUR, formatEURCompact, formatNumber } from '../lib/format'
+import { formatDate, formatEUR, formatEURCompact, formatNumber, formatPriceSources } from '../lib/format'
 
 /** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
 const MAX_THEME_BARS = 10
@@ -196,6 +196,7 @@ export default function StatsPage() {
             <span className="flex shrink-0 items-center gap-2 text-[13px] tabular-nums text-ink-muted">
               <Spinner className="h-3.5 w-3.5" />
               {batch.data.done} / {batch.data.total}
+              {batch.data.currentSetNum ? ` · ${batch.data.currentSetNum}` : ''}
             </span>
           ) : (
             <button
@@ -215,15 +216,27 @@ export default function StatsPage() {
         {batch.data?.isRunning && (
           <>
             <ProgressBar value={batch.data.done} total={batch.data.total} />
+            {batch.data.pendingSources.length > 0 && (
+              <p className="text-[13px] text-ink-muted">
+                En attente de {formatPriceSources(batch.data.pendingSources)}
+              </p>
+            )}
+            {batch.data.captchaRequiredSources.length > 0 && (
+              <p className="text-[13px] text-amber-500">
+                CAPTCHA requis : {formatPriceSources(batch.data.captchaRequiredSources)}.
+              </p>
+            )}
             {/* A run that looks stuck (a slow set, a stalled scrape) had no way out of this
                 screen short of Réglages — the same "interrompre" here, progress kept. */}
             <button
               type="button"
               className="btn-ghost w-full justify-start px-0 text-left text-[13px]"
               onClick={() => cancelBatch.mutate()}
-              disabled={cancelBatch.isPending}
+              disabled={cancelBatch.isPending || batch.data.cancelRequested}
             >
-              Interrompre (la progression est conservée)
+              {batch.data.cancelRequested
+                ? 'Interruption en cours…'
+                : 'Interrompre (la progression est conservée)'}
             </button>
           </>
         )}
@@ -241,11 +254,18 @@ export default function StatsPage() {
             ? `Dernière actualisation : ${formatDate(batch.data.lastCompletedAt)}`
             : 'Prix jamais actualisés'}
         </p>
-        {(completeMissing.isError || refreshValue.isError) && (
+        {(completeMissing.isError || refreshValue.isError || batch.data?.error) && (
           <ErrorLabel
-            message={((completeMissing.error ?? refreshValue.error) as Error).message}
+            message={
+              completeMissing.isError || refreshValue.isError
+                ? ((completeMissing.error ?? refreshValue.error) as Error).message
+                : batch.data?.error ?? 'Erreur inconnue'
+            }
             className="text-[13px]"
           />
+        )}
+        {batch.data?.warning && (
+          <p className="text-[13px] text-amber-500">{batch.data.warning}</p>
         )}
         {missing > 0 && (
           <button

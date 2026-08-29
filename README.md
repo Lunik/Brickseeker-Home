@@ -29,7 +29,7 @@ Pour tout avoir sans Compose :
 
 ```bash
 docker network create brickseeker
-docker run -d --name brickseeker-chromium --network brickseeker --shm-size=1g \
+docker run -d --name brickseeker-chromium --network brickseeker --shm-size=1g -e TIMEOUT=86400000 \
   ghcr.io/browserless/chromium:v2.55.4
 docker run -d --name brickseeker -p 8000:8000 -v "$PWD/data:/data" --network brickseeker \
   -e BRICKSEEKER_BROWSER_WS_ENDPOINT=ws://brickseeker-chromium:3000 brickseeker:latest
@@ -59,6 +59,19 @@ Toutes celles de l'app iOS, à l'identique sauf mention contraire.
     **La Grande Récré**, **JouéClub**, **Carrefour**, **Intermarché**) avec accessoires filtrés,
   - avec l'écart en % face au prix lego.com, et un objectif €/pièce configurable qui colore le
     prix en vert ou en rouge.
+
+Les sites marchands gardent le contrôle de leur accès : Fnac et King Jouet peuvent imposer un
+CAPTCHA DataDome, et Intermarché ne publie pas de prix national sans magasin sélectionné. Un blocage
+est détecté puis mis en pause quinze minutes ; il n'immobilise plus chaque set du lot. Les autres
+sources continuent et leurs résultats sont enregistrés dès qu'ils arrivent.
+
+Un rafraîchissement lancé explicitement depuis la fiche d'un set ouvre une petite fenêtre d'attente.
+Si un retailer demande un CAPTCHA, cette fenêtre affiche la page Chromium exacte sous forme de
+viewer interactif : l'utilisateur valide le défi, puis BrickSeeker reprend uniquement cette source.
+Le cookie obtenu ne transite jamais par le navigateur utilisateur ; il reste côté serveur et est
+persisté chiffré avec la même clé que les identifiants API. Autorisez donc les fenêtres surgissantes
+pour BrickSeeker. Un lot ou une passe automatique n'ouvre jamais cette fenêtre : il signale
+« CAPTCHA requis », conserve l'ancien prix éventuel et continue avec les autres sources.
 - **Historique** des scans, avec carte des lieux si tu actives la capture de position.
 - **Statistiques** — répartition par thème et par année, valeur totale estimée, superlatifs,
   évolution de la valeur de la collection, export CSV et PDF.
@@ -174,7 +187,15 @@ Ce moteur ne vit plus dans l'image applicative : `docker-compose.yml` définit u
 changement de code ne re-télécharge plus Chromium et ses dépendances système — et isole un
 processus notoirement gourmand en mémoire dans son propre conteneur, avec son propre `shm_size`.
 Rien ne change côté fonctionnalités ni côté anti-bot : mêmes drapeaux de lancement Chromium,
-juste atteint autrement.
+juste atteint autrement. Le délai Browserless d'un jour est volontaire : le backend conserve un
+contexte CDP pour réutiliser les cookies de défi entre deux sets, sait le reconnecter à son
+expiration, et borne chaque source et chaque set avec des délais bien plus courts de son côté. Il
+ne rend jamais plus de deux pages marchandes à la fois : au-delà, les sites lourds s'affament
+mutuellement et peuvent tous échouer alors que chacun répond correctement seul.
+
+Browserless OSS ne fournit pas de lien interactif vers une page existante. Le viewer CAPTCHA est
+donc servi par l'API authentifiée de BrickSeeker (captures JPEG et événements souris/clavier) :
+le port CDP reste privé au réseau Compose et aucun jeton de contrôle Chromium n'est exposé au LAN.
 
 ---
 

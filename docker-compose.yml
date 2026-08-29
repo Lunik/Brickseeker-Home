@@ -42,6 +42,12 @@ services:
     image: ghcr.io/browserless/chromium:v2.55.4
     container_name: brickseeker-chromium
     restart: unless-stopped
+    environment:
+      # The backend deliberately keeps one CDP context alive to retain Cloudflare clearance cookies.
+      # Browserless otherwise kills that session after 30 s, in the middle of the first slow scrape.
+      # A finite day avoids the pinned image's broken TIMEOUT=-1 handling; the backend reconnects
+      # cleanly after expiry, and every individual source has its own much shorter hard timeout.
+      - TIMEOUT=86400000
     # No `ports:` — reachable only from `brickseeker` over the compose network, the same exposure
     # Chromium had when it ran inside that container's own process.
     # Chromium needs more than Docker's default 64 MB of shared memory or it crashes mid-page.
@@ -50,7 +56,9 @@ services:
     # starts scraping. Without this, `depends_on: chromium` only waits for the container to start,
     # not for the CDP endpoint to be reachable — leading to 30s timeouts on first scrape attempts.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3000/json/version"]
+      # `/json/version` launches a throwaway Chromium process on Browserless v2; `/pressure` reports
+      # readiness without burning a browser every five seconds.
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/pressure"]
       interval: 5s
       timeout: 3s
       retries: 3

@@ -27,7 +27,7 @@ from urllib.parse import quote_plus
 
 from ..pricing import PriceQuote, PriceSource, set_digits
 from ..rebrickable import LegoSet
-from .browser import ScrapeError, load_and_extract, parse_amount, parse_currency
+from .browser import ScrapeNotFound, load_and_extract, parse_amount, parse_currency
 
 #: No standard retail LEGO set costs this much. Above it, the extractor read something that isn't
 #: a price — most often the set number bleeding into the digits.
@@ -73,7 +73,7 @@ async def fetch_price(lego_set: LegoSet) -> PriceQuote | None:
 
     try:
         raw = await load_and_extract(url, readiness_js=_READINESS_JS, extract_js=_extract_js(digits))
-    except ScrapeError:
+    except ScrapeNotFound:
         return None
 
     try:

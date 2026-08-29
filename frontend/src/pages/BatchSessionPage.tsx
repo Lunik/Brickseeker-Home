@@ -12,7 +12,7 @@ import { useSetActions } from '../hooks/useSetActions'
 import { batchSession, useBatchSession } from '../lib/batch-session'
 import { bestDeal } from '../lib/deal'
 import { usePendingScans } from '../lib/offline-scan-queue'
-import { baseSetNum, formatEUR, SOURCE_LABEL } from '../lib/format'
+import { baseSetNum, formatEUR, formatPriceSources, SOURCE_LABEL } from '../lib/format'
 
 /**
  * The end of a "mode lot" sweep: everything scanned this session, best deal first — the port of
@@ -427,6 +427,13 @@ function Notice({
         {isOurs ? (
           <>
             Recherche des prix… ({batch.done}/{batch.total})
+            {batch.currentSetNum ? ` · ${batch.currentSetNum}` : ''}
+            {batch.pendingSources.length > 0
+              ? ` · en attente de ${formatPriceSources(batch.pendingSources)}`
+              : ''}
+            {batch.captchaRequiredSources.length > 0
+              ? ` · CAPTCHA requis : ${formatPriceSources(batch.captchaRequiredSources)}`
+              : ''}
             <button type="button" className="btn-ghost px-2 py-0.5 text-[13px]" onClick={onCancel}>
               Arrêter
             </button>

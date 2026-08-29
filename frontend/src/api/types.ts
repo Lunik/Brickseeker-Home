@@ -153,6 +153,7 @@ export interface SetDetail {
   /** `prices_fetched_at` was more than 7 days old (or never set), so the backend already kicked
    *  off a background refresh for this item — see `SetDetailPage`'s one-shot delayed refetch. */
   pricesRefreshing: boolean
+  captchaRequiredSources: PriceSourceKey[]
 }
 
 export type ResolveStatus = 'found' | 'ambiguous' | 'notFound' | 'offline'
@@ -277,15 +278,60 @@ export interface SetPrices {
   storePriceFetchedAt: string | null
   valuation: Valuation
   percentVsStore: Partial<Record<PriceSourceKey, number>>
+  captchaRequiredSources: PriceSourceKey[]
 }
 
 export interface BatchStatus {
   isRunning: boolean
   done: number
   total: number
+  failed: number
+  sourceFailures: number
   currentSetNum: string | null
+  currentSetStartedAt: string | null
+  lastProgressAt: string | null
+  pendingSources: string[]
+  captchaRequiredSources: string[]
+  phase: 'preparing' | 'fetching' | 'waiting' | 'finalizing' | 'cancelling' | null
+  cancelRequested: boolean
   mode: string | null
   lastCompletedAt: string | null
+  warning: string | null
+  error: string | null
+  hasPendingQueue: boolean
+}
+
+export interface PriceCaptchaChallenge {
+  challengeId: string
+  source: PriceSourceKey
+  sourceName: string
+  reason: string
+  pageUrl: string
+  expiresAt: string
+}
+
+export interface InteractivePriceRefresh {
+  operationId: string
+  setNum: string
+  status: 'running' | 'captchaRequired' | 'completed' | 'failed' | 'cancelled'
+  createdAt: string
+  updatedAt: string
+  captchaRequiredSources: PriceSourceKey[]
+  resolvedSources: PriceSourceKey[]
+  warning: string | null
+  error: string | null
+  challenge: PriceCaptchaChallenge | null
+}
+
+export interface CaptchaSessionStatus {
+  challengeId: string
+  operationId: string
+  source: PriceSourceKey
+  sourceName: string
+  reason: string
+  pageTitle: string
+  pageUrl: string
+  expiresAt: string
 }
 
 export interface SettingsPayload {

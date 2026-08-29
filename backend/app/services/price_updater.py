@@ -27,10 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import session_scope
 from . import app_settings, collection_repo, notifications, prices
-from .pricing import StoreAvailability, resolve_collection_price
+from .pricing import StoreAvailability, resolve_collection_price, source_display_name
 from .rebrickable import LegoSet
 
 logger = logging.getLogger(__name__)
+_FINALIZATION_TIMEOUT_SECONDS = 30.0
 
 
 @dataclass(slots=True)
@@ -38,9 +39,18 @@ class BatchState:
     is_running: bool = False
     done: int = 0
     total: int = 0
+    failed: int = 0
+    source_failures: int = 0
     current_set_num: str | None = None
+    current_set_started_at: datetime | None = None
+    last_progress_at: datetime | None = None
+    pending_sources: list[str] = field(default_factory=list)
+    captcha_required_sources: list[str] = field(default_factory=list)
+    phase: str | None = None
+    cancel_requested: bool = False
     mode: str | None = None
     last_completed_at: datetime | None = None
+    warning: str | None = None
     error: str | None = None
     #: The remaining queue, kept so a cancel preserves progress and the next start resumes rather
     #: than restarting from zero.
@@ -51,9 +61,18 @@ class BatchState:
             "isRunning": self.is_running,
             "done": self.done,
             "total": self.total,
+            "failed": self.failed,
+            "sourceFailures": self.source_failures,
             "currentSetNum": self.current_set_num,
+            "currentSetStartedAt": self.current_set_started_at,
+            "lastProgressAt": self.last_progress_at,
+            "pendingSources": list(self.pending_sources),
+            "captchaRequiredSources": list(self.captcha_required_sources),
+            "phase": self.phase,
+            "cancelRequested": self.cancel_requested,
             "mode": self.mode,
             "lastCompletedAt": self.last_completed_at,
+            "warning": self.warning,
             "error": self.error,
             "hasPendingQueue": bool(self.queue),
         }
@@ -65,6 +84,7 @@ class PriceUpdater:
         self._cancel_requested = False
         self._task: asyncio.Task[None] | None = None
         self._watch_running = False
+        self._run_id = 0
 
     # --- Manual batch ----------------------------------------------------------------
 
@@ -102,35 +122,75 @@ class PriceUpdater:
         """
         if self._state.is_running or self._watch_running:
             return "busy"
+        resuming = bool(self._state.queue) and not set_nums and not only_missing
+        if self._state.queue and not resuming:
+            # A selection or "missing only" run must not silently discard a paused full queue.
+            return "busy"
+
+        previous_done = self._state.done
+        previous_total = self._state.total
+        previous_failed = self._state.failed
+        previous_source_failures = self._state.source_failures
+        previous_captcha_sources = list(self._state.captcha_required_sources)
+        previous_mode = self._state.mode
+        previous_completed_at = self._state.last_completed_at
+        previous_warning = self._state.warning
+
         # Claimed synchronously, before the first `await` below: two `POST /prices/batch/start`
         # calls arriving close together (the button lives on six different screens) both passed
         # the check above while this was still False, then both built a queue and both started a
         # `_run` — two loops popping the same queue, double-incrementing `done`, scraping some sets
         # twice and racing each other's `finally` for `last_completed_at`. Nothing can run between
         # this line and the check above, so nothing can observe the gap.
+        self._run_id += 1
         self._state.is_running = True
+        self._state.phase = "preparing"
+        self._state.warning = None
+        self._state.error = None
+        self._state.cancel_requested = False
+        self._state.last_progress_at = datetime.now(UTC)
+        self._cancel_requested = False
 
         try:
             async with session_scope() as session:
                 queue = await self._build_queue(session, set_nums, only_missing)
-        except BaseException:
+        except BaseException as error:
             self._state.is_running = False
+            self._state.phase = None
+            self._state.error = str(error)
             raise
 
         if not queue:
             self._state.is_running = False
+            self._state.phase = None
             self._state.last_completed_at = datetime.now(UTC)
+            self._state.last_progress_at = self._state.last_completed_at
             return "empty"
 
-        self._cancel_requested = False
+        mode = previous_mode if resuming else (
+            "selection" if set_nums else ("missing" if only_missing else "full")
+        )
+        done = previous_done if resuming else 0
+        total = max(previous_total, done + len(queue)) if resuming else len(queue)
+        now = datetime.now(UTC)
         self._state = BatchState(
             is_running=True,
-            done=0,
-            total=len(queue),
-            mode="selection" if set_nums else ("missing" if only_missing else "full"),
-            last_completed_at=self._state.last_completed_at,
+            done=done,
+            total=total,
+            failed=previous_failed if resuming else 0,
+            source_failures=previous_source_failures if resuming else 0,
+            captcha_required_sources=previous_captcha_sources if resuming else [],
+            phase="fetching",
+            mode=mode,
+            last_completed_at=previous_completed_at,
+            warning=previous_warning if resuming else None,
+            last_progress_at=now,
             queue=queue,
         )
+        if self._cancel_requested:
+            self._state.is_running = False
+            self._state.phase = None
+            return "cancelled"
         self._task = asyncio.create_task(self._run())
         return "started"
 
@@ -169,15 +229,63 @@ class PriceUpdater:
                 pending.append(row.set_num)
         return pending
 
-    def cancel_preserving_progress(self) -> None:
-        """Stops after the set in flight. The remaining queue survives so the next start resumes."""
+    async def cancel_preserving_progress(self) -> None:
+        """Cancels the in-flight set now; its queue entry survives so the next start resumes it."""
+        if not self._state.is_running:
+            return
         self._cancel_requested = True
+        cancelled_run_id = self._run_id
+        self._state.cancel_requested = True
+        self._state.phase = "cancelling"
+        self._state.last_progress_at = datetime.now(UTC)
+
+        task = self._task
+        if task is None:
+            # Queue construction is still running in the start request. It observes
+            # `_cancel_requested` before creating the worker task.
+            return
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if self._run_id == cancelled_run_id:
+                # A task cancelled before its coroutine gets its first timeslice never enters `_run`
+                # and therefore cannot execute that method's `finally`; normalize the public state
+                # here too, but never touch a newer run that started while this await was suspended.
+                if self._task is task:
+                    self._task = None
+                self._state.is_running = False
+                self._state.current_set_num = None
+                self._state.current_set_started_at = None
+                self._state.pending_sources.clear()
+                self._state.phase = None
+                self._state.cancel_requested = False
+                self._state.last_progress_at = datetime.now(UTC)
+                self._cancel_requested = False
+
+    async def shutdown(self) -> None:
+        await self.cancel_preserving_progress()
 
     async def _run(self) -> None:
+        current_task = asyncio.current_task()
+        completed = False
         try:
             while self._state.queue and not self._cancel_requested:
                 set_num = self._state.queue[0]
                 self._state.current_set_num = set_num
+                self._state.current_set_started_at = datetime.now(UTC)
+                self._state.last_progress_at = self._state.current_set_started_at
+                self._state.pending_sources.clear()
+                self._state.phase = "fetching"
+                logger.info(
+                    "Actualisation des prix de %s (%s/%s)",
+                    set_num,
+                    self._state.done + 1,
+                    self._state.total,
+                )
                 try:
                     async with session_scope() as session:
                         cached = await collection_repo.cached_set(session, set_num)
@@ -194,27 +302,94 @@ class PriceUpdater:
                                 set_url=None,
                             )
                         )
-                        await prices.refresh_set_prices(session, lego_set, reconcile=False)
-                except Exception:  # noqa: BLE001 - one set failing must not end the batch
+                        await prices.refresh_set_prices(
+                            session,
+                            lego_set,
+                            reconcile=False,
+                            on_progress=self._on_source_progress,
+                        )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as error:  # noqa: BLE001 - one set failing must not end the batch
+                    self._state.failed += 1
+                    self._state.warning = f"{set_num} n'a pas pu être actualisé : {error}"
                     logger.warning("Échec du rafraîchissement de %s", set_num, exc_info=True)
 
                 self._state.queue.pop(0)
                 self._state.done += 1
+                self._state.current_set_num = None
+                self._state.current_set_started_at = None
+                self._state.pending_sources.clear()
+                self._state.last_progress_at = datetime.now(UTC)
 
                 if self._state.queue and not self._cancel_requested:
+                    self._state.phase = "waiting"
                     await asyncio.sleep(settings.scrape_delay_between_sets)
-        finally:
+
             completed = not self._state.queue
+            if completed:
+                completed_at = datetime.now(UTC)
+                self._state.last_completed_at = completed_at
+                self._state.last_progress_at = completed_at
+                self._state.phase = "finalizing"
+                try:
+                    async with asyncio.timeout(_FINALIZATION_TIMEOUT_SECONDS):
+                        await self._finish(self._state.done, completed_at)
+                except TimeoutError:
+                    self._state.error = (
+                        "Les prix sont à jour, mais la finalisation a dépassé 30 s."
+                    )
+                    logger.warning("Finalisation du lot abandonnée après 30 s")
+                except Exception as error:  # noqa: BLE001 - fetched prices must remain usable
+                    self._state.error = f"Prix à jour, finalisation incomplète : {error}"
+                    logger.warning("Finalisation du lot de prix échouée", exc_info=True)
+        except asyncio.CancelledError:
+            logger.info("Actualisation des prix interrompue, progression conservée")
+            raise
+        except Exception as error:  # noqa: BLE001 - never leave the public state stuck on running
+            self._state.error = f"Lot interrompu : {error}"
+            logger.exception("Le lot de prix s'est arrêté de façon inattendue")
+        finally:
             self._state.is_running = False
             self._state.current_set_num = None
-            if completed:
-                self._state.last_completed_at = datetime.now(UTC)
-                await self._finish(self._state.done)
+            self._state.current_set_started_at = None
+            self._state.pending_sources.clear()
+            self._state.phase = None
+            self._state.cancel_requested = False
+            self._state.last_progress_at = datetime.now(UTC)
+            self._cancel_requested = False
+            if self._task is current_task:
+                self._task = None
 
-    async def _finish(self, processed: int) -> None:
+    def _on_source_progress(self, source: str, status: prices.SourceProgressStatus) -> None:
+        self._state.last_progress_at = datetime.now(UTC)
+        if status == "started":
+            if source not in self._state.pending_sources:
+                self._state.pending_sources.append(source)
+            return
+
+        if source in self._state.pending_sources:
+            self._state.pending_sources.remove(source)
+        if status == "captcha_required":
+            if source not in self._state.captcha_required_sources:
+                self._state.captcha_required_sources.append(source)
+            label = "BrickLink" if source == "bricklink" else source_display_name(source)
+            self._state.warning = (
+                f"{label} demande un CAPTCHA ; actualisez ce set manuellement pour le résoudre."
+            )
+            return
+        if status not in ("failed", "timed_out"):
+            return
+
+        self._state.source_failures += 1
+        label = "BrickLink" if source == "bricklink" else source_display_name(source)
+        reason = "a dépassé son délai" if status == "timed_out" else "a échoué"
+        self._state.warning = f"{label} {reason} ; le lot continue."
+
+    async def _finish(self, processed: int, completed_at: datetime) -> None:
         async with session_scope() as session:
             await app_settings.set_setting(
-                session, "collectionPriceUpdate.lastCompletedAt", datetime.now(UTC).isoformat()
+                session, "collectionPriceUpdate.lastCompletedAt", completed_at.isoformat()
             )
             await _record_collection_value(session)
             await notifications.notify_batch_complete(session, processed)

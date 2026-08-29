@@ -69,6 +69,14 @@ Invoque-les avec `skill: "nom-du-skill"` pendant ton travail.
 
 Elle ne pose **pas** `prices_fetched_at` : elle n'a interrogé qu'une source.
 
+### Un CAPTCHA n'est interactif que sur demande explicite
+
+Seul le bouton de rafraîchissement d'une fiche peut ouvrir le viewer CAPTCHA. Un lot ou une passe
+automatique marque `captchaRequired`, conserve l'ancien prix éventuel et continue sans jamais ouvrir
+de fenêtre. Le viewer pilote la page du **même BrowserContext serveur** : aucun cookie ni endpoint
+CDP n'est exposé au frontend ; après validation, les cookies du seul domaine concerné sont stockés
+chiffrés et la source seule est rejouée.
+
 ### L'écran de liste est unique
 
 Collection, Historique, Liste cadeaux et Nouveaux sets = **le même écran** avec des données différentes. La galerie de minifigs utilise la même base avec une grille.

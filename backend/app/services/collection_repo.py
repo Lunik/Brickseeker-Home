@@ -520,7 +520,12 @@ async def mark_prices_fetched(session: AsyncSession, set_num: str) -> None:
 
 
 async def cache_prices(
-    session: AsyncSession, quotes: Sequence[PriceQuote], set_num: str, *, reconcile: bool = False
+    session: AsyncSession,
+    quotes: Sequence[PriceQuote],
+    set_num: str,
+    *,
+    reconcile: bool = False,
+    preserve_sources: set[str] | None = None,
 ) -> None:
     """`reconcile=True` only ever for a genuine live fetch: it drops cached sources absent from
     `quotes`, so a source that went "Indisponible" stops showing its last known price. A
@@ -540,7 +545,7 @@ async def cache_prices(
     if reconcile:
         fetched_sources = {quote.source.value for quote in quotes}
         for row in rows:
-            if row.source not in fetched_sources:
+            if row.source not in fetched_sources and row.source not in (preserve_sources or set()):
                 await session.delete(row)
 
     now = _now()

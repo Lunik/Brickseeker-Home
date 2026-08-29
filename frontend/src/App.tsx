@@ -33,6 +33,7 @@ import AlertsPage from './pages/AlertsPage'
 import SettingsPage from './pages/SettingsPage'
 import OnboardingPage from './pages/OnboardingPage'
 import SetDetailPage from './pages/SetDetailPage'
+import CaptchaPage from './pages/CaptchaPage'
 
 interface AuthStatus {
   authRequired: boolean
@@ -46,21 +47,27 @@ function Chrome() {
 
   // The walkthrough runs once, on the same `hasSeenOnboarding` flag the iOS app uses.
   const needsOnboarding =
-    preferences && preferences.hasSeenOnboarding === false && location.pathname !== '/onboarding'
+    preferences
+    && preferences.hasSeenOnboarding === false
+    && location.pathname !== '/onboarding'
+    && !location.pathname.startsWith('/captcha/')
   if (needsOnboarding) return <Navigate to="/onboarding" replace />
 
   // The scanner is full-bleed: no page padding, no chrome of its own.
   const isScanner = location.pathname === '/scan'
+  const isCaptcha = location.pathname.startsWith('/captcha/')
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-2xl">
-      <OfflineBanner />
+    <div className={isCaptcha ? 'min-h-full w-full' : 'mx-auto min-h-full w-full max-w-2xl'}>
+      {!isCaptcha && <OfflineBanner />}
       {/* `apple-mobile-web-app-status-bar-style: black-translucent` (index.html) runs the web view
           under the iOS status bar once installed to the home screen, so the top row of controls
           landed behind the clock and the battery. The inset is what the status bar actually
           occupies on this device — zero in a browser tab, ~47px on a notched iPhone. */}
       <main
-        className={isScanner ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'}
+        className={
+          isScanner || isCaptcha ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'
+        }
       >
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -78,12 +85,13 @@ function Chrome() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/set/:setNum" element={<SetDetailPage />} />
+          <Route path="/captcha/:challengeId" element={<CaptchaPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       {/* Never over the scanner: that screen is full-bleed camera with its own controls pinned to
           the bottom edge, and a version line would sit on top of them. */}
-      {!isScanner && (
+      {!isScanner && !isCaptcha && (
         <footer className="px-4 pb-6 text-center text-[11px] text-ink-faint">
           BrickSeeker {__APP_VERSION__}
         </footer>

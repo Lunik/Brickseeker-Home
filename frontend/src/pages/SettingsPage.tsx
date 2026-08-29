@@ -19,7 +19,7 @@ import {
 import { offlineCatalogStore, type OfflineCatalogName } from '../lib/offline-catalog-store'
 import { useSettings } from '../lib/settings-context'
 import { APPEARANCE_LABELS, BRAND_COLORS, type AppearanceMode, type BrandColor } from '../lib/theme'
-import { formatDateTime } from '../lib/format'
+import { formatDateTime, formatPriceSources } from '../lib/format'
 
 function Section({
   title,
@@ -183,6 +183,16 @@ export default function SettingsPage() {
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : 'Action impossible')
       }
+    }
+  }
+
+  async function startPriceBatch(payload: Record<string, unknown>) {
+    const { status } = await api.post<{ status: string }>('/prices/batch/start', payload)
+    if (status === 'busy') {
+      throw new Error('Une actualisation ou une progression interrompue existe déjà.')
+    }
+    if (status === 'empty') {
+      throw new Error('Aucun set ne nécessite cette actualisation.')
     }
   }
 
@@ -601,17 +611,33 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 text-sm">
               <Spinner className="h-4 w-4" />
               <span>
-                {batch.data.done} / {batch.data.total}
+                {batch.data.cancelRequested ? 'Interruption en cours…' : `${batch.data.done} / ${batch.data.total}`}
                 {batch.data.currentSetNum ? ` · ${batch.data.currentSetNum}` : ''}
               </span>
             </div>
             <ProgressBar value={batch.data.done} total={batch.data.total} />
+            {batch.data.pendingSources.length > 0 && (
+              <p className="text-xs text-ink-faint">
+                En attente de {formatPriceSources(batch.data.pendingSources)}
+              </p>
+            )}
+            {batch.data.captchaRequiredSources.length > 0 && (
+              <p className="text-xs text-amber-500">
+                CAPTCHA requis : {formatPriceSources(batch.data.captchaRequiredSources)}. Ouvrez
+                ensuite la fiche d’un set et actualisez-la manuellement.
+              </p>
+            )}
+            {batch.data.warning && <p className="text-xs text-amber-500">{batch.data.warning}</p>}
+            {batch.data.error && <ErrorLabel message={batch.data.error} className="text-xs" />}
             <button
               type="button"
               className="btn-secondary w-full"
               onClick={run(() => api.post('/prices/batch/cancel'), 'Mise à jour interrompue.')}
+              disabled={batch.data.cancelRequested}
             >
-              Interrompre (la progression est conservée)
+              {batch.data.cancelRequested
+                ? 'Interruption en cours…'
+                : 'Interrompre (la progression est conservée)'}
             </button>
           </div>
         ) : (
@@ -621,23 +647,37 @@ export default function SettingsPage() {
                 Dernière mise à jour complète : {formatDateTime(batch.data.lastCompletedAt)}
               </p>
             )}
+            {batch.data?.hasPendingQueue && (
+              <p className="text-xs text-ink-faint">
+                Une progression interrompue est prête à reprendre.
+              </p>
+            )}
+            {batch.data?.warning && <p className="text-xs text-amber-500">{batch.data.warning}</p>}
+            {(batch.data?.captchaRequiredSources.length ?? 0) > 0 && (
+              <p className="text-xs text-amber-500">
+                CAPTCHA requis : {formatPriceSources(batch.data?.captchaRequiredSources ?? [])}.
+              </p>
+            )}
+            {batch.data?.error && <ErrorLabel message={batch.data.error} className="text-xs" />}
             <button
               type="button"
               className="btn-secondary w-full"
-              onClick={run(() => api.post('/prices/batch/start', {}), 'Mise à jour lancée.')}
+              onClick={run(() => startPriceBatch({}), 'Mise à jour lancée.')}
             >
-              Mettre à jour tous les prix
+              {batch.data?.hasPendingQueue ? 'Reprendre la mise à jour' : 'Mettre à jour tous les prix'}
             </button>
-            <button
-              type="button"
-              className="btn-ghost w-full text-xs"
-              onClick={run(
-                () => api.post('/prices/batch/start', { onlyMissing: true }),
-                'Complément lancé.',
-              )}
-            >
-              Compléter uniquement les prix manquants
-            </button>
+            {!batch.data?.hasPendingQueue && (
+              <button
+                type="button"
+                className="btn-ghost w-full text-xs"
+                onClick={run(
+                  () => startPriceBatch({ onlyMissing: true }),
+                  'Complément lancé.',
+                )}
+              >
+                Compléter uniquement les prix manquants
+              </button>
+            )}
           </div>
         )}
       </Section>
