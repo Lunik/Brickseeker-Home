@@ -25,6 +25,7 @@ export default function CaptchaPage() {
   const pointerDown = useRef(false)
   const lastPointerMove = useRef(0)
   const frameTimer = useRef<number | null>(null)
+  const cancelOnExit = useRef(true)
 
   const challenge = useQuery({
     queryKey: ['captcha-session', challengeId],
@@ -45,6 +46,17 @@ export default function CaptchaPage() {
       if (frameTimer.current !== null) window.clearTimeout(frameTimer.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (!operationId) return
+    const cancel = () => {
+      if (cancelOnExit.current) {
+        api.cancelOnPageExit(`/prices/interactive/${encodeURIComponent(operationId)}/cancel`)
+      }
+    }
+    window.addEventListener('pagehide', cancel)
+    return () => window.removeEventListener('pagehide', cancel)
+  }, [operationId])
 
   function scheduleNextFrame(delay = FRAME_INTERVAL_MS) {
     if (submitted) return
@@ -67,12 +79,14 @@ export default function CaptchaPage() {
         setOperationState(state)
         const nextChallenge = state.challenge?.challengeId
         if (nextChallenge && nextChallenge !== challengeId) {
+          cancelOnExit.current = false
           window.location.replace(
             `/captcha/${encodeURIComponent(nextChallenge)}?returnTo=${encodeURIComponent(returnTo)}`,
           )
           return
         }
         if (state.status === 'completed' || state.status === 'cancelled') {
+          cancelOnExit.current = false
           if (window.opener) window.close()
           else window.location.replace(returnTo)
         } else if (state.status === 'failed') {

@@ -36,6 +36,7 @@ interface PriceCardProps {
   detail: SetDetail
   pricePerPartTarget: number
   isRefreshing: boolean
+  activeSources: string[]
   onRefresh: () => void
 }
 
@@ -59,11 +60,13 @@ function QuoteRow({
   quote,
   storePrice,
   captchaRequired,
+  isLoading,
 }: {
   label: string
   quote: PriceQuote | undefined
   storePrice: number | null
   captchaRequired: boolean
+  isLoading: boolean
 }) {
   return (
     <li className="flex items-start justify-between gap-3 py-2.5">
@@ -88,6 +91,12 @@ function QuoteRow({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {isLoading && (
+          <>
+            <Spinner className="h-4 w-4 text-brand" />
+            <span className="sr-only">{label} en cours de chargement</span>
+          </>
+        )}
         {quote ? (
           <>
             <DeltaBadge percent={percentVsStore(quote.amount, storePrice)} />
@@ -118,6 +127,7 @@ export default function PriceCard({
   detail,
   pricePerPartTarget,
   isRefreshing,
+  activeSources,
   onRefresh,
 }: PriceCardProps) {
   const bySource = new Map(detail.quotes.map((quote) => [quote.source, quote]))
@@ -126,6 +136,8 @@ export default function PriceCard({
 
   const reference = detail.valuation.currentValueEur ?? storePrice
   const pricePerPart = reference && detail.set.numParts > 0 ? reference / detail.set.numParts : null
+  const isSourceLoading = (source: PriceSourceKey | 'legoStore') =>
+    activeSources.includes(source === 'bricklinkNew' || source === 'bricklinkUsed' ? 'bricklink' : source)
 
   return (
     <section className="card space-y-2">
@@ -145,7 +157,6 @@ export default function PriceCard({
           {isRefreshing ? <Spinner className="h-4 w-4" /> : <Icon name="refresh" className="h-4 w-4" />}
         </button>
       </div>
-
       <ul className="divide-y divide-line">
         {!detail.isMinifig && (
         <li className="flex items-start justify-between gap-3 py-2.5">
@@ -170,7 +181,13 @@ export default function PriceCard({
           </div>
           {/* A retired set can legitimately still show a price — the amount is never hidden
               because of the status. */}
-          <span className="shrink-0 text-sm font-bold text-ink">
+          <span className="flex shrink-0 items-center gap-2 text-sm font-bold text-ink">
+            {isSourceLoading('legoStore') && (
+              <>
+                <Spinner className="h-4 w-4 text-brand" />
+                <span className="sr-only">lego.com en cours de chargement</span>
+              </>
+            )}
             {storePrice !== null ? formatEUR(storePrice) : 'Indisponible'}
           </span>
         </li>
@@ -203,6 +220,7 @@ export default function PriceCard({
             quote={bySource.get(source)}
             storePrice={storePrice}
             captchaRequired={detail.captchaRequiredSources?.includes(source) ?? false}
+            isLoading={isSourceLoading(source)}
           />
         ))}
       </ul>
