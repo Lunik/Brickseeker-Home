@@ -95,8 +95,11 @@ class SetDetailOut(CamelModel):
 async def _resolve(session, query: str) -> ResolveOut:
     """Cache-first, exactly like the iOS scanner: a cached row answers instantly.
 
-    The offline-catalogue fallback fires **only** on a connectivity failure. An auth or server
-    error is not a connectivity problem and must not be silently masked by a stale catalogue hit.
+    The offline-catalogue fallback fires on a connectivity failure (503/504) *and* on a missing
+    Rebrickable API key (412, `missing_credentials`) — a downloaded catalogue is meant to answer
+    "what set is this" without ever needing that key, not just when the network happens to be
+    down. Any other error (bad key, server bug) is a real problem and must not be silently masked
+    by a stale catalogue hit.
     """
     cached = await collection_repo.cached_set(session, query)
     if cached is None and "-" not in query:
@@ -112,7 +115,7 @@ async def _resolve(session, query: str) -> ResolveOut:
         client = await rebrickable.client_for(session)
         resolution = await client.resolve_set(query)
     except ApiError as error:
-        if error.status_code in (503, 504):
+        if error.status_code in (503, 504, 412):
             offline = await catalog.lookup_catalog_set(session, query) or await catalog.lookup_catalog_set(
                 session, f"{query}-1"
             )
