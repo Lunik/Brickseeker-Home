@@ -42,6 +42,8 @@ OperationStatus = Literal[
 ChallengeResolution = Literal["continue", "skip"]
 
 _MAX_CAPTCHA_ATTEMPTS = 3
+_AUTOMATIC_CAPTCHA_RETRIES = 2
+_AUTOMATIC_CAPTCHA_RETRY_DELAY_SECONDS = 1
 _COOKIE_KEY_PREFIX = "retailer_session:"
 _SPECIAL_KEYS = {
     "Backspace",
@@ -79,9 +81,14 @@ def _blocked_collector(target: dict[str, BlockedRetailer]):
     return capture
 
 
-def _status_collector(target: list[prices.SourceProgressStatus]):
-    def capture(_source: str, status: prices.SourceProgressStatus) -> None:
+def _status_collector(
+    target: list[prices.SourceProgressStatus],
+    operation: InteractiveOperation | None = None,
+):
+    def capture(source: str, status: prices.SourceProgressStatus) -> None:
         target.append(status)
+        if operation is not None:
+            operation.record_source_progress(source, status)
 
     return capture
 
@@ -111,6 +118,7 @@ class InteractiveOperation:
     current_challenge_id: str | None = None
     captcha_required_sources: list[str] = field(default_factory=list)
     resolved_sources: list[str] = field(default_factory=list)
+    active_sources: list[str] = field(default_factory=list)
     warning: str | None = None
     error: str | None = None
     completed_at: datetime | None = None
@@ -125,6 +133,7 @@ class InteractiveOperation:
             "updatedAt": self.updated_at,
             "captchaRequiredSources": list(self.captcha_required_sources),
             "resolvedSources": list(self.resolved_sources),
+            "activeSources": list(self.active_sources),
             "warning": self.warning,
             "error": self.error,
             "challenge": (
@@ -140,6 +149,14 @@ class InteractiveOperation:
                 else None
             ),
         }
+
+    def record_source_progress(self, source: str, status: prices.SourceProgressStatus) -> None:
+        if status == "started":
+            if source not in self.active_sources:
+                self.active_sources.append(source)
+        else:
+            self.active_sources = [value for value in self.active_sources if value != source]
+        self.updated_at = datetime.now(UTC)
 
 
 class InteractivePriceManager:
@@ -329,6 +346,7 @@ class InteractivePriceManager:
                     lego_set,
                     reconcile=True,
                     on_captcha=_blocked_collector(blocked),
+                    on_progress=operation.record_source_progress,
                     bypass_cooldown=True,
                 )
 
@@ -336,7 +354,14 @@ class InteractivePriceManager:
             operation.updated_at = datetime.now(UTC)
             for source, challenge in blocked.items():
                 try:
-                    await self._resolve_source(operation, lego_set, source, challenge)
+                    remaining = await self._retry_blocked_source(
+                        operation,
+                        lego_set,
+                        source,
+                        challenge,
+                    )
+                    if remaining is not None:
+                        await self._resolve_source(operation, lego_set, source, remaining)
                 except asyncio.CancelledError:
                     raise
                 except InteractiveChallengeUnavailable:
@@ -374,9 +399,53 @@ class InteractivePriceManager:
             )
         finally:
             operation.current_challenge_id = None
+            operation.active_sources.clear()
             operation.completed_at = datetime.now(UTC)
             operation.updated_at = operation.completed_at
             self._active_by_set.pop(operation.set_num, None)
+
+    async def _retry_blocked_source(
+        self,
+        operation: InteractiveOperation,
+        lego_set: LegoSet,
+        source: str,
+        blocked: BlockedRetailer,
+    ) -> BlockedRetailer | None:
+        """Give a transient retailer block two quiet retries before asking the user for help."""
+        current = blocked
+        for attempt in range(_AUTOMATIC_CAPTCHA_RETRIES):
+            retry: dict[str, BlockedRetailer] = {}
+            retry_status: list[prices.SourceProgressStatus] = []
+
+            async with session_scope() as session:
+                await prices.refresh_retail_source(
+                    session,
+                    lego_set,
+                    source,
+                    on_captcha=_blocked_collector(retry),
+                    on_progress=_status_collector(retry_status, operation),
+                )
+
+            if source not in retry and "completed" in retry_status:
+                cookies = await browser.cookies_for_url(current.url)
+                await self._save_cookies(source, current.url, cookies)
+                prices.clear_captcha_requirement(source)
+                operation.captcha_required_sources = [
+                    value for value in operation.captcha_required_sources if value != source
+                ]
+                operation.resolved_sources.append(source)
+                operation.updated_at = datetime.now(UTC)
+                return None
+            if source not in retry:
+                operation.warning = (
+                    f"{source_display_name(source)} n'a pas pu être vérifié après ses nouvelles tentatives."
+                )
+                return None
+
+            current = retry[source]
+            if attempt < _AUTOMATIC_CAPTCHA_RETRIES - 1:
+                await asyncio.sleep(_AUTOMATIC_CAPTCHA_RETRY_DELAY_SECONDS)
+        return current
 
     async def _resolve_source(
         self,
@@ -428,35 +497,9 @@ class InteractivePriceManager:
 
             await self._close_challenge(challenge)
 
-            retry: dict[str, BlockedRetailer] = {}
-            retry_status: list[prices.SourceProgressStatus] = []
-
-            async with session_scope() as session:
-                await prices.refresh_retail_source(
-                    session,
-                    lego_set,
-                    source,
-                    on_captcha=_blocked_collector(retry),
-                    on_progress=_status_collector(retry_status),
-                )
-            if source not in retry and "completed" in retry_status:
-                cookies = await browser.cookies_for_url(current.url)
-                await self._save_cookies(source, current.url, cookies)
-                prices.clear_captcha_requirement(source)
-                operation.captcha_required_sources = [
-                    value
-                    for value in operation.captcha_required_sources
-                    if value != source
-                ]
-                operation.resolved_sources.append(source)
-                operation.updated_at = datetime.now(UTC)
+            current = await self._retry_blocked_source(operation, lego_set, source, current)
+            if current is None:
                 return
-            if source not in retry:
-                operation.warning = (
-                    f"{source_display_name(source)} n'a pas pu être vérifié après le CAPTCHA."
-                )
-                return
-            current = retry[source]
 
         operation.warning = (
             f"Le CAPTCHA {source_display_name(source)} n'a pas été validé."

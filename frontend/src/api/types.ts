@@ -318,6 +318,7 @@ export interface InteractivePriceRefresh {
   updatedAt: string
   captchaRequiredSources: PriceSourceKey[]
   resolvedSources: PriceSourceKey[]
+  activeSources: string[]
   warning: string | null
   error: string | null
   challenge: PriceCaptchaChallenge | null

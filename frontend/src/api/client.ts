@@ -93,6 +93,18 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string, body?: unknown) => request<T>(path, { method: 'DELETE', body }),
   upload: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form, raw: true }),
+  /**
+   * Requests cancellation while a page is being dismissed. `keepalive` gives the browser a chance
+   * to deliver it after the document has started unloading; the authenticated session cookie stays
+   * same-origin and is never exposed to the caller.
+   */
+  cancelOnPageExit: (path: string) => {
+    void fetch(`/api${path}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(() => reportRequestOutcome(false))
+  },
 }
 
 /**

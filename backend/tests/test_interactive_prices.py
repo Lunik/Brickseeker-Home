@@ -38,7 +38,7 @@ def _page() -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_explicit_refresh_waits_for_captcha_then_retries_only_source() -> None:
+async def test_explicit_refresh_retries_a_blocked_source_before_requesting_captcha() -> None:
     manager = InteractivePriceManager()
     page = _page()
     lego_set = LegoSet("76924-1", "Mercedes", 2024, 1, 808, None, None)
@@ -50,8 +50,18 @@ async def test_explicit_refresh_waits_for_captcha_then_retries_only_source() -> 
         )
         return {}
 
+    retry_attempts = 0
+
     async def retry_refresh(_session, _target, source, **kwargs):
+        nonlocal retry_attempts
+        retry_attempts += 1
         kwargs["on_progress"](source, "started")
+        if retry_attempts <= 2:
+            kwargs["on_captcha"](
+                source,
+                ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search"),
+            )
+            return None
         kwargs["on_progress"](source, "completed")
         return None
 
@@ -94,6 +104,7 @@ async def test_explicit_refresh_waits_for_captcha_then_retries_only_source() -> 
             new=AsyncMock(),
         ),
         patch.object(interactive_prices.prices, "clear_captcha_requirement"),
+        patch.object(interactive_prices, "_AUTOMATIC_CAPTCHA_RETRY_DELAY_SECONDS", 0),
     ):
         started = manager.start(lego_set.set_num)
         operation_id = str(started["operationId"])
@@ -105,6 +116,7 @@ async def test_explicit_refresh_waits_for_captcha_then_retries_only_source() -> 
         else:
             pytest.fail("CAPTCHA state was never published")
 
+        assert retry_source.await_count == 2
         challenge = state["challenge"]
         assert isinstance(challenge, dict)
         manager.resolve_challenge(str(challenge["challengeId"]), "continue")
@@ -116,8 +128,78 @@ async def test_explicit_refresh_waits_for_captcha_then_retries_only_source() -> 
     assert manager.state(operation_id)["status"] == "completed"
     assert manager.state(operation_id)["captchaRequiredSources"] == []
     assert manager.state(operation_id)["resolvedSources"] == ["fnac"]
-    retry_source.assert_awaited_once()
+    assert retry_source.await_count == 3
     save_cookies.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_cancelling_an_open_captcha_marks_its_operation_cancelled() -> None:
+    manager = InteractivePriceManager()
+    page = _page()
+    lego_set = LegoSet("76924-1", "Mercedes", 2024, 1, 808, None, None)
+
+    async def blocked_refresh(_session, _target, *args, **kwargs):
+        kwargs["on_captcha"](
+            "fnac",
+            ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search"),
+        )
+        return None
+
+    with (
+        patch.object(manager, "_lego_set", new=AsyncMock(return_value=lego_set)),
+        patch.object(interactive_prices, "session_scope", _session_scope),
+        patch.object(
+            interactive_prices.prices,
+            "is_background_refreshing",
+            return_value=False,
+        ),
+        patch.object(
+            interactive_prices.prices,
+            "refresh_set_prices",
+            side_effect=blocked_refresh,
+        ),
+        patch.object(
+            interactive_prices.prices,
+            "refresh_retail_source",
+            side_effect=blocked_refresh,
+        ),
+        patch.object(
+            interactive_prices.browser,
+            "open_interactive_page",
+            new=AsyncMock(return_value=page),
+        ),
+        patch.object(
+            interactive_prices.browser,
+            "close_interactive_page",
+            new=AsyncMock(),
+        ) as close_page,
+        patch.object(interactive_prices, "_AUTOMATIC_CAPTCHA_RETRY_DELAY_SECONDS", 0),
+    ):
+        operation_id = str(manager.start(lego_set.set_num)["operationId"])
+        for _ in range(20):
+            if manager.state(operation_id)["status"] == "captchaRequired":
+                break
+            await asyncio.sleep(0)
+        else:
+            pytest.fail("CAPTCHA state was never published")
+
+        await manager.cancel(operation_id)
+
+    assert manager.state(operation_id)["status"] == "cancelled"
+    close_page.assert_awaited_once_with(page)
+
+
+def test_interactive_operation_exposes_only_currently_loading_sources() -> None:
+    now = datetime.now(UTC)
+    operation = InteractiveOperation("operation", "76924-1", "running", now, now)
+
+    operation.record_source_progress("fnac", "started")
+    operation.record_source_progress("bricklink", "started")
+    assert operation.as_dict(None)["activeSources"] == ["fnac", "bricklink"]
+
+    operation.record_source_progress("fnac", "captcha_required")
+    operation.record_source_progress("bricklink", "completed")
+    assert operation.as_dict(None)["activeSources"] == []
 
 
 @pytest.mark.asyncio

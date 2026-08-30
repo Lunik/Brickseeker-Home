@@ -74,8 +74,11 @@ export default function SetDetailPage() {
   const [refreshBlocked, setRefreshBlocked] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [interactiveOperationId, setInteractiveOperationId] = useState<string | null>(null)
+  const activeOperationId = useRef<string | null>(null)
+  const currentSetNum = useRef(setNum)
   const captchaWindow = useRef<Window | null>(null)
   const displayedChallengeId = useRef<string | null>(null)
+  const lastInteractiveDetailRefresh = useRef(0)
   const [showPaidPrice, setShowPaidPrice] = useState(false)
   const [showScanPrice, setShowScanPrice] = useState(false)
   const [showLists, setShowLists] = useState(false)
@@ -86,6 +89,17 @@ export default function SetDetailPage() {
   // one set must not keep showing the placeholder once the pager moves to a set whose image is fine.
   const [heroImageFailed, setHeroImageFailed] = useState(false)
   useEffect(() => setHeroImageFailed(false), [setNum])
+  useEffect(() => {
+    currentSetNum.current = setNum
+    setInteractiveOperationId(null)
+    setRefreshError(null)
+    return () => {
+      const operationId = activeOperationId.current
+      if (!operationId) return
+      activeOperationId.current = null
+      void api.post(`/prices/interactive/${encodeURIComponent(operationId)}/cancel`)
+    }
+  }, [setNum])
 
   // When the background refresh a stale set's `GET` triggers hasn't landed yet, tracks how long
   // it's been polling for — paging (`replace`) reuses this component, so this must reset per set
@@ -143,21 +157,14 @@ export default function SetDetailPage() {
     mutationFn: () =>
       api.post<InteractivePriceRefresh>(`/prices/interactive/start/${encodeURIComponent(setNum)}`),
     onSuccess: (operation) => {
-      setInteractiveOperationId(operation.operationId)
-      const returnTo = `/set/${encodeURIComponent(setNum)}`
-      const waitingUrl = (
-        `/captcha/waiting?operationId=${encodeURIComponent(operation.operationId)}`
-        + `&returnTo=${encodeURIComponent(returnTo)}`
-      )
-      if (captchaWindow.current && !captchaWindow.current.closed) {
-        captchaWindow.current.location.replace(waitingUrl)
-      } else {
-        window.location.assign(waitingUrl)
+      if (currentSetNum.current !== operation.setNum) {
+        void api.post(`/prices/interactive/${encodeURIComponent(operation.operationId)}/cancel`)
+        return
       }
+      activeOperationId.current = operation.operationId
+      setInteractiveOperationId(operation.operationId)
     },
     onError: (caught) => {
-      captchaWindow.current?.close()
-      captchaWindow.current = null
       setRefreshError(caught instanceof Error ? caught.message : 'Actualisation impossible')
     },
   })
@@ -186,27 +193,21 @@ export default function SetDetailPage() {
       operation.status !== 'completed'
       && operation.status !== 'failed'
       && operation.status !== 'cancelled'
-      && captchaWindow.current?.closed
+      && Date.now() - lastInteractiveDetailRefresh.current >= 1_500
     ) {
+      lastInteractiveDetailRefresh.current = Date.now()
+      void queryClient.invalidateQueries({ queryKey: key })
+    }
+
+    if (operation.status !== 'completed' && operation.status !== 'failed'
+      && operation.status !== 'cancelled' && captchaWindow.current?.closed) {
       captchaWindow.current = null
       displayedChallengeId.current = null
+      activeOperationId.current = null
       setRefreshError('La fenêtre CAPTCHA a été fermée. Relancez l’actualisation pour réessayer.')
       void api.post(`/prices/interactive/${encodeURIComponent(operation.operationId)}/cancel`)
       setInteractiveOperationId(null)
       return
-    }
-
-    const challengeId = operation.challenge?.challengeId
-    if (challengeId && displayedChallengeId.current !== challengeId) {
-      if (!captchaWindow.current || captchaWindow.current.closed) {
-        setRefreshError(
-          'La fenêtre CAPTCHA a été fermée. Relancez l’actualisation pour reprendre la validation.',
-        )
-        void api.post(`/prices/interactive/${encodeURIComponent(operation.operationId)}/cancel`)
-        return
-      }
-      displayedChallengeId.current = challengeId
-      captchaWindow.current.location.replace(`/captcha/${encodeURIComponent(challengeId)}`)
     }
 
     if (
@@ -224,6 +225,25 @@ export default function SetDetailPage() {
     void queryClient.invalidateQueries({ queryKey: key })
     setInteractiveOperationId(null)
   }, [interactiveRefresh.data, queryClient, setNum])
+
+  const openCaptcha = (challengeId: string) => {
+    const returnTo = `/set/${encodeURIComponent(setNum)}`
+    const captchaUrl = (
+      `/captcha/${encodeURIComponent(challengeId)}?returnTo=${encodeURIComponent(returnTo)}`
+    )
+    const popup = window.open(
+      captchaUrl,
+      'brickseeker-price-captcha',
+      'popup,width=1100,height=820,resizable=yes,scrollbars=no',
+    )
+    if (popup) {
+      captchaWindow.current = popup
+      displayedChallengeId.current = challengeId
+      return
+    }
+    navigate(captchaUrl)
+  }
+  const activeCaptchaChallenge = interactiveRefresh.data?.challenge
   const setWishlist = useMutation({
     mutationFn: (wanted: boolean) =>
       wanted
@@ -499,6 +519,7 @@ export default function SetDetailPage() {
           || interactiveRefresh.data?.status === 'running'
           || interactiveRefresh.data?.status === 'captchaRequired'
         }
+        activeSources={interactiveRefresh.data?.activeSources ?? []}
         onRefresh={() => {
           // Skip the attempt entirely rather than firing it and waiting out a timeout — the
           // backend is a self-hosted LAN server, not a CDN, and won't answer any faster for
@@ -509,18 +530,29 @@ export default function SetDetailPage() {
           }
           setRefreshBlocked(false)
           setRefreshError(null)
-          const popup = window.open(
-            '/captcha/waiting',
-            'brickseeker-price-captcha',
-            'popup,width=1100,height=820,resizable=yes,scrollbars=no',
-          )
-          captchaWindow.current = popup
+          captchaWindow.current = null
           displayedChallengeId.current = null
+          lastInteractiveDetailRefresh.current = 0
           refresh.mutate()
         }}
       />
       {refreshBlocked && <ErrorLabel message="Hors-ligne : actualisation impossible pour le moment." />}
       {refreshError && <ErrorLabel message={refreshError} />}
+      {activeCaptchaChallenge && (
+        <section className="card flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-muted">
+            {activeCaptchaChallenge.sourceName} demande une validation après plusieurs
+            tentatives automatiques.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => openCaptcha(activeCaptchaChallenge.challengeId)}
+          >
+            Résoudre le CAPTCHA
+          </button>
+        </section>
+      )}
 
       <PriceHistoryChart history={data.priceHistory} soldListings={data.soldListings} />
 
