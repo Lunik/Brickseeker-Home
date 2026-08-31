@@ -188,6 +188,12 @@ class PriceUpdater:
                 self._state.is_running = False
                 self._state.phase = None
             return "cancelled"
+        if self._tasks:
+            # A worker is already draining `self._state.queue`, which the branch above just grew —
+            # it will pick up these sets on its own. Spawning a second `_run` here would have two
+            # loops popping the same list concurrently: sets scraped twice, others skipped, and the
+            # "one set at a time" politeness the manual batch exists for broken in the process.
+            return "started"
         task = asyncio.create_task(self._run())
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
