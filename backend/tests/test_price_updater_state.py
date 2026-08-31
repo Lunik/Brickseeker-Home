@@ -82,6 +82,51 @@ async def test_immediate_cancel_cannot_leave_batch_stuck_running() -> None:
     assert updater.state["hasPendingQueue"] is True
 
 
+@pytest.mark.asyncio
+async def test_starting_while_running_merges_the_queue_instead_of_racing_a_second_worker() -> None:
+    """A second selection while the first is still in flight (the multiselect "refresh prices"
+
+    case, since the button lives on every list screen) must grow the shared queue rather than
+    spawn a second `_run` loop — two loops popping the same list race `queue.pop(0)` against each
+    other, so some of the newly selected sets are skipped or double-processed instead of all of
+    them running.
+    """
+    updater = PriceUpdater()
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+
+    async def slow_first(_session, lego_set, **_kwargs):
+        first_started.set()
+        await release_first.wait()
+        return {}
+
+    with (
+        patch.object(updater, "_build_queue", new=AsyncMock(return_value=["first"])),
+        patch("app.services.price_updater.prices.refresh_set_prices", side_effect=slow_first),
+        patch("app.services.price_updater.settings.scrape_delay_between_sets", 0),
+    ):
+        assert await updater.start(["first"]) == "started"
+        await asyncio.wait_for(first_started.wait(), timeout=0.5)
+        assert len(updater._tasks) == 1
+
+        # A multiselect refresh for two more sets arrives while "first" is still being scraped.
+        with patch.object(updater, "_build_queue", new=AsyncMock(return_value=["second", "third"])):
+            assert await updater.start(["second", "third"]) == "started"
+
+        assert len(updater._tasks) == 1, "a second worker must not be spawned onto the shared queue"
+        assert updater.state["hasPendingQueue"] is True
+        assert "second" in updater._state.queue
+        assert "third" in updater._state.queue
+
+        release_first.set()
+        task = updater._task
+        assert task is not None
+        await task
+
+    assert updater.state["done"] == 3
+    assert updater.state["isRunning"] is False
+
+
 def test_source_timeout_is_reported_as_non_fatal_warning() -> None:
     updater = PriceUpdater()
 
