@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { CollectionPayload, SetRow } from '../api/types'
 import ListConditionsSheet from '../components/ListConditionsSheet'
+import PriceBatchBanner from '../components/PriceBatchBanner'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import Icon from '../components/Icon'
 import { EmptyState, Sheet } from '../components/ui'
@@ -114,11 +115,14 @@ export default function CollectionPage() {
           ) : undefined
         }
         header={
-          data?.lastSyncedAt ? (
-            <p className="px-1 text-[13px] text-ink-faint">
-              Synchronisé {formatDateTime(data.lastSyncedAt)}
-            </p>
-          ) : undefined
+          <>
+            <PriceBatchBanner />
+            {data?.lastSyncedAt && (
+              <p className="px-1 text-[13px] text-ink-faint">
+                Synchronisé {formatDateTime(data.lastSyncedAt)}
+              </p>
+            )}
+          </>
         }
         emptyState={
           !data?.isLinked ? (

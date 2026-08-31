@@ -6,6 +6,7 @@ import { api, query } from '../api/client'
 import type { CatalogStatus, ListCondition, PriceSourceKey, SetRow, SortOption, StoreAvailability } from '../api/types'
 import Icon from '../components/Icon'
 import ListPickerSheet from '../components/ListPickerSheet'
+import PriceBatchBanner from '../components/PriceBatchBanner'
 import SetListScreen from '../components/SetListScreen'
 import { EmptyState, ErrorLabel, Spinner } from '../components/ui'
 import { useSetActions } from '../hooks/useSetActions'
@@ -215,7 +216,9 @@ export default function NewSetsPage() {
           />
         }
         header={
-          <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] text-ink-faint">
+          <>
+            <PriceBatchBanner />
+            <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] text-ink-faint">
             <span>
               {total} set{total > 1 ? 's' : ''}
               {data?.isFiltered ? ' depuis la première synchronisation' : ' au catalogue'}
@@ -249,6 +252,7 @@ export default function NewSetsPage() {
               </span>
             )}
           </div>
+          </>
         }
       />
       <ListPickerSheet
