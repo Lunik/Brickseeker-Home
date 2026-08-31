@@ -8,6 +8,7 @@ import { useSetActions } from '../hooks/useSetActions'
 import Icon from '../components/Icon'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import ListPickerSheet from '../components/ListPickerSheet'
+import PriceBatchBanner from '../components/PriceBatchBanner'
 import { EmptyState, ErrorLabel, ProgressBar, Sheet, Spinner } from '../components/ui'
 
 const WISHLIST_SORTS: SortOption[] = ['deal', 'price', 'name', 'year', 'partCount']
@@ -90,6 +91,7 @@ export default function WishlistPage() {
         rows={data?.sets ?? []}
         isLoading={isLoading}
         error={error ? (error as Error).message : null}
+        header={<PriceBatchBanner />}
         bulkActions={actions}
         onOpenSet={(row, visible) =>
           navigate(`/set/${encodeURIComponent(row.setNum)}`, {

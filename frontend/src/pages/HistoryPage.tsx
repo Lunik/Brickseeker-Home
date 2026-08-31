@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { SetRow } from '../api/types'
 import ListPickerSheet from '../components/ListPickerSheet'
+import PriceBatchBanner from '../components/PriceBatchBanner'
 import ScanMap from '../components/ScanMap'
 import SetListScreen, { type BulkAction } from '../components/SetListScreen'
 import Icon from '../components/Icon'
@@ -76,7 +77,12 @@ export default function HistoryPage() {
       rows={data?.sets ?? []}
       isLoading={isLoading}
       error={error ? (error as Error).message : null}
-      header={<PendingSyncSection />}
+      header={
+        <>
+          <PriceBatchBanner />
+          <PendingSyncSection />
+        </>
+      }
       showOwnedFilter
       subtitleFor={(row) =>
         [row.lastScannedAt ? `Scanné ${formatRelative(row.lastScannedAt)}` : null, row.themeName]
