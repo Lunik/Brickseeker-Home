@@ -188,9 +188,6 @@ export default function SettingsPage() {
 
   async function startPriceBatch(payload: Record<string, unknown>) {
     const { status } = await api.post<{ status: string }>('/prices/batch/start', payload)
-    if (status === 'busy') {
-      throw new Error('Une actualisation ou une progression interrompue existe déjà.')
-    }
     if (status === 'empty') {
       throw new Error('Aucun set ne nécessite cette actualisation.')
     }

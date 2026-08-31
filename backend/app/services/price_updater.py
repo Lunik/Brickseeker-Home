@@ -82,9 +82,13 @@ class PriceUpdater:
     def __init__(self) -> None:
         self._state = BatchState()
         self._cancel_requested = False
-        self._task: asyncio.Task[None] | None = None
+        self._tasks: set[asyncio.Task[None]] = set()
         self._watch_running = False
         self._run_id = 0
+
+    @property
+    def _task(self) -> asyncio.Task[None] | None:
+        return next(iter(self._tasks), None)
 
     # --- Manual batch ----------------------------------------------------------------
 
@@ -115,17 +119,8 @@ class PriceUpdater:
             logger.warning("Date de dernière actualisation illisible : %r", stored)
 
     async def start(self, set_nums: list[str] | None = None, *, only_missing: bool = False) -> str:
-        """Kicks off a run and returns immediately — the UI polls `state`.
-
-        Returns "busy" when another run (or the background pass) is already in flight: starting now
-        would silently hijack it.
-        """
-        if self._state.is_running or self._watch_running:
-            return "busy"
+        """Kicks off a run and returns immediately — the UI polls `state`."""
         resuming = bool(self._state.queue) and not set_nums and not only_missing
-        if self._state.queue and not resuming:
-            # A selection or "missing only" run must not silently discard a paused full queue.
-            return "busy"
 
         previous_done = self._state.done
         previous_total = self._state.total
@@ -136,62 +131,66 @@ class PriceUpdater:
         previous_completed_at = self._state.last_completed_at
         previous_warning = self._state.warning
 
-        # Claimed synchronously, before the first `await` below: two `POST /prices/batch/start`
-        # calls arriving close together (the button lives on six different screens) both passed
-        # the check above while this was still False, then both built a queue and both started a
-        # `_run` — two loops popping the same queue, double-incrementing `done`, scraping some sets
-        # twice and racing each other's `finally` for `last_completed_at`. Nothing can run between
-        # this line and the check above, so nothing can observe the gap.
         self._run_id += 1
-        self._state.is_running = True
-        self._state.phase = "preparing"
-        self._state.warning = None
-        self._state.error = None
-        self._state.cancel_requested = False
-        self._state.last_progress_at = datetime.now(UTC)
         self._cancel_requested = False
 
         try:
             async with session_scope() as session:
                 queue = await self._build_queue(session, set_nums, only_missing)
         except BaseException as error:
-            self._state.is_running = False
-            self._state.phase = None
+            if not self._tasks:
+                self._state.is_running = False
+                self._state.phase = None
             self._state.error = str(error)
             raise
 
         if not queue:
-            self._state.is_running = False
-            self._state.phase = None
-            self._state.last_completed_at = datetime.now(UTC)
-            self._state.last_progress_at = self._state.last_completed_at
+            if not self._tasks:
+                self._state.is_running = False
+                self._state.phase = None
+                self._state.last_completed_at = datetime.now(UTC)
+                self._state.last_progress_at = self._state.last_completed_at
             return "empty"
 
         mode = previous_mode if resuming else (
             "selection" if set_nums else ("missing" if only_missing else "full")
         )
-        done = previous_done if resuming else 0
-        total = max(previous_total, done + len(queue)) if resuming else len(queue)
-        now = datetime.now(UTC)
-        self._state = BatchState(
-            is_running=True,
-            done=done,
-            total=total,
-            failed=previous_failed if resuming else 0,
-            source_failures=previous_source_failures if resuming else 0,
-            captcha_required_sources=previous_captcha_sources if resuming else [],
-            phase="fetching",
-            mode=mode,
-            last_completed_at=previous_completed_at,
-            warning=previous_warning if resuming else None,
-            last_progress_at=now,
-            queue=queue,
-        )
+
+        if not self._tasks:
+            done = previous_done if resuming else 0
+            total = max(previous_total, done + len(queue)) if resuming else len(queue)
+            now = datetime.now(UTC)
+            self._state = BatchState(
+                is_running=True,
+                done=done,
+                total=total,
+                failed=previous_failed if resuming else 0,
+                source_failures=previous_source_failures if resuming else 0,
+                captcha_required_sources=previous_captcha_sources if resuming else [],
+                phase="fetching",
+                mode=mode,
+                last_completed_at=previous_completed_at,
+                warning=previous_warning if resuming else None,
+                last_progress_at=now,
+                queue=list(queue),
+            )
+        else:
+            for item in queue:
+                if item not in self._state.queue:
+                    self._state.queue.append(item)
+            self._state.total = self._state.done + len(self._state.queue) + (1 if self._state.current_set_num else 0)
+            self._state.is_running = True
+            self._state.phase = "fetching"
+            self._state.last_progress_at = datetime.now(UTC)
+
         if self._cancel_requested:
-            self._state.is_running = False
-            self._state.phase = None
+            if not self._tasks:
+                self._state.is_running = False
+                self._state.phase = None
             return "cancelled"
-        self._task = asyncio.create_task(self._run())
+        task = asyncio.create_task(self._run())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         return "started"
 
     async def _build_queue(
@@ -231,7 +230,7 @@ class PriceUpdater:
 
     async def cancel_preserving_progress(self) -> None:
         """Cancels the in-flight set now; its queue entry survives so the next start resumes it."""
-        if not self._state.is_running:
+        if not self._state.is_running and not self._tasks:
             return
         self._cancel_requested = True
         cancelled_run_id = self._run_id
@@ -239,32 +238,24 @@ class PriceUpdater:
         self._state.phase = "cancelling"
         self._state.last_progress_at = datetime.now(UTC)
 
-        task = self._task
-        if task is None:
-            # Queue construction is still running in the start request. It observes
-            # `_cancel_requested` before creating the worker task.
-            return
-
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        finally:
-            if self._run_id == cancelled_run_id:
-                # A task cancelled before its coroutine gets its first timeslice never enters `_run`
-                # and therefore cannot execute that method's `finally`; normalize the public state
-                # here too, but never touch a newer run that started while this await was suspended.
-                if self._task is task:
-                    self._task = None
-                self._state.is_running = False
-                self._state.current_set_num = None
-                self._state.current_set_started_at = None
-                self._state.pending_sources.clear()
-                self._state.phase = None
-                self._state.cancel_requested = False
-                self._state.last_progress_at = datetime.now(UTC)
-                self._cancel_requested = False
+        tasks = list(self._tasks)
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        self._tasks.clear()
+        if self._run_id == cancelled_run_id:
+            self._state.is_running = False
+            self._state.current_set_num = None
+            self._state.current_set_started_at = None
+            self._state.pending_sources.clear()
+            self._state.phase = None
+            self._state.cancel_requested = False
+            self._state.last_progress_at = datetime.now(UTC)
+            self._cancel_requested = False
 
     async def shutdown(self) -> None:
         await self.cancel_preserving_progress()
@@ -350,16 +341,15 @@ class PriceUpdater:
             self._state.error = f"Lot interrompu : {error}"
             logger.exception("Le lot de prix s'est arrêté de façon inattendue")
         finally:
-            self._state.is_running = False
-            self._state.current_set_num = None
-            self._state.current_set_started_at = None
-            self._state.pending_sources.clear()
-            self._state.phase = None
-            self._state.cancel_requested = False
-            self._state.last_progress_at = datetime.now(UTC)
-            self._cancel_requested = False
-            if self._task is current_task:
-                self._task = None
+            if not self._tasks or len(self._tasks) <= 1:
+                self._state.is_running = False
+                self._state.current_set_num = None
+                self._state.current_set_started_at = None
+                self._state.pending_sources.clear()
+                self._state.phase = None
+                self._state.cancel_requested = False
+                self._state.last_progress_at = datetime.now(UTC)
+                self._cancel_requested = False
 
     def _on_source_progress(self, source: str, status: prices.SourceProgressStatus) -> None:
         self._state.last_progress_at = datetime.now(UTC)
@@ -403,7 +393,7 @@ class PriceUpdater:
         set costs ≥2s (new + used). The manual batch's delay exists for the browser scrapes and
         doesn't apply here — adding it would pay the same politeness twice.
         """
-        if self._watch_running or self._state.is_running:
+        if self._watch_running:
             return 0
 
         async with session_scope() as session:

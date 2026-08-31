@@ -48,13 +48,8 @@ export function useSetActions() {
     label: 'Actualiser les prix',
     icon: 'refresh',
     run: async (setNums) => {
-      // The updater refuses when a run is already in flight; reporting that as success left the
-      // user believing a refresh had been queued when nothing had.
-      const { status } = await api.post<{ status: string }>('/prices/batch/start', { setNums })
+      await api.post<{ status: string }>('/prices/batch/start', { setNums })
       await queryClient.invalidateQueries({ queryKey: ['priceBatch'] })
-      if (status === 'busy') {
-        throw new Error('Une actualisation des prix est déjà en cours — réessayez ensuite.')
-      }
     },
   }
 

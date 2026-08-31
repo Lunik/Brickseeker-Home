@@ -116,8 +116,6 @@ async def batch_status() -> dict[str, object]:
 async def batch_start(payload: BatchStartIn) -> dict[str, str]:
     """Kicks off the batch and returns at once — a full collection takes many minutes by design,
     since it is sequential to stay polite to the scraped sites. The UI polls `/batch/status`."""
-    if interactive_price_manager.has_active_operation:
-        return {"status": "busy"}
     status = await price_updater.start(payload.set_nums, only_missing=payload.only_missing)
     return {"status": status}
 
@@ -167,8 +165,6 @@ async def start_interactive_refresh(
 ) -> dict[str, object]:
     if await collection_repo.cached_set(session, set_num) is None:
         raise ApiError("Ce set n'est pas encore en cache", 404)
-    if price_updater.state["isRunning"] or price_updater.is_watch_running:
-        raise ApiError("Une actualisation en lot est déjà en cours", 409)
     try:
         return interactive_price_manager.start(set_num)
     except RuntimeError as error:
