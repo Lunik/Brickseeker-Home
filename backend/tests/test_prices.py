@@ -76,10 +76,14 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         await asyncio.sleep(0.30)
         return None
 
-    async def fake_fnac(target):
+    async def fake_smyth_toys(target):
         del target
         await asyncio.sleep(0.08)
-        return PriceQuote(source=PriceSource.FNAC, amount=26.0, fetched_at=datetime.now(UTC))
+        return PriceQuote(
+            source=PriceSource.SMYTH_TOYS,
+            amount=26.0,
+            fetched_at=datetime.now(UTC),
+        )
 
     async def fake_alerts(session_arg, target):
         del session_arg, target
@@ -90,12 +94,10 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         patch.object(prices.amazon, "fetch_price", side_effect=fake_amazon),
         patch.object(prices.cdiscount, "fetch_price", side_effect=fake_cdiscount),
         patch.object(prices.cultura, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.fnac, "fetch_price", side_effect=fake_fnac),
+        patch.object(prices.smyth_toys, "fetch_price", side_effect=fake_smyth_toys),
         patch.object(prices.king_jouet, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.la_grande_recre, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.joueclub, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.carrefour, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.intermarche, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.collection_repo, "cache_prices", side_effect=cache_prices),
         patch.object(prices.alerts, "evaluate_alerts", new=fake_alerts),
         patch.object(prices.collection_repo, "mark_prices_fetched", new=AsyncMock()),
@@ -112,10 +114,10 @@ async def test_refresh_set_prices_persists_partial_results_while_fetching() -> N
         await asyncio.sleep(0.05)
         assert any({"amazon"} <= sources for sources in persisted)
         result = await task
-        assert any({"fnac"} <= sources for sources in persisted)
+        assert any({"smythToys"} <= sources for sources in persisted)
         assert {quote.source for quote in result["quotes"]} >= {
             PriceSource.AMAZON,
-            PriceSource.FNAC,
+            PriceSource.SMYTH_TOYS,
             PriceSource.BRICKLINK_NEW,
         }
 
@@ -164,16 +166,20 @@ async def test_browser_sources_are_globally_bounded() -> None:
         patch.object(prices.amazon, "fetch_price", side_effect=web_source),
         patch.object(prices.cdiscount, "fetch_price", side_effect=web_source),
         patch.object(prices.cultura, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.fnac, "fetch_price", side_effect=web_source),
+        patch.object(prices.smyth_toys, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.king_jouet, "fetch_price", side_effect=web_source),
         patch.object(prices.la_grande_recre, "fetch_price", side_effect=web_source),
         patch.object(prices.joueclub, "fetch_price", side_effect=web_source),
-        patch.object(prices.carrefour, "fetch_price", side_effect=web_source),
-        patch.object(prices.intermarche, "fetch_price", side_effect=web_source),
     ):
         assert await prices.fetch_prices(None, lego_set) == []
 
     assert maximum_active == 2
+
+
+def test_smyths_api_does_not_consume_a_browser_slot() -> None:
+    fetchers = {source: browser_backed for source, _fetch, browser_backed in prices._retail_fetchers()}
+
+    assert fetchers[PriceSource.SMYTH_TOYS.value] is False
 
 
 @pytest.mark.asyncio
@@ -209,12 +215,10 @@ async def test_reconcile_preserves_sources_skipped_by_cooldown() -> None:
         patch.object(prices.amazon, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.cdiscount, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.cultura, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.fnac, "fetch_price", new=AsyncMock(return_value=None)),
+        patch.object(prices.smyth_toys, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.king_jouet, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.la_grande_recre, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.joueclub, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.carrefour, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.intermarche, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.collection_repo, "cache_prices", new=cache),
         patch.object(prices.collection_repo, "mark_prices_fetched", new=AsyncMock()),
         patch.object(prices.alerts, "evaluate_alerts", new=AsyncMock(return_value=[])),
@@ -243,12 +247,10 @@ async def test_cancelling_refresh_cancels_all_source_tasks() -> None:
         patch.object(prices.amazon, "fetch_price", side_effect=stalled),
         patch.object(prices.cdiscount, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.cultura, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.fnac, "fetch_price", new=AsyncMock(return_value=None)),
+        patch.object(prices.smyth_toys, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.king_jouet, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.la_grande_recre, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.joueclub, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.carrefour, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.intermarche, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.collection_repo, "cache_prices", new=AsyncMock()),
         patch.object(prices.collection_repo, "mark_prices_fetched", new=AsyncMock()),
         patch.object(prices.alerts, "evaluate_alerts", new=AsyncMock(return_value=[])),
@@ -296,12 +298,10 @@ async def test_complete_refresh_timeout_includes_persistence() -> None:
         patch.object(prices.amazon, "fetch_price", side_effect=amazon_quote),
         patch.object(prices.cdiscount, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.cultura, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.fnac, "fetch_price", new=AsyncMock(return_value=None)),
+        patch.object(prices.smyth_toys, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.king_jouet, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.la_grande_recre, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.joueclub, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.carrefour, "fetch_price", new=AsyncMock(return_value=None)),
-        patch.object(prices.intermarche, "fetch_price", new=AsyncMock(return_value=None)),
         patch.object(prices.collection_repo, "cache_prices", side_effect=stalled_cache),
         pytest.raises(prices.PriceRefreshTimeout),
     ):

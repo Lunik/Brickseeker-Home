@@ -21,12 +21,10 @@ const NEW_SOURCES: PriceSourceKey[] = [
   'amazon',
   'cdiscount',
   'cultura',
-  'fnac',
+  'smythToys',
   'kingJouet',
   'laGrandeRecre',
   'joueclub',
-  'carrefour',
-  'intermarche',
 ]
 const USED_SOURCES: PriceSourceKey[] = ['bricklinkUsed']
 

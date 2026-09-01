@@ -21,12 +21,10 @@ const SOURCE_COLORS: Record<string, string> = {
   amazon: '#a855f7',
   cdiscount: '#ec4899',
   cultura: '#8b5cf6',
-  fnac: '#ef4444',
+  smythToys: '#ef4444',
   kingJouet: '#f97316',
   laGrandeRecre: '#06b6d4',
   joueclub: '#3b82f6',
-  carrefour: '#2563eb',
-  intermarche: '#dc2626',
 }
 const FALLBACK_COLOR = 'rgb(var(--brand))'
 

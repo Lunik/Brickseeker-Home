@@ -77,12 +77,10 @@ export const SOURCE_LABEL: Record<string, string> = {
   amazon: 'Amazon (neuf)',
   cdiscount: 'Cdiscount (neuf)',
   cultura: 'Cultura (neuf)',
-  fnac: 'Fnac (neuf)',
+  smythToys: 'Smyths Toys (neuf)',
   kingJouet: 'King Jouet (neuf)',
   laGrandeRecre: 'La Grande Récré (neuf)',
   joueclub: 'JouéClub (neuf)',
-  carrefour: 'Carrefour (neuf)',
-  intermarche: 'Intermarché (neuf)',
   legoStore: 'lego.com (officiel)',
 }
 

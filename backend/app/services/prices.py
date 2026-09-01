@@ -24,14 +24,12 @@ from .pricing import PriceQuote, PriceSource, is_minifig
 from .rebrickable import LegoSet
 from .scraping import (
     amazon,
-    carrefour,
     cdiscount,
     cultura,
-    fnac,
-    intermarche,
     joueclub,
     king_jouet,
     la_grande_recre,
+    smyth_toys,
 )
 from .scraping.browser import ScrapeBlocked
 from .scraping.lego_store import LegoStoreError, StorePrice
@@ -120,12 +118,10 @@ def _retail_fetchers() -> tuple[
         (PriceSource.AMAZON.value, amazon.fetch_price, True),
         (PriceSource.CDISCOUNT.value, cdiscount.fetch_price, True),
         (PriceSource.CULTURA.value, cultura.fetch_price, False),
-        (PriceSource.FNAC.value, fnac.fetch_price, True),
+        (PriceSource.SMYTH_TOYS.value, smyth_toys.fetch_price, False),
         (PriceSource.KING_JOUET.value, king_jouet.fetch_price, True),
         (PriceSource.LA_GRANDE_RECRE.value, la_grande_recre.fetch_price, True),
         (PriceSource.JOUECLUB.value, joueclub.fetch_price, True),
-        (PriceSource.CARREFOUR.value, carrefour.fetch_price, True),
-        (PriceSource.INTERMARCHE.value, intermarche.fetch_price, True),
     )
 
 

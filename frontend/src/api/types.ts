@@ -10,12 +10,10 @@ export type PriceSourceKey =
   | 'amazon'
   | 'cdiscount'
   | 'cultura'
-  | 'fnac'
+  | 'smythToys'
   | 'kingJouet'
   | 'laGrandeRecre'
   | 'joueclub'
-  | 'carrefour'
-  | 'intermarche'
 export type StoreAvailability = 'available' | 'outOfStock' | 'retired' | 'unknown'
 export type NonSetKind = 'merchandise' | 'book' | 'exclusive' | 'catalogArtifact'
 

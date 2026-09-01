@@ -55,15 +55,15 @@ Toutes celles de l'app iOS, à l'identique sauf mention contraire.
   - le prix officiel **lego.com**,
   - la moyenne **BrickLink** des ventes réalisées sur 6 mois, neuf et occasion, via l'API Price
     Guide officielle (identifiants BrickLink requis),
-  - des sites marchands (**Amazon**, **Cdiscount**, **Cultura**, **Fnac**, **King Jouet**,
-    **La Grande Récré**, **JouéClub**, **Carrefour**, **Intermarché**) avec accessoires filtrés,
+  - des sites marchands (**Amazon**, **Cdiscount**, **Cultura**, **Smyths Toys**, **King Jouet**,
+    **La Grande Récré**, **JouéClub**) avec accessoires filtrés,
   - avec l'écart en % face au prix lego.com, et un objectif €/pièce configurable qui colore le
     prix en vert ou en rouge.
 
-Les sites marchands gardent le contrôle de leur accès : Fnac et King Jouet peuvent imposer un
-CAPTCHA DataDome, et Intermarché ne publie pas de prix national sans magasin sélectionné. Un blocage
-est détecté puis mis en pause quinze minutes ; il n'immobilise plus chaque set du lot. Les autres
-sources continuent et leurs résultats sont enregistrés dès qu'ils arrivent.
+Les sites marchands gardent le contrôle de leur accès : certains, notamment King Jouet, peuvent
+imposer un CAPTCHA DataDome. Un blocage est détecté puis mis en pause quinze minutes ; il
+n'immobilise plus chaque set du lot. Les autres sources continuent et leurs résultats sont
+enregistrés dès qu'ils arrivent.
 
 Un rafraîchissement lancé explicitement depuis la fiche d'un set ouvre une petite fenêtre d'attente.
 Si un retailer demande un CAPTCHA, cette fenêtre affiche la page Chromium exacte sous forme de

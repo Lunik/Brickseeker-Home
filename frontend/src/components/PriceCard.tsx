@@ -17,12 +17,10 @@ const ROW_ORDER: PriceSourceKey[] = [
   'amazon',
   'cdiscount',
   'cultura',
-  'fnac',
+  'smythToys',
   'kingJouet',
   'laGrandeRecre',
   'joueclub',
-  'carrefour',
-  'intermarche',
 ]
 /**
  * A minifig is only ever sold on BrickLink — never at retail, which is why `resolve_minifig_price`

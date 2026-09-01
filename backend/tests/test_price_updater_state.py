@@ -143,11 +143,11 @@ def test_source_timeout_is_reported_as_non_fatal_warning() -> None:
 def test_captcha_is_reported_without_counting_as_source_failure() -> None:
     updater = PriceUpdater()
 
-    updater._on_source_progress("fnac", "started")
-    updater._on_source_progress("fnac", "captcha_required")
+    updater._on_source_progress("kingJouet", "started")
+    updater._on_source_progress("kingJouet", "captcha_required")
 
     assert updater.state["pendingSources"] == []
-    assert updater.state["captchaRequiredSources"] == ["fnac"]
+    assert updater.state["captchaRequiredSources"] == ["kingJouet"]
     assert updater.state["sourceFailures"] == 0
     assert "CAPTCHA" in str(updater.state["warning"])
 
