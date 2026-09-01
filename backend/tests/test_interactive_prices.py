@@ -45,8 +45,8 @@ async def test_explicit_refresh_retries_a_blocked_source_before_requesting_captc
 
     async def initial_refresh(_session, _target, **kwargs):
         kwargs["on_captcha"](
-            "fnac",
-            ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search"),
+            "kingJouet",
+            ScrapeBlocked("DataDome CAPTCHA", "https://www.king-jouet.com/search"),
         )
         return {}
 
@@ -59,7 +59,7 @@ async def test_explicit_refresh_retries_a_blocked_source_before_requesting_captc
         if retry_attempts <= 2:
             kwargs["on_captcha"](
                 source,
-                ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search"),
+                ScrapeBlocked("DataDome CAPTCHA", "https://www.king-jouet.com/search"),
             )
             return None
         kwargs["on_progress"](source, "completed")
@@ -96,7 +96,7 @@ async def test_explicit_refresh_retries_a_blocked_source_before_requesting_captc
         patch.object(
             interactive_prices.browser,
             "cookies_for_url",
-            new=AsyncMock(return_value=[{"name": "datadome", "domain": ".fnac.com"}]),
+            new=AsyncMock(return_value=[{"name": "datadome", "domain": ".king-jouet.com"}]),
         ),
         patch.object(
             interactive_prices.browser,
@@ -127,7 +127,7 @@ async def test_explicit_refresh_retries_a_blocked_source_before_requesting_captc
 
     assert manager.state(operation_id)["status"] == "completed"
     assert manager.state(operation_id)["captchaRequiredSources"] == []
-    assert manager.state(operation_id)["resolvedSources"] == ["fnac"]
+    assert manager.state(operation_id)["resolvedSources"] == ["kingJouet"]
     assert retry_source.await_count == 3
     save_cookies.assert_awaited_once()
 
@@ -140,8 +140,8 @@ async def test_cancelling_an_open_captcha_marks_its_operation_cancelled() -> Non
 
     async def blocked_refresh(_session, _target, *args, **kwargs):
         kwargs["on_captcha"](
-            "fnac",
-            ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search"),
+            "kingJouet",
+            ScrapeBlocked("DataDome CAPTCHA", "https://www.king-jouet.com/search"),
         )
         return None
 
@@ -193,11 +193,11 @@ def test_interactive_operation_exposes_only_currently_loading_sources() -> None:
     now = datetime.now(UTC)
     operation = InteractiveOperation("operation", "76924-1", "running", now, now)
 
-    operation.record_source_progress("fnac", "started")
+    operation.record_source_progress("kingJouet", "started")
     operation.record_source_progress("bricklink", "started")
-    assert operation.as_dict(None)["activeSources"] == ["fnac", "bricklink"]
+    assert operation.as_dict(None)["activeSources"] == ["kingJouet", "bricklink"]
 
-    operation.record_source_progress("fnac", "captcha_required")
+    operation.record_source_progress("kingJouet", "captcha_required")
     operation.record_source_progress("bricklink", "completed")
     assert operation.as_dict(None)["activeSources"] == []
 
@@ -211,8 +211,8 @@ async def test_captcha_viewer_forwards_frame_pointer_keyboard_and_wheel() -> Non
     challenge = CaptchaSession(
         id="challenge",
         operation_id=operation.id,
-        source="fnac",
-        source_url="https://www.fnac.com/search",
+        source="kingJouet",
+        source_url="https://www.king-jouet.com/search",
         reason="DataDome CAPTCHA",
         page=page,
         created_at=now,
@@ -245,8 +245,8 @@ async def test_challenge_reload_does_not_make_session_look_expired() -> None:
     challenge = CaptchaSession(
         id="challenge",
         operation_id="operation",
-        source="fnac",
-        source_url="https://www.fnac.com/search",
+        source="kingJouet",
+        source_url="https://www.king-jouet.com/search",
         reason="DataDome CAPTCHA",
         page=page,
         created_at=now,
@@ -256,7 +256,7 @@ async def test_challenge_reload_does_not_make_session_look_expired() -> None:
 
     state = await manager.challenge_state(challenge.id)
 
-    assert state["pageTitle"] == "Fnac (neuf)"
+    assert state["pageTitle"] == "King Jouet (neuf)"
     assert state["pageUrl"] == challenge.source_url
 
 
@@ -281,22 +281,22 @@ async def test_background_block_records_captcha_without_raising() -> None:
     statuses: list[tuple[str, str]] = []
 
     async def blocked():
-        raise ScrapeBlocked("DataDome CAPTCHA", "https://www.fnac.com/search")
+        raise ScrapeBlocked("DataDome CAPTCHA", "https://www.king-jouet.com/search")
 
-    interactive_prices.prices.clear_captcha_requirement("fnac")
+    interactive_prices.prices.clear_captcha_requirement("kingJouet")
     try:
         result = await interactive_prices.prices._run_source(
-            "fnac",
+            "kingJouet",
             blocked,
             lambda source, status: statuses.append((source, status)),
             browser_backed=True,
             bypass_cooldown=True,
         )
         assert result is None
-        assert ("fnac", "captcha_required") in statuses
-        assert "fnac" in interactive_prices.prices.captcha_required_sources()
+        assert ("kingJouet", "captcha_required") in statuses
+        assert "kingJouet" in interactive_prices.prices.captcha_required_sources()
     finally:
-        interactive_prices.prices.clear_captcha_requirement("fnac")
+        interactive_prices.prices.clear_captcha_requirement("kingJouet")
 
 
 @pytest.mark.asyncio
@@ -306,13 +306,13 @@ async def test_restore_loads_only_unexpired_encrypted_cookies() -> None:
     expired = datetime.now(UTC).timestamp() - 3600
     stored = json.dumps(
         [
-            {"name": "valid", "value": "secret", "domain": ".fnac.com", "expires": future},
-            {"name": "old", "value": "secret", "domain": ".fnac.com", "expires": expired},
+            {"name": "valid", "value": "secret", "domain": ".king-jouet.com", "expires": future},
+            {"name": "old", "value": "secret", "domain": ".king-jouet.com", "expires": expired},
         ]
     )
 
     async def credential(_session, key):
-        return stored if str(key).endswith(":fnac") else None
+        return stored if str(key).endswith(":kingJouet") else None
 
     with (
         patch.object(interactive_prices, "get_credential", side_effect=credential),

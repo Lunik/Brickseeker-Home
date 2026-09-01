@@ -47,12 +47,10 @@ class PriceSource(StrEnum):
     AMAZON = "amazon"
     CDISCOUNT = "cdiscount"
     CULTURA = "cultura"
-    FNAC = "fnac"
+    SMYTH_TOYS = "smythToys"
     KING_JOUET = "kingJouet"
     LA_GRANDE_RECRE = "laGrandeRecre"
     JOUECLUB = "joueclub"
-    CARREFOUR = "carrefour"
-    INTERMARCHE = "intermarche"
 
     @property
     def is_used(self) -> bool:
@@ -66,12 +64,10 @@ class PriceSource(StrEnum):
             PriceSource.AMAZON: "Amazon (neuf)",
             PriceSource.CDISCOUNT: "Cdiscount (neuf)",
             PriceSource.CULTURA: "Cultura (neuf)",
-            PriceSource.FNAC: "Fnac (neuf)",
+            PriceSource.SMYTH_TOYS: "Smyths Toys (neuf)",
             PriceSource.KING_JOUET: "King Jouet (neuf)",
             PriceSource.LA_GRANDE_RECRE: "La Grande Récré (neuf)",
             PriceSource.JOUECLUB: "JouéClub (neuf)",
-            PriceSource.CARREFOUR: "Carrefour (neuf)",
-            PriceSource.INTERMARCHE: "Intermarché (neuf)",
         }[self]
 
 
@@ -209,12 +205,10 @@ RETAIL_SOURCES = (
     PriceSource.AMAZON,
     PriceSource.CDISCOUNT,
     PriceSource.CULTURA,
-    PriceSource.FNAC,
+    PriceSource.SMYTH_TOYS,
     PriceSource.KING_JOUET,
     PriceSource.LA_GRANDE_RECRE,
     PriceSource.JOUECLUB,
-    PriceSource.CARREFOUR,
-    PriceSource.INTERMARCHE,
 )
 
 
