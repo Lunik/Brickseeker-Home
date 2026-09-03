@@ -87,6 +87,7 @@ export default function CollectionPage() {
       <SetListScreen
         title="Ma collection"
         screenId="collection"
+        defaultSort="dateAdded"
         rows={data?.sets ?? []}
         isLoading={isLoading}
         error={error ? (error as Error).message : null}
