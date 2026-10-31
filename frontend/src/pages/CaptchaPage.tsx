@@ -6,8 +6,11 @@ import { api } from '../api/client'
 import type { CaptchaSessionStatus, InteractivePriceRefresh } from '../api/types'
 import { ErrorLabel, Spinner } from '../components/ui'
 
-const FRAME_INTERVAL_MS = 500
-const POINTER_MOVE_INTERVAL_MS = 30
+const FRAME_INTERVAL_MS = 120
+// ~60 Hz: the remote page sees the real trajectory of the pointer, not a handful of jumps.
+const POINTER_MOVE_INTERVAL_MS = 16
+// Moves piling up behind a slow request are stale by the time they would land; clicks never drop.
+const MAX_PENDING_MOVES = 3
 
 export default function CaptchaPage() {
   const { challengeId = 'waiting' } = useParams()
@@ -26,6 +29,10 @@ export default function CaptchaPage() {
   const lastPointerMove = useRef(0)
   const frameTimer = useRef<number | null>(null)
   const cancelOnExit = useRef(true)
+  // Input must reach the page in the order it happened: independent requests can overtake each
+  // other (an `up` before its `down`), so every event goes through one chain.
+  const inputQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const pendingMoves = useRef(0)
 
   const challenge = useQuery({
     queryKey: ['captcha-session', challengeId],
@@ -127,18 +134,32 @@ export default function CaptchaPage() {
     }
   }
 
+  function sendInput(path: string, body: object, isMove = false) {
+    if (isMove) {
+      if (pendingMoves.current >= MAX_PENDING_MOVES) return
+      pendingMoves.current += 1
+    }
+    inputQueue.current = inputQueue.current
+      .then(() => api.post(`/prices/captcha/${encodeURIComponent(challengeId)}/${path}`, body))
+      .catch((error: Error) => setInteractionError(error.message))
+      .finally(() => {
+        if (isMove) pendingMoves.current -= 1
+      })
+  }
+
   function sendPointer(event: PointerEvent<HTMLDivElement>, eventType: 'move' | 'down' | 'up') {
     const now = performance.now()
     if (eventType === 'move' && now - lastPointerMove.current < POINTER_MOVE_INTERVAL_MS) return
     if (eventType === 'move') lastPointerMove.current = now
-    const coordinates = remoteCoordinates(event)
-    void api
-      .post(`/prices/captcha/${encodeURIComponent(challengeId)}/pointer`, {
+    sendInput(
+      'pointer',
+      {
         eventType,
-        ...coordinates,
+        ...remoteCoordinates(event),
         button: event.button === 1 ? 'middle' : event.button === 2 ? 'right' : 'left',
-      })
-      .catch((error: Error) => setInteractionError(error.message))
+      },
+      eventType === 'move',
+    )
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -149,7 +170,7 @@ export default function CaptchaPage() {
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!pointerDown.current) return
+    // Hover included: the page must see the pointer arrive, not appear on the target.
     sendPointer(event, 'move')
   }
 
@@ -164,12 +185,7 @@ export default function CaptchaPage() {
 
   function onWheel(event: WheelEvent<HTMLDivElement>) {
     event.preventDefault()
-    void api
-      .post(`/prices/captcha/${encodeURIComponent(challengeId)}/wheel`, {
-        deltaX: event.deltaX,
-        deltaY: event.deltaY,
-      })
-      .catch((error: Error) => setInteractionError(error.message))
+    sendInput('wheel', { deltaX: event.deltaX, deltaY: event.deltaY })
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -177,12 +193,7 @@ export default function CaptchaPage() {
     const printable = event.key.length === 1 && event.key !== ' '
     const key = event.key === ' ' ? 'Space' : event.key
     event.preventDefault()
-    void api
-      .post(`/prices/captcha/${encodeURIComponent(challengeId)}/key`, {
-        key: printable ? null : key,
-        text: printable ? event.key : null,
-      })
-      .catch((error: Error) => setInteractionError(error.message))
+    sendInput('key', { key: printable ? null : key, text: printable ? event.key : null })
   }
 
   if (waiting) {
