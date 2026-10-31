@@ -6,7 +6,7 @@ import FilterSheet from './FilterSheet'
 import Icon from './Icon'
 import SelectionBar, { ActionSheet, type SelectionAction } from './SelectionBar'
 import SetRow from './SetRow'
-import { ConfirmDialog, EmptyState, ErrorLabel, LoadingBlock, NavBar, Spinner } from './ui'
+import { ConfirmDialog, EmptyState, ErrorLabel, ListSkeleton, NavBar, Spinner } from './ui'
 
 /**
  * The one browse screen. Collection, Historique, Liste cadeaux and Nouveaux sets are this screen
@@ -254,7 +254,7 @@ export default function SetListScreen({
       {actionError && <ErrorLabel message={actionError} />}
 
       {isLoading ? (
-        <LoadingBlock />
+        <ListSkeleton />
       ) : error && rows.length === 0 ? (
         // A background refetch failing while a persisted list is already on screen (offline, or a
         // slow LAN) must not hide it behind a full-page error — the offline banner already says
@@ -361,7 +361,7 @@ export default function SetListScreen({
       {bulkActions.length > 0 && rows.length > 0 && !selecting && (
         <button
           type="button"
-          className="fixed bottom-8 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-surface-raised text-brand shadow-lg"
+          className="fixed bottom-24 right-5 z-20 lg:bottom-8 flex h-14 w-14 items-center justify-center rounded-full bg-surface-raised text-brand shadow-lg"
           onClick={() => setSelecting(true)}
           aria-label="Sélectionner des sets"
         >

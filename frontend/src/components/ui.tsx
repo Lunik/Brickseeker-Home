@@ -7,11 +7,12 @@
  */
 
 import { useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { imageUrl } from '../api/client'
 import BlockedPricesButton from './BlockedPricesButton'
 import minifigPlaceholder from '../assets/minifig-placeholder.png'
+import { ROOT_PATHS } from './AppNav'
 import Icon from './Icon'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -87,6 +88,7 @@ export function NavBar({
   actions?: ReactNode
 }) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   return (
     // `top-0` alone isn't enough: sticky pins to the *viewport*, not to `<main>`'s padded content
     // box, so once actually stuck (any scroll past the very top) it snaps flush under the notch —
@@ -94,14 +96,19 @@ export function NavBar({
     // same offset here means the stuck position lands exactly where the unstuck one already was, so
     // there's no jump either.
     <div className="sticky top-[calc(0.5rem_+_env(safe-area-inset-top))] z-30 -mx-4 mb-3 flex items-center gap-2 px-4 py-2">
-      <button
-        type="button"
-        className="nav-circle shrink-0"
-        onClick={onBack ?? (() => navigate(-1))}
-        aria-label={backLabel}
-      >
-        <Icon name="chevron-left" />
-      </button>
+      {/* A tab's root screen has the bar to leave by; its back button would only go "nowhere". */}
+      {ROOT_PATHS.has(pathname) && !onBack ? (
+        <span className="h-11 w-11 shrink-0" aria-hidden="true" />
+      ) : (
+        <button
+          type="button"
+          className="nav-circle shrink-0"
+          onClick={onBack ?? (() => navigate(-1))}
+          aria-label={backLabel}
+        >
+          <Icon name="chevron-left" />
+        </button>
+      )}
       <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold text-ink">{title}</h1>
       <div className="flex shrink-0 items-center gap-1.5">
         <BlockedPricesButton />
@@ -125,6 +132,24 @@ export function LoadingBlock({ label = 'Chargement…' }: { label?: string }) {
     <div className="flex items-center justify-center gap-3 py-16 text-ink-muted" role="status">
       <Spinner />
       <span className="text-[15px]">{label}</span>
+    </div>
+  )
+}
+
+/** Placeholder rows shaped like a browse list — only for screens that actually are one. */
+export function ListSkeleton() {
+  return (
+    <div className="list-card animate-pulse" role="status" aria-label="Chargement…">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0">
+          <div className="h-16 w-16 shrink-0 rounded-xl bg-surface-sunken" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-20 rounded bg-surface-sunken" />
+            <div className="h-3.5 w-3/4 rounded bg-surface-sunken" />
+          </div>
+          <div className="h-4 w-12 rounded bg-surface-sunken" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -175,7 +200,7 @@ export function StatusLine({
     warning: 'text-[rgb(var(--warning))]',
   }
   return (
-    <p className={`flex items-center justify-center gap-2 text-[17px] font-medium ${colors[tone]}`}>
+    <p className={`flex items-center justify-center gap-2 text-[17px] font-medium lg:justify-start ${colors[tone]}`}>
       {tone === 'positive' && (
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgb(var(--positive))] text-white">
           <Icon name="check" className="h-3.5 w-3.5" />
@@ -308,10 +333,10 @@ export function SetThumbnail({
   // torn-page glyph — which looks like the app is broken rather than the artwork missing. `onError`
   // is the only signal a load failure gives.
   const [failed, setFailed] = useState(false)
-  const dimensions = { sm: 'h-12 w-12', md: 'h-[60px] w-[60px]', lg: 'h-24 w-24' }[size]
+  const dimensions = { sm: 'h-12 w-12', md: 'h-16 w-16', lg: 'h-24 w-24' }[size]
   const src = imageUrl(url)
   return (
-    <div className={`${dimensions} shrink-0 overflow-hidden rounded-xl bg-white flex items-center justify-center`}>
+    <div className={`${dimensions} shrink-0 overflow-hidden rounded-xl bg-white flex items-center justify-center shadow-sm ring-1 ring-black/5`}>
       {src && !failed ? (
         <img
           src={src}
@@ -336,8 +361,8 @@ export function Toast({ message, onDismiss }: { message: string; onDismiss?: () 
   return (
     <div
       role="status"
-      className="fixed inset-x-0 bottom-28 z-50 mx-auto w-fit max-w-[90vw] rounded-full bg-surface-raised px-4 py-2.5
-                 text-[15px] font-medium text-ink shadow-lg"
+      className="fixed inset-x-0 bottom-28 z-50 mx-auto lg:left-64 lg:bottom-10 w-fit max-w-[90vw] rounded-full bg-surface-raised px-4 py-2.5
+                 text-[15px] font-medium text-ink" style={{ boxShadow: 'var(--shadow-float)' }}
       onClick={onDismiss}
     >
       {message}
@@ -366,7 +391,7 @@ export function Sheet({
   if (!open) return null
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <button type="button" aria-label="Fermer" className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <button type="button" aria-label="Fermer" className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
         className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-surface
                     shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'}`}
@@ -406,7 +431,7 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-8" role="alertdialog" aria-modal="true">
       <button type="button" aria-label="Annuler" className="absolute inset-0 bg-black/50" onClick={onCancel} />
-      <div className="relative w-full max-w-[280px] overflow-hidden rounded-2xl bg-surface-raised text-center">
+      <div className="relative w-full max-w-[300px] overflow-hidden rounded-[22px] bg-surface-raised text-center shadow-2xl">
         <div className="space-y-1 px-4 py-4">
           <p className="text-[17px] font-semibold text-ink">{title}</p>
           {message && <p className="text-[13px] text-ink-muted">{message}</p>}
@@ -452,12 +477,12 @@ export function StatCard({
   isLink?: boolean
 }) {
   return (
-    <div className="flex h-full min-h-[150px] flex-col rounded-2xl bg-surface-raised p-4 text-left">
+    <div className="card flex h-full min-h-[150px] flex-col text-left transition active:scale-[0.98]">
       <div className="flex items-start justify-between">
-        <span className="text-brand">{icon}</span>
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand">{icon}</span>
         {isLink && <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />}
       </div>
-      <p className="mt-2 text-[22px] font-bold leading-tight text-ink">{value ?? title}</p>
+      <p className="mt-3 text-[26px] font-bold leading-tight tracking-tight text-ink">{value ?? title}</p>
       <div className="flex-1" />
       <p className="text-[15px] text-ink-muted">{value === undefined ? (caption ?? '') : title}</p>
     </div>

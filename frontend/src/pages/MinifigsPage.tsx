@@ -279,9 +279,8 @@ export default function MinifigsPage() {
         // whole Rebrickable catalogue.
         <button
           type="button"
-          // Tinted rather than filled: this icon set is line art, and filling the box glyph turns
-          // it into a solid blob.
-          className={`nav-circle ${ownedOnly ? 'bg-brand text-white' : 'text-ink-muted'}`}
+          // Tinted rather than solid red: the one solid brand colour is for a screen's main action.
+          className={`nav-circle ${ownedOnly ? 'bg-brand/15 text-brand' : 'text-ink-muted'}`}
           onClick={() => setOwnedOnly(!ownedOnly)}
           aria-pressed={ownedOnly}
           aria-label="Possédées seulement"

@@ -65,14 +65,14 @@ export default function SetRow({
       // Without this, a long-press on iOS also runs its own text-selection callout ("Copier /
       // Chercher / Traduire") over the whole gesture, on top of the quick-action sheet it was
       // supposed to replace.
-      className="flex w-full select-none items-center gap-3 px-4 py-3 text-left [-webkit-touch-callout:none] active:bg-surface-sunken"
+      className="flex w-full select-none items-center gap-3 px-4 py-3 text-left [-webkit-touch-callout:none] transition-colors hover:bg-surface-sunken/60 active:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/40"
       aria-pressed={selecting ? selected : undefined}
     >
       <SetThumbnail url={row.setImgUrl} alt={row.name} />
 
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="text-[20px] font-semibold text-ink">{baseSetNum(row.setNum)}</span>
+          <span className="text-[19px] font-bold tracking-tight text-ink">{baseSetNum(row.setNum)}</span>
           {row.quantity > 1 && (
             // VoiceOver read a bare "×2" as "multiplication 2" on iOS, hence the explicit label.
             <span className="text-[13px] font-bold text-ink-muted" aria-label={`${row.quantity} exemplaires`}>
@@ -98,7 +98,7 @@ export default function SetRow({
       <span className="flex shrink-0 items-center gap-3">
         {row.resolvedPrice !== null && (
           <span className="text-right">
-            <span className="block text-[17px] font-semibold text-ink">{formatEUR(row.resolvedPrice)}</span>
+            <span className="block text-[17px] font-bold tabular-nums text-ink">{formatEUR(row.resolvedPrice)}</span>
             {row.priceLabel && <span className="block text-[11px] text-ink-faint">{row.priceLabel}</span>}
           </span>
         )}

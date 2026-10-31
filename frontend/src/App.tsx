@@ -1,15 +1,15 @@
 /**
  * The shell: auth gate, settings/theme provider, routes.
  *
- * There is deliberately **no tab bar**. The iOS app navigates entirely from Home's tile grid and
- * its floating scan cluster, with every other screen pushed on top carrying a back button — so a
- * persistent tab bar here would be a structure the original doesn't have.
+ * Navigation is a bottom tab bar on a phone and a fixed sidebar on a desktop (`AppNav`). This is a
+ * deliberate departure from the iOS app, which pushes every screen from Home's tile grid.
  *
  * Set detail is a route rather than local state, so it is linkable and the browser's back button
  * behaves. The list a set was opened from rides along in router state, which is what lets the
  * detail screen page through it the way `SetDetailPagerView` does.
  */
 
+import { Sidebar, TabBar } from './components/AppNav'
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -52,16 +52,21 @@ function Chrome() {
   if (needsOnboarding) return <Navigate to="/onboarding" replace />
 
   const isCaptcha = location.pathname.startsWith('/captcha/')
+  const showNav = !isCaptcha && location.pathname !== '/onboarding'
 
   return (
-    <div className={isCaptcha ? 'min-h-full w-full' : 'mx-auto min-h-full w-full max-w-2xl'}>
+    <div className={isCaptcha ? 'min-h-full w-full' : 'mx-auto min-h-full w-full max-w-2xl lg:max-w-none lg:pl-64'}>
       {!isCaptcha && <OfflineBanner />}
       {/* `apple-mobile-web-app-status-bar-style: black-translucent` (index.html) runs the web view
           under the iOS status bar once installed to the home screen, so the top row of controls
           landed behind the clock and the battery. The inset is what the status bar actually
           occupies on this device — zero in a browser tab, ~47px on a notched iPhone. */}
       <main
-        className={isCaptcha ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'}
+        className={
+          isCaptcha
+            ? ''
+            : 'mx-auto px-4 pb-28 pt-[calc(0.5rem_+_env(safe-area-inset-top))] lg:max-w-4xl lg:px-10 lg:pb-16'
+        }
       >
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -79,8 +84,10 @@ function Chrome() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {showNav && <TabBar />}
+      {showNav && <Sidebar />}
       {!isCaptcha && (
-        <footer className="px-4 pb-6 text-center text-[11px] text-ink-faint">
+        <footer className="px-4 pb-24 text-center text-[11px] lg:pb-6 text-ink-faint">
           BrickSeeker {__APP_VERSION__}
         </footer>
       )}

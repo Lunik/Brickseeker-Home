@@ -52,10 +52,10 @@ export default function SelectionBar({
   return (
     <>
       <div
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-2xl border-t border-line bg-surface/95
+        className="fixed inset-x-0 bottom-0 z-[35] mx-auto w-full max-w-2xl lg:left-64 lg:max-w-none border-t border-line bg-surface/95
                    px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
       >
-        <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-2xl items-center gap-3 lg:max-w-4xl lg:px-6">
           <button
             type="button"
             className="btn-ghost px-0 text-[15px]"

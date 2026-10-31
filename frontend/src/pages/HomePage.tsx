@@ -3,13 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
-import type { CollectionPayload, ResolveResult } from '../api/types'
+import type { CollectionPayload, CollectionStats, ResolveResult } from '../api/types'
 import { useSettings } from '../lib/settings-context'
-import { formatDateTime } from '../lib/format'
-import Icon from '../components/Icon'
+import { formatDateTime, formatEUR } from '../lib/format'
+import Icon, { type IconName } from '../components/Icon'
 import BlockedPricesButton from '../components/BlockedPricesButton'
 import NotificationsBell from '../components/NotificationsBell'
-import { ErrorLabel, Sheet, Spinner, StatCard } from '../components/ui'
+import { ErrorLabel, ProgressBar, Spinner, StatCard } from '../components/ui'
 
 interface HistoryPayload {
   sets: { setNum: string }[]
@@ -30,9 +30,10 @@ export default function HomePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { settings } = useSettings()
-  const [showManualEntry, setShowManualEntry] = useState(false)
   const [manualValue, setManualValue] = useState('')
   const [lookupError, setLookupError] = useState<string | null>(null)
+
+  const isLinkedEarly = settings?.credentials?.rebrickableLinked ?? false
 
   const collection = useQuery({
     queryKey: ['collection'],
@@ -55,6 +56,11 @@ export default function HomePage() {
     queryFn: () => api.get<{ count: number }>('/catalog/minifigs?ownedOnly=true&limit=1'),
     retry: false,
   })
+  const stats = useQuery({
+    queryKey: ['stats'],
+    queryFn: () => api.get<CollectionStats>('/stats'),
+    enabled: isLinkedEarly,
+  })
   const sync = useMutation({
     mutationFn: () => api.post<CollectionPayload>('/collection/sync'),
     onSuccess: async () => {
@@ -76,7 +82,6 @@ export default function HomePage() {
     onSuccess: (result) => {
       setLookupError(null)
       if (result.set) {
-        setShowManualEntry(false)
         setManualValue('')
         navigate(`/set/${encodeURIComponent(result.set.setNum)}`)
       } else if (result.status === 'ambiguous') {
@@ -126,12 +131,40 @@ export default function HomePage() {
         )}
         <BlockedPricesButton />
         <NotificationsBell />
-        <Link to="/settings" className="nav-circle" aria-label="Paramètres">
+        <Link to="/settings" className="nav-circle lg:hidden" aria-label="Paramètres">
           <Icon name="settings" className="h-6 w-6" />
         </Link>
       </div>
 
-      <h1 className="text-[34px] font-bold leading-tight text-ink">BrickSeeker</h1>
+      <h1 className="text-[36px] lg:hidden font-extrabold leading-tight tracking-tight text-ink">BrickSeeker</h1>
+
+      <form
+        className="relative"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (manualValue.trim()) lookup.mutate({ setNum: manualValue.trim(), source: 'manualEntry' })
+        }}
+      >
+        <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-faint" />
+        <input
+          className="search-field pr-24"
+          inputMode="numeric"
+          placeholder="Numéro de set, ex. 10307"
+          aria-label="Numéro du set"
+          value={manualValue}
+          onChange={(event) => setManualValue(event.target.value)}
+        />
+        <button
+          type="submit"
+          className="absolute right-1 top-1/2 flex h-10 -translate-y-1/2 items-center rounded-full bg-brand px-4 text-[15px] font-semibold text-white"
+          disabled={lookup.isPending}
+        >
+          {lookup.isPending ? <Spinner className="h-4 w-4" /> : 'Ouvrir'}
+        </button>
+      </form>
+      {lookupError && <ErrorLabel message={lookupError} className="-mt-4" />}
+
+      {stats.data && stats.data.setCount > 0 && <ValueHero stats={stats.data} />}
 
       {credentials && !credentials.rebrickableApiKey && (
         <Link
@@ -145,26 +178,7 @@ export default function HomePage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-[22px] font-bold text-ink">Activité</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/history">
-            <StatCard
-              title="Sets scannés"
-              value={String(history.data?.sets.length ?? 0)}
-              icon={<Icon name="hash" className="h-7 w-7" />}
-              isLink
-            />
-          </Link>
-          <StatCard
-            title="Scans effectués"
-            value={String(scanEvents.data?.events.length ?? 0)}
-            icon={<Icon name="viewfinder" className="h-7 w-7" />}
-          />
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-[22px] font-bold text-ink">Collection</h2>
+        <h2 className="text-[22px] font-bold tracking-tight text-ink">Collection</h2>
         {!isLinked ? (
           <p className="text-[15px] text-ink-muted">
             Compte non lié — ouvrez{' '}
@@ -176,14 +190,6 @@ export default function HomePage() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
-              <Link to="/stats">
-                <StatCard
-                  title="Statistiques"
-                  icon={<Icon name="chart" className="h-7 w-7" />}
-                  caption="Voir le détail"
-                  isLink
-                />
-              </Link>
               <Link to="/collection">
                 <StatCard
                   title="Sets possédés"
@@ -200,23 +206,37 @@ export default function HomePage() {
                   isLink
                 />
               </Link>
-              <Link to="/new-sets">
-                <StatCard
-                  title="Nouveaux sets"
-                  icon={<Icon name="sparkles" className="h-7 w-7" />}
-                  caption="Voir le détail"
-                  isLink
-                />
-              </Link>
+            </div>
+            <div className="list-card">
+              <HomeLink to="/stats" icon="chart" label="Statistiques" />
+              <HomeLink to="/new-sets" icon="sparkles" label="Nouveaux sets" />
             </div>
             {syncLine}
           </>
         )}
       </section>
 
+      <section className="space-y-3">
+        <h2 className="text-[22px] font-bold tracking-tight text-ink">Activité</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/history">
+            <StatCard
+              title="Sets scannés"
+              value={String(history.data?.sets.length ?? 0)}
+              icon={<Icon name="hash" className="h-7 w-7" />}
+              isLink
+            />
+          </Link>
+          <StatCard
+            title="Scans effectués"
+            value={String(scanEvents.data?.events.length ?? 0)}
+            icon={<Icon name="viewfinder" className="h-7 w-7" />}
+          />
+        </div>
+      </section>
       {/* Gated on its own account: the gift list lives on Brickset, not Rebrickable. */}
       <section className="space-y-3">
-        <h2 className="text-[22px] font-bold text-ink">Liste cadeaux</h2>
+        <h2 className="text-[22px] font-bold tracking-tight text-ink">Liste cadeaux</h2>
         {!bricksetLinked ? (
           <p className="text-[15px] text-ink-muted">
             Compte non lié — ouvrez{' '}
@@ -240,44 +260,75 @@ export default function HomePage() {
         )}
       </section>
 
-      {lookupError && <ErrorLabel message={lookupError} />}
+          </div>
+  )
+}
 
-      {/* The cluster floats over the content with no backing of its own: a panel behind it left a
-          dead strip of page background on iOS, and would here too. */}
-      <div className="fixed inset-x-0 bottom-8 z-20 mx-auto flex w-full max-w-2xl items-center justify-center gap-6">
-        <button
-          type="button"
-          className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-brand text-white shadow-xl"
-          onClick={() => setShowManualEntry(true)}
-          aria-label="Saisie manuelle"
-        >
-          <Icon name="keyboard" className="h-8 w-8" />
-        </button>
+/** The headline of the dashboard: what the collection is worth and which way it is moving. */
+function ValueHero({ stats }: { stats: CollectionStats }) {
+  const points = stats.valueSnapshots.filter((snapshot) => snapshot.isReliable).map((snapshot) => snapshot.totalValueEur)
+  const previous = points.length > 1 ? points[points.length - 2] : null
+  const delta = previous ? stats.totalValueEur - previous : null
+
+  const width = 120
+  const height = 40
+  const [min, max] = [Math.min(...points), Math.max(...points)]
+  const path = points
+    .map((value, i) => {
+      const x = (i / Math.max(points.length - 1, 1)) * width
+      const y = height - 4 - ((value - min) / Math.max(max - min, 1)) * (height - 8)
+      return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  return (
+    <Link to="/stats" className="card block">
+      <p className="section-title">Valeur de la collection</p>
+      <div className="mt-2 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-[34px] font-extrabold leading-none tracking-tight text-ink">{formatEUR(stats.totalValueEur)}</p>
+          {delta !== null && delta !== 0 && (
+            <p
+              className={`mt-2 text-[14px] font-semibold ${
+                delta > 0 ? 'text-[rgb(var(--positive))]' : 'text-[rgb(var(--negative))]'
+              }`}
+            >
+              {delta > 0 ? '▲' : '▼'} {formatEUR(Math.abs(delta))} depuis la dernière mesure
+            </p>
+          )}
+          {/* An estimated total is only honest next to its coverage (same wording as Statistiques),
+              so the coverage sits right under the figure, with a gauge, at a readable size. */}
+          <p className="mt-2 text-[14px] text-ink-muted">
+            Estimée sur {stats.setsWithKnownPrice} / {stats.setCount} sets dont le prix est connu
+          </p>
+          <div className="mt-2 w-48 max-w-full">
+            <ProgressBar value={stats.setsWithKnownPrice} total={stats.setCount} />
+          </div>
+          {stats.completablePriceCount > 0 && (
+            <p className="mt-2 text-[14px] font-semibold text-brand">Compléter les prix manquants ›</p>
+          )}
+        </div>
+        {points.length > 1 && (
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-10 w-28 shrink-0 text-brand" aria-hidden="true">
+            <path d={path} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </div>
+    </Link>
+  )
+}
 
-      <Sheet open={showManualEntry} title="Saisie manuelle" onClose={() => setShowManualEntry(false)}>
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (manualValue.trim()) lookup.mutate({ setNum: manualValue.trim(), source: 'manualEntry' })
-          }}
-        >
-          <input
-            className="input"
-            // Focused on open so the keyboard is already up, as the iOS sheet takes care to do.
-            autoFocus
-            inputMode="numeric"
-            placeholder="Numéro du set (ex. 10307)"
-            value={manualValue}
-            onChange={(event) => setManualValue(event.target.value)}
-          />
-          <button type="submit" className="btn-primary w-full" disabled={lookup.isPending}>
-            {lookup.isPending ? <Spinner className="h-5 w-5" /> : 'Rechercher'}
-          </button>
-          {lookupError && <ErrorLabel message={lookupError} />}
-        </form>
-      </Sheet>
-    </div>
+function HomeLink({ to, icon, label }: { to: string; icon: IconName; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="flex min-h-14 items-center gap-3 border-b border-line/60 px-4 last:border-0 transition-colors hover:bg-surface-sunken/60 active:bg-surface-sunken"
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-brand">
+        <Icon name={icon} className="h-5 w-5" />
+      </span>
+      <span className="flex-1 text-[17px] font-semibold text-ink">{label}</span>
+      <Icon name="chevron-right" className="h-4 w-4 text-ink-faint" />
+    </Link>
   )
 }

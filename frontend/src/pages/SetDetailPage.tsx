@@ -372,16 +372,16 @@ export default function SetDetailPage() {
         </button>
       </div>
 
-      <section className="space-y-3">
+      <section className="space-y-3 lg:grid lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start lg:gap-x-10 lg:gap-y-3 lg:space-y-0 lg:[&>*:not(:first-child)]:col-start-2">
         {/* A fixed box reserved before the image loads: without it the whole page shifted down
             the moment the artwork arrived, moving whatever the user was about to tap. */}
-        <div className="flex h-64 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/5">
+        <div className="flex h-64 w-full items-center justify-center overflow-hidden rounded-[20px] lg:sticky lg:top-24 lg:row-span-6 lg:h-[340px] bg-white ring-1 ring-black/5" style={{ boxShadow: 'var(--shadow-card)' }}>
           {data.set.setImgUrl && !heroImageFailed ? (
             <img
               src={imageUrl(data.set.setImgUrl)}
               alt={data.set.name}
               referrerPolicy="no-referrer"
-              className="h-full w-full object-contain"
+              className="h-full w-full object-contain p-3"
               onError={() => setHeroImageFailed(true)}
             />
           ) : data.isMinifig ? (
@@ -393,13 +393,13 @@ export default function SetDetailPage() {
           )}
         </div>
 
-        <div className="space-y-1 text-center">
+        <div className="space-y-1 text-center lg:text-left">
           <h1 className="text-[34px] font-bold leading-tight text-ink">{baseSetNum(data.set.setNum)}</h1>
           <p className="text-[22px] leading-tight text-ink">{data.set.name}</p>
           <p className="text-[17px] text-ink-muted">
             {[data.set.year || null, `${formatNumber(data.set.numParts)} pièces`].filter(Boolean).join(' · ')}
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 lg:justify-start">
             {data.nonSetKind && <Badge tone="warning">{NON_SET_LABEL[data.nonSetKind]}</Badge>}
             {data.isOfflineResult && <Badge tone="neutral">Résultat hors-ligne</Badge>}
             {/* Distinct from `isOfflineResult`: that one means the *server* resolved this set via
@@ -449,7 +449,7 @@ export default function SetDetailPage() {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              className={data.isInCollection ? 'btn-secondary' : 'btn-primary'}
+              className={`${data.isInCollection ? 'btn-secondary' : 'btn-primary'} whitespace-nowrap px-2 text-[16px]`}
               onClick={() => setShowLists(true)}
             >
               <Icon name="box" className="h-5 w-5" />
@@ -457,7 +457,7 @@ export default function SetDetailPage() {
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary whitespace-nowrap px-2 text-[16px]"
               onClick={() => setWishlist.mutate(!data.isInWishlist)}
             >
               <Icon name="heart" filled={data.isInWishlist} className="h-5 w-5" />

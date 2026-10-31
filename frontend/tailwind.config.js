@@ -24,6 +24,7 @@ export default {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'],
       },
       borderRadius: { card: '1rem' },
+      boxShadow: { float: 'var(--shadow-float)' },
     },
   },
   plugins: [],

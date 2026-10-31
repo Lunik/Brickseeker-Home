@@ -13,7 +13,7 @@ export default function OfflineBanner() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center pt-[max(0.5rem,env(safe-area-inset-top))]"
+      className="pointer-events-none fixed inset-x-0 top-0 z-50 flex lg:left-64 justify-center pt-[max(0.5rem,env(safe-area-inset-top))]"
       aria-live="polite"
     >
       <span className="rounded-full bg-black/80 px-3 py-1 text-xs font-medium text-white shadow-lg backdrop-blur">

@@ -33,6 +33,10 @@
   --negative: 255 59 48;
   --warning: 255 149 0;
 
+  --hairline: 0 0 0 / 0.06; /* 1px card edge */
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 4px 16px -4px rgb(16 24 40 / 0.08);
+  --shadow-float: 0 2px 4px rgb(16 24 40 / 0.06), 0 12px 28px -8px rgb(16 24 40 / 0.18);
+
   color-scheme: light;
 }
 
@@ -52,6 +56,10 @@
   --negative: 255 69 58;
   --warning: 255 159 10;
 
+  --hairline: 255 255 255 / 0.07;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  --shadow-float: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 14px 32px -8px rgb(0 0 0 / 0.7);
+
   color-scheme: dark;
 }
 
@@ -64,17 +72,26 @@ body,
 body {
   @apply bg-surface text-ink antialiased;
   padding-bottom: env(safe-area-inset-bottom);
+  font-feature-settings: 'cv11', 'ss01', 'tnum' 0;
+  letter-spacing: -0.011em;
+}
+
+h1,
+h2 {
+  letter-spacing: -0.025em;
 }
 
 @layer components {
-  /* The grouped card. No border: the lighter fill is what raises it, exactly as on iOS. */
+  /* The grouped card. Raised by a lighter fill, a soft shadow and a 1px hairline edge. */
   .card {
-    @apply rounded-2xl bg-surface-raised p-4;
+    @apply rounded-[20px] bg-surface-raised p-4;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
   }
 
   /* A card holding rows, with the dividers inset past the leading content (iOS list style). */
   .list-card {
-    @apply overflow-hidden rounded-2xl bg-surface-raised;
+    @apply overflow-hidden rounded-[20px] bg-surface-raised;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
   }
 
   .btn {
@@ -88,6 +105,7 @@ body {
 
   .btn-secondary {
     @apply btn bg-surface-sunken text-ink;
+    box-shadow: 0 0 0 1px rgb(var(--hairline));
   }
 
   /* iOS's most common action: tinted text, no chrome at all. */
@@ -102,32 +120,36 @@ body {
   /* The pill buttons in a navigation bar — circular for an icon, oval for a word. */
   .nav-pill {
     @apply inline-flex min-h-11 items-center justify-center gap-1 rounded-full bg-surface-raised px-4
-           text-[17px] text-brand transition-opacity active:opacity-60 disabled:opacity-40;
+           text-[16px] font-medium text-brand transition active:scale-95 active:opacity-60 disabled:opacity-40;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
   }
 
   .nav-circle {
     @apply inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-brand
-           transition-opacity active:opacity-60 disabled:opacity-40;
+           transition active:scale-95 active:opacity-60 disabled:opacity-40;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
   }
 
   .input {
-    @apply w-full rounded-xl bg-surface-sunken px-3 py-3 text-[17px] text-ink
+    @apply w-full rounded-xl bg-surface-sunken px-3.5 py-3 text-[17px] text-ink
            placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
+    box-shadow: 0 0 0 1px rgb(var(--hairline));
   }
 
   /* The search field is a fully-rounded pill with the glass inside it. */
   .search-field {
     @apply w-full rounded-full bg-surface-raised py-3 pl-11 pr-4 text-[17px] text-ink
            placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
   }
 
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium;
   }
 
-  /* Section label above a grouped card: plain grey, sentence case — never uppercase. */
+  /* Section label above a grouped card: small, grey, uppercase and letter-spaced. */
   .section-title {
-    @apply text-[17px] font-semibold text-ink-muted;
+    @apply text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-faint;
   }
 
   /* Explanatory copy under a grouped card. */
@@ -136,15 +158,21 @@ body {
   }
 
   .segmented {
-    @apply flex rounded-lg bg-surface-sunken p-0.5;
+    @apply flex rounded-xl bg-surface-sunken p-1;
   }
 
   .segmented-option {
-    @apply flex-1 rounded-md py-1.5 text-center text-[15px] font-medium text-ink transition-colors;
+    @apply flex-1 rounded-lg py-1.5 text-center text-[15px] font-medium text-ink transition-colors;
   }
 
   .segmented-option-active {
-    @apply bg-[rgb(var(--ink))]/15 font-semibold;
+    @apply bg-surface-raised font-semibold;
+    box-shadow: var(--shadow-card), 0 0 0 1px rgb(var(--hairline));
+  }
+
+  /* Dark: the card colour is darker than the track, so the selected segment is lifted instead. */
+  .dark .segmented-option-active {
+    background-color: rgb(255 255 255 / 0.16);
   }
 
   /*

@@ -118,12 +118,15 @@ export default function AlertsPage() {
         </ul>
       )}
 
-      <p className="text-xs text-ink-faint">
-        Le rafraîchissement en arrière-plan ne peut interroger que BrickLink : une alerte
-        « occasion » est entièrement surveillée, une alerte « neuf » l'est jusqu'à BrickLink neuf.
-        Les autres sources (lego.com, Amazon, Cdiscount) sont relevées quand vous ouvrez la fiche du
-        set ou lancez une mise à jour des prix.
-      </p>
+      <details className="text-xs text-ink-faint">
+        <summary className="cursor-pointer">Comment les alertes sont surveillées</summary>
+        <p className="mt-2">
+          Le rafraîchissement en arrière-plan ne peut interroger que BrickLink : une alerte
+          « occasion » est entièrement surveillée, une alerte « neuf » l'est jusqu'à BrickLink neuf.
+          Les autres sources (lego.com, Amazon, Cdiscount) sont relevées quand vous ouvrez la fiche
+          du set ou lancez une mise à jour des prix.
+        </p>
+      </details>
     </div>
   )
 }

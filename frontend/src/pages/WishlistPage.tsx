@@ -84,7 +84,7 @@ export default function WishlistPage() {
   return (
     <>
       <SetListScreen
-        title="Liste cadeaux"
+        title="Cadeaux"
         screenId="wishlist"
         defaultSort="deal"
         sortOptions={WISHLIST_SORTS}

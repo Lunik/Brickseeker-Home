@@ -18,7 +18,7 @@ import { api } from '../api/client'
 import type { BatchStatus, CollectionStats, SetRow } from '../api/types'
 import Icon from '../components/Icon'
 import ListConditionsSheet from '../components/ListConditionsSheet'
-import { EmptyState, ErrorLabel, LoadingBlock, NavBar, ProgressBar, Spinner } from '../components/ui'
+import { EmptyState, ErrorLabel, LoadingBlock, NavBar, ProgressBar, Spinner, StatCard } from '../components/ui'
 import { formatDate, formatEUR, formatEURCompact, formatNumber, formatPriceSources } from '../lib/format'
 
 /** Beyond this the theme labels stop being readable on a phone; the rest is grouped as "Autres". */
@@ -142,7 +142,7 @@ export default function StatsPage() {
               allowDecimals={false}
             />
             <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "rgb(var(--ink))" }} cursor={tooltipCursor} />
-            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" />
+            <Bar dataKey="setCount" name="Sets" fill="rgb(var(--brand))" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </section>
@@ -164,7 +164,7 @@ export default function StatsPage() {
             <YAxis
               type="category"
               dataKey="themeName"
-              width={104}
+              width={window.matchMedia('(min-width: 1024px)').matches ? 150 : 104}
               interval={0}
               tickLine={false}
               axisLine={false}
@@ -395,7 +395,9 @@ export default function StatsPage() {
  */
 function ThemeTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
   const full = String(payload?.value ?? '')
-  const label = full.length > 12 ? `${full.slice(0, 12)}…` : full
+  // The desktop gutter (150px) has room for far more than a phone's 104px did.
+  const max = window.matchMedia('(min-width: 1024px)').matches ? 22 : 12
+  const label = full.length > max ? `${full.slice(0, max)}…` : full
   return (
     <text
       x={x}
@@ -413,12 +415,7 @@ function ThemeTick({ x, y, payload }: { x?: number; y?: number; payload?: { valu
 
 function Total({ icon, value, label }: { icon: 'box' | 'brick' | 'tag'; value: string; label: string }) {
   return (
-    <div className="flex min-h-[130px] flex-col rounded-2xl bg-surface-raised p-3">
-      <Icon name={icon} className="h-6 w-6 text-brand" />
-      <p className="mt-2 text-[22px] font-bold leading-tight text-ink">{value}</p>
-      <div className="flex-1" />
-      <p className="text-[13px] text-ink-muted">{label}</p>
-    </div>
+    <StatCard title={label} value={value} icon={<Icon name={icon} className="h-6 w-6" />} />
   )
 }
 

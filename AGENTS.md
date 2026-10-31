@@ -150,6 +150,13 @@ Elles sont peu nombreuses et chacune a une raison :
   swipe horizontal, avec des boutons précédent/suivant qui ne sont pas décoratifs — un geste seul
   n'est pas une affordance, et les lecteurs d'écran mangent les swipes horizontaux.
 
+## Navigation : onglets, pas un hub
+
+Écart assumé avec l'app iOS : barre d'onglets en bas sur téléphone, barre latérale sur ordinateur
+(`components/AppNav.tsx`). Les racines d'onglet (`ROOT_PATHS`) n'ont pas de bouton retour ; la fiche
+d'un set masque la barre. Tout contrôle `fixed` en bas d'écran doit dégager la barre
+(`bottom-24 lg:bottom-8`) ; la barre de sélection passe au-dessus (`z-[35]`).
+
 ## L'écran de liste est unique
 
 Collection, Historique, Liste cadeaux et Nouveaux sets sont **le même écran** avec des données
@@ -169,12 +176,12 @@ contenu défile. Rien ne l'impose par construction — il n'existe pas de compos
 commandes » unique — donc chaque écran reprend `sticky`/`fixed` à la main, et tout nouvel écran doit
 faire pareil plutôt que redécouvrir la règle au cas par cas :
 
-- `NavBar` (`components/ui.tsx`) porte le bouton retour et les `actions` de `SetListScreen`, donc
+- `NavBar` (`components/ui.tsx`) porte le bouton retour (sauf sur une racine d'onglet) et les `actions` de `SetListScreen`, donc
   Collection, Historique, Liste cadeaux, Nouveaux sets, Alertes et Paramètres en héritent. `sticky`
   seul ne suffit pas : voir la note sur `env(safe-area-inset-top)` juste au-dessus.
 - L'en-tête du pager de `SetDetailPage` (chevrons + « Fermer ») reprend le même traitement.
 - La barre de sélection multiple (`components/SelectionBar.tsx`) : `fixed inset-x-0 bottom-0`.
-- Le bouton flottant « Sélectionner » (`SetListScreen.tsx`) : `fixed bottom-8 right-5`.
+- Le bouton flottant « Sélectionner » (`SetListScreen.tsx`) : `fixed bottom-24 right-5 lg:bottom-8`.
 - L'en-tête « Fermer » d'un `Sheet` : placé hors de la zone `overflow-y-auto` qui scrolle, donc
   visible par construction, sans classe de positionnement à part.
 - Sur le scanner, « Fermer le scanner » est en `absolute inset-x-0 top-0` — correct seulement parce
