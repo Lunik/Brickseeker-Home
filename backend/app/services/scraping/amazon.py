@@ -43,7 +43,7 @@ def _extract_js(digits: str) -> str:
     const titleEl = card.querySelector('h2');
     const title = (titleEl ? titleEl.textContent : '').trim();
     if (!/^lego\\b/i.test(title)) continue;
-    if (title.indexOf('{digits}') === -1) continue;
+    if (!new RegExp('(^|\\\\D){digits}(\\\\D|$)').test(title)) continue;
     if (reject.test(title)) continue;
     const priceEl = card.querySelector('.a-price .a-offscreen');
     if (!priceEl) continue;
