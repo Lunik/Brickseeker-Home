@@ -10,6 +10,7 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { imageUrl } from '../api/client'
+import BlockedPricesButton from './BlockedPricesButton'
 import minifigPlaceholder from '../assets/minifig-placeholder.png'
 import Icon from './Icon'
 
@@ -102,7 +103,10 @@ export function NavBar({
         <Icon name="chevron-left" />
       </button>
       <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold text-ink">{title}</h1>
-      <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <BlockedPricesButton />
+        {actions}
+      </div>
     </div>
   )
 }

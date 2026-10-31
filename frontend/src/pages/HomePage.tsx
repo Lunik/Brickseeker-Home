@@ -7,6 +7,7 @@ import type { CollectionPayload, ResolveResult } from '../api/types'
 import { useSettings } from '../lib/settings-context'
 import { formatDateTime } from '../lib/format'
 import Icon from '../components/Icon'
+import BlockedPricesButton from '../components/BlockedPricesButton'
 import NotificationsBell from '../components/NotificationsBell'
 import { ErrorLabel, Sheet, Spinner, StatCard } from '../components/ui'
 
@@ -123,6 +124,7 @@ export default function HomePage() {
             {sync.isPending ? <Spinner className="h-5 w-5" /> : <Icon name="refresh" className="h-6 w-6" />}
           </button>
         )}
+        <BlockedPricesButton />
         <NotificationsBell />
         <Link to="/settings" className="nav-circle" aria-label="Paramètres">
           <Icon name="settings" className="h-6 w-6" />

@@ -620,8 +620,8 @@ export default function SettingsPage() {
             )}
             {batch.data.captchaRequiredSources.length > 0 && (
               <p className="text-xs text-amber-500">
-                CAPTCHA requis : {formatPriceSources(batch.data.captchaRequiredSources)}. Ouvrez
-                ensuite la fiche d’un set et actualisez-la manuellement.
+                CAPTCHA requis : {formatPriceSources(batch.data.captchaRequiredSources)}. Touchez
+                ensuite le bouton ⚠ de l’accueil pour le valider.
               </p>
             )}
             {batch.data.warning && <p className="text-xs text-amber-500">{batch.data.warning}</p>}

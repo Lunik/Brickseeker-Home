@@ -323,3 +323,46 @@ async def test_restore_loads_only_unexpired_encrypted_cookies() -> None:
     configure.assert_called_once()
     restored = configure.call_args.args[0]
     assert [cookie["name"] for cookie in restored] == ["valid"]
+
+
+@pytest.mark.asyncio
+async def test_blocked_replay_validates_once_then_retries_every_blocked_set() -> None:
+    manager = InteractivePriceManager()
+    prices = interactive_prices.prices
+    prices._blocked_sets.clear()
+    prices._blocked_pages.clear()
+    for set_num in ("1-1", "2-1", "3-1"):
+        prices._track_blocked("kingJouet", set_num, "captcha_required")
+    prices._track_block_page(
+        "kingJouet", ScrapeBlocked("DataDome CAPTCHA", "https://www.king-jouet.com/s")
+    )
+    assert prices.blocked_sources() == {"kingJouet": ["1-1", "2-1", "3-1"]}
+
+    async def validated(operation, _lego_set, source, _blocked):
+        operation.resolved_sources.append(source)
+        return None
+
+    replayed: list[str] = []
+
+    async def refresh(_session, lego_set, source, **_kwargs):
+        replayed.append(lego_set.set_num)
+        prices._track_blocked(source, lego_set.set_num, "completed")
+
+    def lego_set(_session, set_num):
+        return LegoSet(set_num, "x", 2024, 1, 0, None, None)
+
+    with (
+        patch.object(manager, "_lego_set", new=AsyncMock(side_effect=lego_set)),
+        patch.object(manager, "_retry_blocked_source", new=AsyncMock(side_effect=validated)),
+        patch.object(prices, "refresh_retail_source", new=refresh),
+        patch.object(interactive_prices, "session_scope", _session_scope),
+        patch.object(interactive_prices.settings, "scrape_delay_between_sets", 0),
+    ):
+        operation = manager.start_blocked()
+        await manager._operations[operation["operationId"]].task
+
+    final = manager.state(operation["operationId"])
+    assert final["status"] == "completed"
+    assert (final["replayDone"], final["replayTotal"]) == (1 + len(replayed), 3)
+    assert replayed == ["2-1", "3-1"]  # "1-1" is replayed inside the (mocked) validation
+    assert final["warning"] is None or "encore requis" in final["warning"]

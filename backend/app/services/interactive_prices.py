@@ -123,6 +123,9 @@ class InteractiveOperation:
     error: str | None = None
     completed_at: datetime | None = None
     task: asyncio.Task[None] | None = None
+    #: Global ("blocked sets") operations only: sets replayed after a validation, out of the total.
+    replay_total: int = 0
+    replay_done: int = 0
 
     def as_dict(self, challenge: CaptchaSession | None) -> dict[str, object]:
         return {
@@ -133,6 +136,8 @@ class InteractiveOperation:
             "updatedAt": self.updated_at,
             "captchaRequiredSources": list(self.captcha_required_sources),
             "resolvedSources": list(self.resolved_sources),
+            "replayTotal": self.replay_total,
+            "replayDone": self.replay_done,
             "activeSources": list(self.active_sources),
             "warning": self.warning,
             "error": self.error,
@@ -215,6 +220,43 @@ class InteractivePriceManager:
         self._operations[operation.id] = operation
         self._active_by_set[set_num] = operation.id
         operation.task = asyncio.create_task(self._run(operation))
+        return operation.as_dict(None)
+
+    def start_blocked(self) -> dict[str, object]:
+        """One validation per blocked retailer, then every set that was blocked on it is replayed.
+
+        The operation has no set (`setNum == ""`): it is the app-wide counterpart of `start`.
+        """
+        self._cleanup_completed()
+        existing_id = self._active_by_set.get("")
+        if existing_id is not None:
+            return self.state(existing_id)
+        # A per-set operation already waiting on a challenge is the one the user wants to finish:
+        # hand it back so the button attaches to it (its popup works the same) instead of a dead end.
+        running = next(
+            (
+                operation
+                for operation in self._operations.values()
+                if operation.status in ("running", "captchaRequired")
+            ),
+            None,
+        )
+        if running is not None:
+            return self.state(running.id)
+        if not prices.blocked_sources():
+            raise LookupError("Aucun set en attente de CAPTCHA")
+
+        now = datetime.now(UTC)
+        operation = InteractiveOperation(
+            id=secrets.token_urlsafe(24),
+            set_num="",
+            status="running",
+            created_at=now,
+            updated_at=now,
+        )
+        self._operations[operation.id] = operation
+        self._active_by_set[""] = operation.id
+        operation.task = asyncio.create_task(self._run_blocked(operation))
         return operation.as_dict(None)
 
     def state(self, operation_id: str) -> dict[str, object]:
@@ -403,6 +445,94 @@ class InteractivePriceManager:
             operation.completed_at = datetime.now(UTC)
             operation.updated_at = operation.completed_at
             self._active_by_set.pop(operation.set_num, None)
+
+    async def _run_blocked(self, operation: InteractiveOperation) -> None:
+        try:
+            retail = {source.value for source in RETAIL_SOURCES}
+            pending = {
+                source: set_nums
+                for source, set_nums in prices.blocked_sources().items()
+                if source in retail
+            }
+            operation.captcha_required_sources = list(pending)
+            operation.replay_total = sum(len(set_nums) for set_nums in pending.values())
+            for source, set_nums in pending.items():
+                try:
+                    await self._replay_source(operation, source, set_nums)
+                except asyncio.CancelledError:
+                    raise
+                except InteractiveChallengeUnavailable:
+                    operation.warning = (
+                        f"{source_display_name(source)} refuse cette session interactive ; "
+                        "réessayez plus tard."
+                    )
+                except Exception as error:  # noqa: BLE001 - one retailer must not hide the next
+                    operation.warning = (
+                        f"{source_display_name(source)} n'a pas pu ouvrir sa validation."
+                    )
+                    logger.warning(
+                        "Validation globale échouée pour %s (%s)", source, error, exc_info=True
+                    )
+            operation.status = "completed"
+            if operation.warning is None and prices.blocked_sources():
+                names = ", ".join(source_display_name(source) for source in pending)
+                operation.warning = f"CAPTCHA encore requis : {names}."
+        except asyncio.CancelledError:
+            operation.status = "cancelled"
+            operation.warning = "Actualisation interactive annulée."
+        except Exception as error:  # noqa: BLE001 - state must become terminal for the polling UI
+            operation.status = "failed"
+            operation.error = str(error)
+            logger.warning("Actualisation globale échouée", exc_info=True)
+        finally:
+            operation.current_challenge_id = None
+            operation.active_sources.clear()
+            operation.completed_at = datetime.now(UTC)
+            operation.updated_at = operation.completed_at
+            self._active_by_set.pop("", None)
+
+    async def _replay_source(
+        self, operation: InteractiveOperation, source: str, set_nums: list[str]
+    ) -> None:
+        """Validates `source` once with the first blocked set, then replays the others serially."""
+        page = prices.blocked_page(source)
+        if page is None:
+            return
+        reason, url = page
+        first, rest = set_nums[0], set_nums[1:]
+        async with session_scope() as session:
+            lego_set = await self._lego_set(session, first)
+        blocked = BlockedRetailer(source=source, reason=reason, url=url)
+        # `_retry_blocked_source` replays `first` itself: that is the proof the validation worked.
+        remaining = await self._retry_blocked_source(operation, lego_set, source, blocked)
+        if remaining is not None:
+            await self._resolve_source(operation, lego_set, source, remaining)
+        if source not in operation.resolved_sources:
+            return
+        operation.replay_done += 1
+        operation.updated_at = datetime.now(UTC)
+
+        for index, set_num in enumerate(rest):
+            if index:
+                await asyncio.sleep(settings.scrape_delay_between_sets)
+            retry: dict[str, BlockedRetailer] = {}
+            async with session_scope() as session:
+                lego_set = await self._lego_set(session, set_num)
+                await prices.refresh_retail_source(
+                    session,
+                    lego_set,
+                    source,
+                    on_captcha=_blocked_collector(retry),
+                    on_progress=operation.record_source_progress,
+                )
+            if source in retry:
+                operation.warning = (
+                    f"{source_display_name(source)} bloque à nouveau ; "
+                    "relancez la validation pour les sets restants."
+                )
+                return
+            operation.replay_done += 1
+            operation.updated_at = datetime.now(UTC)
 
     async def _retry_blocked_source(
         self,

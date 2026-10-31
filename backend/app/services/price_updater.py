@@ -371,7 +371,7 @@ class PriceUpdater:
                 self._state.captcha_required_sources.append(source)
             label = "BrickLink" if source == "bricklink" else source_display_name(source)
             self._state.warning = (
-                f"{label} demande un CAPTCHA ; actualisez ce set manuellement pour le résoudre."
+                f"{label} demande un CAPTCHA ; validez-le via le bouton ⚠ de l’accueil."
             )
             return
         if status not in ("failed", "timed_out"):

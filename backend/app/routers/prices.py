@@ -158,6 +158,29 @@ async def deal_verdict(payload: DealVerdictIn, session: SessionDep) -> dict[str,
     }
 
 
+@router.get("/blocked")
+async def blocked_prices() -> dict[str, object]:
+    """What a CAPTCHA currently holds back, for the app-wide validation button."""
+    blocked = prices.blocked_sources()
+    return {
+        "total": sum(len(set_nums) for set_nums in blocked.values()),
+        "sources": [
+            {"source": source, "sourceName": source_display_name(source), "setCount": len(set_nums)}
+            for source, set_nums in blocked.items()
+        ],
+    }
+
+
+@router.post("/interactive/start-blocked")
+async def start_blocked_refresh() -> dict[str, object]:
+    try:
+        return interactive_price_manager.start_blocked()
+    except LookupError as error:
+        raise ApiError(str(error), 404) from error
+    except RuntimeError as error:
+        raise ApiError(str(error), 409) from error
+
+
 @router.post("/interactive/start/{set_num}")
 async def start_interactive_refresh(
     set_num: str,

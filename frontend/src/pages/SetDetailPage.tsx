@@ -22,6 +22,7 @@ import {
   SetThumbnail,
   StatusLine,
 } from '../components/ui'
+import BlockedPricesButton from '../components/BlockedPricesButton'
 import { useBackendReachable } from '../lib/backend-reachability'
 import { useSettings } from '../lib/settings-context'
 import {
@@ -124,6 +125,13 @@ export default function SetDetailPage() {
       return Date.now() - refreshingSince.current > 300_000 ? false : 3000
     },
   })
+
+  // A refresh of this set can be the one that gets a retailer blocked: surface the global button now
+  // rather than at its next poll.
+  const blockedSources = data?.captchaRequiredSources?.join(',')
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ['blocked-prices'] })
+  }, [blockedSources, queryClient])
 
   const collection = useQuery({
     queryKey: ['collection'],
@@ -358,6 +366,7 @@ export default function SetDetailPage() {
         <span className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold text-ink">
           {siblings.length > 1 && index >= 0 ? `${index + 1} sur ${siblings.length}` : ''}
         </span>
+        <BlockedPricesButton />
         <button type="button" className="nav-pill" onClick={() => navigate(-1)}>
           Fermer
         </button>

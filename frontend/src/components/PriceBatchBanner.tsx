@@ -41,8 +41,8 @@ export default function PriceBatchBanner() {
       )}
       {captchaSources.length > 0 && (
         <p className="text-[13px] text-amber-500">
-          CAPTCHA requis : {formatPriceSources(captchaSources)}. Ouvrez la fiche d’un set concerné
-          et actualisez-la manuellement pour le débloquer.
+          CAPTCHA requis : {formatPriceSources(captchaSources)}. Touchez le bouton ⚠ de l’accueil
+          pour le valider ; les sets concernés seront relancés.
         </p>
       )}
     </div>

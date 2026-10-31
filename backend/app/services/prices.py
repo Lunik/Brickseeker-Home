@@ -58,6 +58,10 @@ _web_source_slots = asyncio.Semaphore(settings.scrape_max_concurrency)
 _source_unavailable_until: dict[str, float] = {}
 _captcha_required_until: dict[str, float] = {}
 _SOURCE_FAILURE_COOLDOWN_SECONDS = 15 * 60
+#: Sets whose last attempt on a retailer ended in a CAPTCHA block, so one human validation can
+#: replay all of them. In memory only: a restart forgets it, and the next refresh re-discovers it.
+_blocked_sets: dict[str, set[str]] = {}
+_blocked_pages: dict[str, tuple[str, str]] = {}  # source -> (reason, url) of the latest block
 
 
 class PriceRefreshTimeout(RuntimeError):
@@ -103,6 +107,30 @@ def captcha_required_sources() -> list[str]:
     for source in expired:
         _captcha_required_until.pop(source, None)
     return sorted(_captcha_required_until)
+
+
+def blocked_sources() -> dict[str, list[str]]:
+    """Retailers with at least one set waiting on a CAPTCHA, mapped to those sets (oldest first)."""
+    return {
+        source: sorted(set_nums)
+        for source, set_nums in _blocked_sets.items()
+        if set_nums and source in _blocked_pages
+    }
+
+
+def blocked_page(source: str) -> tuple[str, str] | None:
+    return _blocked_pages.get(source)
+
+
+def _track_blocked(source: str, set_num: str, status: SourceProgressStatus) -> None:
+    if status == "captcha_required":
+        _blocked_sets.setdefault(source, set()).add(set_num)
+    elif status == "completed":
+        _blocked_sets.get(source, set()).discard(set_num)
+
+
+def _track_block_page(source: str, error: ScrapeBlocked) -> None:
+    _blocked_pages[source] = (error.reason, error.url)
 
 
 def clear_captcha_requirement(source: str) -> None:
@@ -341,8 +369,14 @@ async def _refresh_set_prices(
     def report_progress(source: str, status: SourceProgressStatus) -> None:
         if status in ("skipped", "captcha_required"):
             skipped_sources.add(source)
+        _track_blocked(source, set_num, status)
         if on_progress:
             on_progress(source, status)
+
+    def report_captcha(source: str, error: ScrapeBlocked) -> None:
+        _track_block_page(source, error)
+        if on_captcha:
+            on_captcha(source, error)
 
     async def isolated_bricklink() -> list[PriceQuote]:
         # Streaming retailer results are persisted on the caller's session while BrickLink may still
@@ -361,7 +395,7 @@ async def _refresh_set_prices(
             operation,
             report_progress,
             browser_backed=browser_backed,
-            on_captcha=on_captcha,
+            on_captcha=report_captcha,
             bypass_cooldown=bypass_cooldown,
         )
         if isinstance(found, list):
@@ -374,7 +408,7 @@ async def _refresh_set_prices(
             lambda: _read_store_price(set_num),
             report_progress,
             browser_backed=True,
-            on_captcha=on_captcha,
+            on_captcha=report_captcha,
             bypass_cooldown=bypass_cooldown,
         )
         return _SourceOutput(store_price=found)
@@ -459,12 +493,24 @@ async def refresh_retail_source(
     if selected is None:
         raise ValueError(f"Source retail inconnue : {source}")
     fetch, browser_backed = selected
+    set_num = lego_set.set_num
+
+    def report_progress(key: str, status: SourceProgressStatus) -> None:
+        _track_blocked(key, set_num, status)
+        if on_progress:
+            on_progress(key, status)
+
+    def report_captcha(key: str, error: ScrapeBlocked) -> None:
+        _track_block_page(key, error)
+        if on_captcha:
+            on_captcha(key, error)
+
     quote = await _run_source(
         source,
         lambda: fetch(lego_set),
-        on_progress,
+        report_progress,
         browser_backed=browser_backed,
-        on_captcha=on_captcha,
+        on_captcha=report_captcha,
         bypass_cooldown=True,
     )
     if quote is not None:
