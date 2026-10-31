@@ -130,6 +130,11 @@ passage à « You have been blocked » après un slider réussi. Le fallback Pla
 headless faute de display garanti ; ne généralise pas ce fallback au sidecar. Une page DataDome sans
 slider, audio ni Retry est terminale pour cette session : ne la présente jamais comme résolvable.
 
+Repli FlareSolverr : seul `ScrapeCloudflareChallenge` (défi Cloudflare toujours affiché après dix
+secondes) y mène, et seulement si `BRICKSEEKER_FLARESOLVERR_URL` est défini. FlareSolverr ne renvoie
+que cookies + User-Agent (`cf_clearance` est lié à cet UA), rejoués dans un contexte jetable : ne
+lui fais pas extraire de prix lui-même. `ScrapeBlocked` (DataDome…) ne passe jamais par lui.
+
 ## Différences assumées avec l'app iOS
 
 Elles sont peu nombreuses et chacune a une raison :

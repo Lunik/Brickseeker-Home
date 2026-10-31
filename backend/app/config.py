@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     dev flow (`uvicorn --reload` against a local Playwright install), not the packaged image,
     which no longer bundles a browser at all. See browser.py."""
 
+    flaresolverr_url: str | None = None
+    """Base URL of a FlareSolverr instance (e.g. `http://flaresolverr:8191`, the sidecar the shipped
+    docker-compose.yml wires up). Used only as a fallback when Chromium stays stuck on a Cloudflare
+    challenge; any other CAPTCHA keeps the interactive window. Unset = no fallback."""
+
     scrape_timeout_seconds: float = Field(default=30.0, gt=0)
     scrape_max_concurrency: int = Field(default=2, ge=1, le=4)
     """Maximum browser-backed price sources active at once across the whole process."""

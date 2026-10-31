@@ -61,6 +61,11 @@ class ScrapeChallengeUnsolved(ScrapeError):
     """Readiness never went truthy inside the timeout."""
 
 
+class ScrapeCloudflareChallenge(ScrapeChallengeUnsolved):
+    """Chromium stayed stuck on a Cloudflare challenge. The only error `load_and_extract` hands to
+    the FlareSolverr fallback; every other block keeps the interactive CAPTCHA window."""
+
+
 class ScrapeBlocked(ScrapeError):
     """The retailer explicitly rejected this automated browser session."""
 
@@ -126,6 +131,18 @@ _BLOCKED_JS = """
   return null;
 })()
 """
+
+#: Cloudflare's interstitial (managed challenge, Turnstile). A headful Chromium usually clears it in
+#: a few seconds on its own, so FlareSolverr only gets called once it has been stuck this long.
+_CLOUDFLARE_JS = """
+(() => {
+  if (/Just a moment|Un instant/i.test(document.title || '')) return true;
+  return !!document.querySelector(
+    'iframe[src*="challenges.cloudflare.com"], #challenge-form, #cf-challenge-running'
+  );
+})()
+"""
+_CLOUDFLARE_GRACE_SECONDS = 10.0
 
 _playwright: Playwright | None = None
 _browser: Browser | None = None
@@ -412,6 +429,54 @@ async def load_and_extract(
     fails_on_http_404: bool = False,
     retry_empty_extraction: bool = False,
 ) -> str:
+    """Scrape `url` in the shared context; on a stuck Cloudflare challenge, retry once with the
+    clearance FlareSolverr obtained (when `flaresolverr_url` is set). See `_load_and_extract`."""
+    try:
+        return await _load_and_extract(
+            url, readiness_js, extract_js, timeout, fails_on_http_404, retry_empty_extraction
+        )
+    except ScrapeCloudflareChallenge:
+        if not settings.flaresolverr_url:
+            raise
+    from . import flaresolverr  # local: flaresolverr imports this module's errors
+
+    limit = settings.scrape_timeout_seconds if timeout is None else timeout
+    logger.info("Défi Cloudflare persistant, repli sur FlareSolverr : %s", url)
+    clearance = await flaresolverr.solve(url, limit)
+    browser = await get_browser()
+    context = await browser.new_context(
+        viewport=_VIEWPORT,
+        locale="fr-FR",
+        timezone_id="Europe/Paris",
+        user_agent=clearance.user_agent,
+    )
+    try:
+        await context.add_cookies(clearance.cookies)
+        return await _load_and_extract(
+            url,
+            readiness_js,
+            extract_js,
+            timeout,
+            fails_on_http_404,
+            retry_empty_extraction,
+            context=context,
+        )
+    finally:
+        try:
+            await asyncio.wait_for(context.close(), timeout=_CLOSE_TIMEOUT_SECONDS)
+        except (TimeoutError, PlaywrightError):
+            logger.debug("Fermeture du contexte FlareSolverr abandonnée", exc_info=True)
+
+
+async def _load_and_extract(
+    url: str,
+    readiness_js: str,
+    extract_js: str,
+    timeout: float | None = None,
+    fails_on_http_404: bool = False,
+    retry_empty_extraction: bool = False,
+    context: BrowserContext | None = None,
+) -> str:
     """Load `url`, wait for `readiness_js` to go truthy, then return `extract_js`'s string result.
 
     `readiness_js` is how a cleared challenge is detected: it must test for something only the real
@@ -421,6 +486,9 @@ async def load_and_extract(
     `fails_on_http_404` opts into raising `ScrapeHttpNotFound` as soon as the page's own response
     comes back 404 — the lego.com path needs "removed from the store" and "challenge never cleared"
     to stay distinguishable instead of both timing out.
+
+    `context` is the FlareSolverr-clearance context of the retry; leave it unset to use the shared
+    one. Only the shared-context attempt can raise `ScrapeCloudflareChallenge`.
     """
     if not settings.scraping_enabled:
         raise ScrapeDisabled(_DISABLED_MESSAGE)
@@ -429,6 +497,8 @@ async def load_and_extract(
     page: Page | None = None
     last_status: int | None = None
     saw_ready_page = False
+    cloudflare_since: float | None = None
+    watch_cloudflare = context is None and bool(settings.flaresolverr_url)
 
     def record_status(response: PlaywrightResponse) -> None:
         # Every navigation response, not just the first: after a Cloudflare interstitial (403/503)
@@ -443,7 +513,7 @@ async def load_and_extract(
 
     try:
         async with asyncio.timeout(limit):
-            page = await _acquire_page()
+            page = await (_acquire_page() if context is None else context.new_page())
             page.on("response", record_status)
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=limit * 1000)
@@ -491,6 +561,17 @@ async def load_and_extract(
                             continue
                         raise ScrapeNotFound(f"Rien à extraire : {url}")
                     return extracted
+                if watch_cloudflare:
+                    try:
+                        on_challenge = bool(await page.evaluate(_CLOUDFLARE_JS))
+                    except PlaywrightError:
+                        on_challenge = False
+                    if not on_challenge:
+                        cloudflare_since = None
+                    elif cloudflare_since is None:
+                        cloudflare_since = time.monotonic()
+                    elif time.monotonic() - cloudflare_since >= _CLOUDFLARE_GRACE_SECONDS:
+                        raise ScrapeCloudflareChallenge(f"Défi Cloudflare persistant : {url}")
                 await asyncio.sleep(_POLL_INTERVAL)
 
             if saw_ready_page:
