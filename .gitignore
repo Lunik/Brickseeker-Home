@@ -1,5 +1,6 @@
 # Runtime data (SQLite, image cache, catalogue snapshots, generated secret key)
 data/
+.data/
 *.db
 *.db-wal
 *.db-shm
