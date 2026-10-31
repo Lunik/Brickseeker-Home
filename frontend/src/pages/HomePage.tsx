@@ -1,11 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../api/client'
 import type { CollectionPayload, ResolveResult } from '../api/types'
-import * as offlineOcr from '../lib/offline-ocr'
-import { extractSetNumbers } from '../lib/set-number-extractor'
 import { useSettings } from '../lib/settings-context'
 import { formatDateTime } from '../lib/format'
 import Icon from '../components/Icon'
@@ -25,9 +23,7 @@ interface WishlistPayload {
  * The app root — and the app's only navigation hub, exactly as on iOS: every other screen is
  * reached from a tile here or from the floating scan cluster.
  *
- * Manual entry and photo import both resolve through `/scan/lookup`, the same path the camera
- * uses, rather than each having its own resolution logic. Photo import's OCR step, like the
- * camera's, runs on-device (`lib/offline-ocr.ts`) — there is no server-side OCR left to call.
+ * Manual entry is the only way to look a set up; it resolves through `/scan/lookup`.
  */
 export default function HomePage() {
   const navigate = useNavigate()
@@ -36,7 +32,6 @@ export default function HomePage() {
   const [showManualEntry, setShowManualEntry] = useState(false)
   const [manualValue, setManualValue] = useState('')
   const [lookupError, setLookupError] = useState<string | null>(null)
-  const fileInput = useRef<HTMLInputElement>(null)
 
   const collection = useQuery({
     queryKey: ['collection'],
@@ -89,19 +84,6 @@ export default function HomePage() {
         setLookupError('Aucun set trouvé pour ce numéro.')
       }
     },
-    onError: (error: Error) => setLookupError(error.message),
-  })
-
-  const ocr = useMutation({
-    // On-device, same as the camera path (`lib/offline-ocr.ts`) — there is no server-side OCR to
-    // call at all. `File` is accepted directly; tesseract.js doesn't need it wrapped for upload.
-    mutationFn: async (file: File) => {
-      const candidates = await offlineOcr.recognize(file)
-      const setNums = extractSetNumbers(candidates)
-      if (!setNums.length) throw new Error('Aucun numéro de set lisible sur cette photo.')
-      return setNums[0]
-    },
-    onSuccess: (setNum) => lookup.mutate({ setNum, source: 'photoImport' }),
     onError: (error: Error) => setLookupError(error.message),
   })
 
@@ -263,42 +245,13 @@ export default function HomePage() {
       <div className="fixed inset-x-0 bottom-8 z-20 mx-auto flex w-full max-w-2xl items-center justify-center gap-6">
         <button
           type="button"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-raised text-brand shadow-lg"
-          onClick={() => fileInput.current?.click()}
-          aria-label="Depuis mes photos"
-          disabled={ocr.isPending}
-        >
-          {ocr.isPending ? <Spinner className="h-6 w-6" /> : <Icon name="image" className="h-6 w-6" />}
-        </button>
-        <button
-          type="button"
           className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-brand text-white shadow-xl"
-          onClick={() => navigate('/scan')}
-          aria-label="Scanner un set"
-        >
-          <Icon name="camera" className="h-8 w-8" />
-        </button>
-        <button
-          type="button"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-raised text-brand shadow-lg"
           onClick={() => setShowManualEntry(true)}
           aria-label="Saisie manuelle"
         >
-          <Icon name="keyboard" className="h-6 w-6" />
+          <Icon name="keyboard" className="h-8 w-8" />
         </button>
       </div>
-
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (file) ocr.mutate(file)
-          event.target.value = ''
-        }}
-      />
 
       <Sheet open={showManualEntry} title="Saisie manuelle" onClose={() => setShowManualEntry(false)}>
         <form

@@ -38,7 +38,6 @@ Les compétences du dépôt sont dans [`.copilot/skills/`](./skills) :
 - **check-bricklink-endpoint** — Sonde signée d'une API BrickLink avant d'implémenter
 - **check-rebrickable-endpoint** — Sonde d'une API Rebrickable v3 avant de décoder
 - **ui-parity-check** — Capture l'app en Playwright et compare aux baselines iOS
-- **scanner-sheet-checklist** — Checklist pour ajouter une surface au scanner
 - **clean-feature-revert** — Revert une feature récente (pas juste un git revert)
 - **flaticon-icons** — Télécharge et installe des SVG Flaticon
 
@@ -93,14 +92,6 @@ Starlette teste les routes **dans l'ordre de déclaration**. `POST /collection/b
 
 Toute route littérale se déclare **avant** les routes paramétrées de son préfixe. `backend/tests/test_routes.py` le vérifie.
 
-### Caméra et pipeline de scan
-
-`isCovered` dans `pages/ScannerPage.tsx` est la seule source de vérité — elle arrête la caméra et le polling OCR. Ajoute chaque nouveau surface à cette ligne, pas un `useEffect` de plus.
-
-La boucle OCR traite une image toutes les ~800 ms et **compte les apparitions**. Elle ne se fie jamais au premier candidat (l'OCR en renvoie un différent à chaque prise). Gagne celui qui accumule deux apparitions.
-
-Le retour sonore/haptique n'appartient qu'au chemin caméra — pas de feedback lors d'une saisie manuelle ou relecture.
-
 ### Ce qui vit en mémoire doit savoir se relire au démarrage
 
 `price_updater` garde l'état du lot en mémoire. `PriceUpdater.restore()` le relit au démarrage depuis la base — sinon la persistance n'est qu'une écriture.
@@ -132,7 +123,7 @@ Quand une réponse est paginée, affiche le `count` total (avant découpe) et di
 Peu nombreuses, chacune a une raison :
 
 - Keychain → chiffrement Fernet en base
-- Vision → tesseract.js sur l'appareil (reconnaissance OCR côté client)
+- Vision → saisie au clavier (scan caméra/OCR retiré)
 - WKWebView → Playwright/Chromium
 - `UNUserNotificationCenter` → Web Push + centre de notifications intégré
 - Pas de `TabView` : route + swipe + boutons explicites (accessibilité)

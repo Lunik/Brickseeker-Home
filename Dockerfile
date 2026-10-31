@@ -37,8 +37,6 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     BRICKSEEKER_DATA_DIR=/data
 
-# No tesseract here: OCR runs entirely on-device (tesseract.js, bundled into the frontend build),
-# never server-side — see frontend/src/lib/offline-ocr.ts.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl ca-certificates tini \

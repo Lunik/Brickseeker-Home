@@ -37,9 +37,8 @@ Les 7 compétences disponibles :
 2. **check-bricklink-endpoint** — Sonde signée d'une API BrickLink
 3. **check-rebrickable-endpoint** — Sonde d'une API Rebrickable v3
 4. **ui-parity-check** — Compare web vs iOS (Playwright + baselines)
-5. **scanner-sheet-checklist** — Checklist pour ajouter une surface au scanner
-6. **clean-feature-revert** — Revert une feature récente (pas juste git revert)
-7. **flaticon-icons** — Télécharge et installe des SVG Flaticon
+5. **clean-feature-revert** — Revert une feature récente (pas juste git revert)
+6. **flaticon-icons** — Télécharge et installe des SVG Flaticon
 
 ### Ajouter une compétence
 
@@ -66,7 +65,6 @@ Lis **absolument** `AGENTS.md` avant de modifier ce dépôt — c'est l'archive 
 - ✅ Ce qui est saisi à la main survit aux caches
 - ✅ La surveillance de fond ne couvre que les sets avec alertes activées
 - ✅ L'écran de liste est partagé par 4 vues différentes
-- ✅ L'OCR compte les apparitions, pas le premier candidat
 - ✅ L'ordre de déclaration des routes est une règle, pas un détail
 
 ## Vérification avant de terminer

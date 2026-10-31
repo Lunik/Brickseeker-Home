@@ -44,9 +44,7 @@ export default defineConfig({
       // main.tsx registers the worker itself (see the eager `serviceWorker.register` call there).
       injectRegister: false,
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}', 'tesseract/**/*'],
-        // The tesseract WASM core + traineddata exceed Workbox's default 2 MB precache cap.
-        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
       },
     }),
   ],

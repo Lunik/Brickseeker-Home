@@ -13,7 +13,6 @@ GitHub Copilot (Web, CLI, VS Code), Claude Code, etc.
 │   ├── check-bricklink-endpoint/
 │   ├── check-rebrickable-endpoint/
 │   ├── ui-parity-check/
-│   ├── scanner-sheet-checklist/
 │   ├── clean-feature-revert/
 │   └── flaticon-icons/
 └── README.md            # Ce fichier

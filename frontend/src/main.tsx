@@ -6,7 +6,6 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import { del, get, set } from 'idb-keyval'
 
 import App from './App'
-import { initOfflineScanSync } from './lib/offline-scan-sync'
 import { queryClient } from './lib/query-client'
 import { shouldPersistQuery } from './lib/query-persistence'
 import './index.css'
@@ -61,15 +60,12 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-// Everything this app caches to work offline — the ~21 MB precache, the catalogue snapshot, the
-// query cache, and above all the queue of scans not yet synced — is "best effort" storage by
+// Everything this app caches to work offline — the ~21 MB precache, the catalogue snapshot and the
+// query cache — is "best effort" storage by
 // default, evictable under pressure. Eviction would strike precisely when it cannot be recovered:
 // with no network to re-fetch from. Browsers grant this silently on an installed PWA and decline
 // it elsewhere, so it is a request, not a guarantee, and nothing here depends on the answer.
 void navigator.storage?.persist?.().catch(() => undefined)
-
-// Registers the online/foreground/reachability triggers that replay scans queued while offline.
-initOfflineScanSync()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -6,9 +6,9 @@ import { useSettings } from '../lib/settings-context'
 
 const STEPS: { icon: IconName; title: string; body: string }[] = [
   {
-    icon: 'camera',
-    title: 'Scannez un set',
-    body: "Visez le numéro imprimé sur la boîte. Vous pouvez aussi le taper à la main ou importer une photo — la caméra n'est jamais un passage obligé.",
+    icon: 'keyboard',
+    title: 'Cherchez un set',
+    body: 'Tapez le numéro imprimé sur la boîte pour retrouver le set.',
   },
   {
     icon: 'box',

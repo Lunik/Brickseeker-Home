@@ -4,8 +4,7 @@ import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 
-// The build-time-generated, content-hashed list of the app shell (JS/CSS/HTML, icons, the
-// tesseract assets) — this is what lets the app load with zero network after a first visit.
+// The build-time-generated, content-hashed list of the app shell (JS/CSS/HTML, icons) — this is what lets the app load with zero network after a first visit.
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 

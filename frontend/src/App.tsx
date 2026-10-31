@@ -21,8 +21,6 @@ import { LoadingBlock } from './components/ui'
 import OfflineBanner from './components/OfflineBanner'
 import LoginGate from './pages/LoginGate'
 import HomePage from './pages/HomePage'
-import ScannerPage from './pages/ScannerPage'
-import BatchSessionPage from './pages/BatchSessionPage'
 import CollectionPage from './pages/CollectionPage'
 import HistoryPage from './pages/HistoryPage'
 import WishlistPage from './pages/WishlistPage'
@@ -53,8 +51,6 @@ function Chrome() {
     && !location.pathname.startsWith('/captcha/')
   if (needsOnboarding) return <Navigate to="/onboarding" replace />
 
-  // The scanner is full-bleed: no page padding, no chrome of its own.
-  const isScanner = location.pathname === '/scan'
   const isCaptcha = location.pathname.startsWith('/captcha/')
 
   return (
@@ -65,17 +61,11 @@ function Chrome() {
           landed behind the clock and the battery. The inset is what the status bar actually
           occupies on this device — zero in a browser tab, ~47px on a notched iPhone. */}
       <main
-        className={
-          isScanner || isCaptcha ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'
-        }
+        className={isCaptcha ? '' : 'px-4 pb-16 pt-[calc(0.5rem_+_env(safe-area-inset-top))]'}
       >
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route path="/scan" element={<ScannerPage />} />
-          {/* A route, not a sheet inside the scanner: opening a scanned set unmounts the camera,
-              so a sheet could never be come back to — which was the whole complaint. */}
-          <Route path="/scan/session" element={<BatchSessionPage />} />
           <Route path="/collection" element={<CollectionPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
@@ -89,9 +79,7 @@ function Chrome() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      {/* Never over the scanner: that screen is full-bleed camera with its own controls pinned to
-          the bottom edge, and a version line would sit on top of them. */}
-      {!isScanner && !isCaptcha && (
+      {!isCaptcha && (
         <footer className="px-4 pb-6 text-center text-[11px] text-ink-faint">
           BrickSeeker {__APP_VERSION__}
         </footer>

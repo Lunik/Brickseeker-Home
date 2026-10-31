@@ -12,4 +12,4 @@ Les instructions centralisées pour tous les clients Copilot (GitHub Copilot, CL
 dans [`.copilot/instructions.md`](.copilot/instructions.md) — c'est le standard reconnu partout.
 
 Les compétences du dépôt sont dans [`.copilot/skills/`](.copilot/skills) : vérification avant de
-dire qu'un changement est fini, sondes d'API, parité d'écran avec l'app iOS, checklist du scanner.
+dire qu'un changement est fini, sondes d'API, parité d'écran avec l'app iOS.

@@ -138,12 +138,8 @@ Elles sont peu nombreuses et chacune a une raison :
   (présent/absent/indéterminé) parce qu'iOS peut refuser une lecture appareil verrouillé. Côté
   serveur ce cas n'existe pas : « ligne absente » signifie vraiment « non configuré », donc le
   message « non configuré » est sûr ici.
-- **Vision → tesseract.js, sur l'appareil.** Une première version de ce port faisait tourner
-  tesseract côté serveur (un aller-retour réseau par image) ; la reconnaissance tourne maintenant
-  entièrement dans le navigateur, comme sur iOS — seul le moteur diffère (WASM plutôt que le
-  framework système), pas l'endroit où il s'exécute. Conséquence directe : scanner ne demande
-  aucune connexion au backend, pas même pour identifier un numéro. La boucle de capture reste
-  bridée à ~800 ms comme sur iOS, où traiter chaque trame était déjà du gâchis.
+- **Vision → saisie au clavier.** Le scan caméra/OCR et l'import de photo ont été retirés : ils
+  marchaient mal en conditions réelles. Le numéro du set se tape à la main depuis l'accueil.
 - **WKWebView → Playwright/Chromium.** Même mécanique : charger la page, attendre que le défi JS
   soit passé, extraire du DOM. Les sélecteurs et regex sont portés quasi tels quels — chacun encode
   un bug trouvé uniquement en testant contre les vrais sites.
@@ -203,31 +199,6 @@ Toute route littérale se déclare **avant** les routes paramétrées de son pr�
 `backend/tests/test_routes.py` le vérifie sur toute la surface, lue depuis le schéma OpenAPI — et
 non depuis `app.routes` : FastAPI enveloppe les routeurs inclus dans un objet dont les enfants ne
 sont pas exposés et dont les chemins n'ont pas le préfixe `/api`.
-
-## Caméra et pipeline de scan
-
-Tout ce qui recouvre la caméra doit l'arrêter. `isCovered`, dans `pages/ScannerPage.tsx`, est la
-seule source de vérité et alimente `useCamera`. Une feuille de plus, un champ de saisie de plus :
-ajoute son état à `isCovered`, pas un `useEffect` de plus.
-
-La boucle OCR traite une image toutes les ~800 ms, entièrement sur l'appareil, et **compte les
-apparitions de chaque numéro**.
-Elle ne se fie jamais au premier candidat d'une image : l'OCR en renvoie un différent à chaque prise
-(un nombre de pièces, un âge, le vrai numéro), si bien qu'exiger deux fois de suite le même premier
-candidat ne déclenchait jamais rien — la caméra détectait et il ne se passait rien. Gagne celui qui
-accumule deux apparitions ; un candidat non revu depuis 6 s est oublié ; un numéro résolu est
-verrouillé 30 s, faute de quoi garder une boîte dans le cadre réécrit un `ScanEvent` toutes les deux
-secondes.
-
-Le retour sonore et haptique (`lib/feedback.ts`) n'appartient qu'au chemin caméra. Une saisie
-manuelle ou une relecture depuis l'Historique passent par le même `resolve()` et ne doivent rien
-émettre : l'utilisateur a déjà les yeux sur l'écran. C'est la règle `playsFeedbackSounds` de l'app
-iOS, portée telle quelle.
-
-La session du mode lot vit **hors du composant** (`lib/batch-session.ts` : magasin de module doublé
-de `sessionStorage`). Le scanner est une route, donc ouvrir un set scanné le démonte : tant que la
-session était un `useState`, regarder la liste qu'on venait de scanner était précisément ce qui la
-détruisait.
 
 ## Ce qui vit en mémoire doit savoir se relire au démarrage
 
