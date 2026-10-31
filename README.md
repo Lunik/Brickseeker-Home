@@ -197,6 +197,12 @@ développement reste headless, puisqu'aucune session graphique n'y est garantie.
 l'IP sans proposer de slider/audio/Retry, BrickSeeker le signale et ne présente pas cette page
 terminale comme un CAPTCHA que l'utilisateur pourrait résoudre.
 
+Un troisième service, `flaresolverr`, sert de repli **Cloudflare uniquement** : si Chromium reste bloqué
+plus de dix secondes sur un défi Cloudflare, le backend demande à FlareSolverr
+(`BRICKSEEKER_FLARESOLVERR_URL`, déjà câblé dans `docker-compose.yml`) de passer le défi, puis rejoue
+ses cookies et son User-Agent dans un contexte Chromium jetable et relance la même extraction. Tout
+autre CAPTCHA (DataDome…) garde la fenêtre interactive. Sans cette variable, rien ne change.
+
 Browserless OSS ne fournit pas de lien interactif vers une page existante. Le viewer CAPTCHA est
 donc servi par l'API authentifiée de BrickSeeker (captures JPEG et événements souris/clavier) :
 le port CDP reste privé au réseau Compose et aucun jeton de contrôle Chromium n'est exposé au LAN.

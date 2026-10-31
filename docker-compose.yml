@@ -22,6 +22,8 @@ services:
     # something other than the bundled `chromium` sidecar.
     environment:
       - BRICKSEEKER_BROWSER_WS_ENDPOINT=ws://chromium:3000
+      # Cloudflare-only fallback (see the `flaresolverr` service). Drop this line to disable it.
+      - BRICKSEEKER_FLARESOLVERR_URL=http://flaresolverr:8191
     depends_on:
       chromium:
         condition: service_healthy  # Wait for Chromium to be ready, not just started
@@ -63,3 +65,23 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  flaresolverr:
+    # Only called when Chromium stays stuck on a Cloudflare challenge; it hands back the clearance
+    # cookies and User-Agent, which the backend replays in its own browser. Other CAPTCHAs
+    # (DataDome...) never go through it: they keep the interactive window. Not a `depends_on` of
+    # `brickseeker` on purpose — without it the fallback just fails and the source is skipped.
+    # Pinned for the same reason as `chromium`: a Chrome bump changes what Cloudflare sees.
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    container_name: brickseeker-flaresolverr
+    restart: unless-stopped
+    environment:
+      - LOG_LEVEL=info
+    # No `ports:` — reachable only from `brickseeker` over the compose network.
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8191/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
