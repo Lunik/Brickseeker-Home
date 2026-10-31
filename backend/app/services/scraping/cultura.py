@@ -1,18 +1,24 @@
-"""Cultura price from the retailer's public Magento GraphQL catalogue."""
+"""Cultura price from the retailer's public Magento GraphQL catalogue.
+
+The catalogue sits behind a Cloudflare challenge that refuses a bare HTTP client (`403`), so the
+query runs **inside a page of the shared browser**, same-origin, the way the site's own front end
+does it. A challenge then surfaces as `ScrapeBlocked` and reaches the interactive popup like any
+other browser-backed retailer; once validated, the clearance cookie is reused.
+"""
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
-import httpx
-
 from ..pricing import PriceQuote, PriceSource, set_digits
 from ..rebrickable import LegoSet
-from .browser import ScrapeError
+from .browser import ScrapeError, ScrapeNotFound, load_and_extract
 
-_ENDPOINT = "https://www.cultura.com/m2/graphql"
+_HOME = "https://www.cultura.com/"
+_ENDPOINT = "/m2/graphql"
 _QUERY = """
 query Products($search: String!) {
   products(search: $search, pageSize: 5) {
@@ -31,7 +37,15 @@ query Products($search: String!) {
   }
 }
 """
-_HTTP_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
+#: The interstitial keeps the page title/body of its own; real content only after it clears.
+_READINESS_JS = """
+(() => {
+  const text = document.body ? document.body.innerText : '';
+  return document.readyState !== 'loading'
+    && !/Un instant|Vérification de sécurité/i.test(text)
+    && text.trim().length > 0;
+})()
+"""
 
 
 def _number(value: object) -> float | None:
@@ -88,16 +102,31 @@ def _quote_from_payload(payload: object, digits: str) -> PriceQuote | None:
     return None
 
 
+def _extract_js(digits: str) -> str:
+    request = json.dumps({"query": _QUERY, "variables": {"search": digits}})
+    return f"""
+(async () => {{
+  const response = await fetch({json.dumps(_ENDPOINT)}, {{
+    method: 'POST',
+    headers: {{ 'content-type': 'application/json' }},
+    body: {json.dumps(request)},
+  }});
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  return await response.text();
+}})()
+"""
+
+
 async def fetch_price(lego_set: LegoSet) -> PriceQuote | None:
     digits = set_digits(lego_set.set_num)
     try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            response = await client.post(
-                _ENDPOINT,
-                json={"query": _QUERY, "variables": {"search": digits}},
-            )
-            response.raise_for_status()
-            payload = response.json()
-    except (httpx.HTTPError, ValueError) as error:
-        raise ScrapeError(f"Cultura GraphQL indisponible : {error}") from error
+        raw = await load_and_extract(
+            _HOME, readiness_js=_READINESS_JS, extract_js=_extract_js(digits)
+        )
+    except ScrapeNotFound:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ScrapeError("Réponse Cultura illisible") from error
     return _quote_from_payload(payload, digits)

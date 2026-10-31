@@ -117,7 +117,7 @@ def _retail_fetchers() -> tuple[
     return (
         (PriceSource.AMAZON.value, amazon.fetch_price, True),
         (PriceSource.CDISCOUNT.value, cdiscount.fetch_price, True),
-        (PriceSource.CULTURA.value, cultura.fetch_price, False),
+        (PriceSource.CULTURA.value, cultura.fetch_price, True),
         (PriceSource.SMYTH_TOYS.value, smyth_toys.fetch_price, False),
         (PriceSource.KING_JOUET.value, king_jouet.fetch_price, True),
         (PriceSource.LA_GRANDE_RECRE.value, la_grande_recre.fetch_price, True),
