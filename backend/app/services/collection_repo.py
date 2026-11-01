@@ -301,6 +301,29 @@ async def set_entry_quantity(
     await session.commit()
 
 
+async def sync_set_entries(
+    session: AsyncSession, set_num: str, user_sets: Sequence[UserSet], lists: Sequence[SetList]
+) -> None:
+    """One set's slice of `sync_collection`: its entries mirror Rebrickable exactly, the summary
+    columns follow. No-ops without a cache row."""
+    cached = await session.get(CachedSet, set_num)
+    if cached is None:
+        return
+    names = {set_list.id: set_list.name for set_list in lists}
+    per_list: dict[int, int] = {}
+    for user_set in user_sets:
+        if user_set.lego_set.set_num == set_num and user_set.list_id is not None:
+            per_list[user_set.list_id] = per_list.get(user_set.list_id, 0) + user_set.quantity
+    for entry in await set_entries(session, set_num):
+        if entry.list_id not in per_list:
+            await session.delete(entry)
+    for list_id, quantity in per_list.items():
+        await _upsert_entry(session, set_num, list_id, names.get(list_id), quantity)
+    await _sync_from_entries(session, cached)
+    cached.last_synced_at = _now()
+    await session.commit()
+
+
 async def _enter_collection(session: AsyncSession, set_num: str) -> None:
     """What "this set is now owned" implies beyond the flag itself.
 

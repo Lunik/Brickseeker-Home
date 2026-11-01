@@ -468,8 +468,9 @@ class RebrickableClient:
             raise
         return _decode(payload, UserSet.from_payload)
 
-    async def fetch_all_user_sets(self) -> list[UserSet]:
-        """The whole collection, DRF-paginated.
+    async def fetch_all_user_sets(self, set_num: str | None = None) -> list[UserSet]:
+        """The whole collection, DRF-paginated. `set_num` narrows it to one set — still one row
+        per list (probed live: `/sets/{num}/` folds every list into the first one).
 
         A set owned in several Set Lists comes back **once per list** — documented behaviour, not a
         bug. Callers assuming one list per set (`collection_repo.sync_collection`) dedupe by
@@ -479,6 +480,8 @@ class RebrickableClient:
         collected: list[UserSet] = []
         url = f"{BASE_URL}/users/{_seg(token)}/sets/"
         params: dict[str, str] | None = {"page_size": "100"}
+        if set_num:
+            params["set_num"] = set_num
         visited: set[str] = set()
         while True:
             page = _decode_page(_json(await self._request("GET", url, params=params)), UserSet.from_payload)

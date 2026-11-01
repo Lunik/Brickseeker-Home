@@ -27,6 +27,7 @@ from ..schemas import (
     ScanEventOut,
     ValuationOut,
 )
+from ..security import CredentialKey, has_credential
 from ..services import catalog, collection_repo, prices, rebrickable
 from ..services.alerts import effective_threshold
 from ..services.pricing import (
@@ -325,6 +326,22 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
         prices_refreshing=refreshing,
         captcha_required_sources=prices.captcha_required_sources(),
     )
+
+
+@router.post("/sets/{set_num}/sync-collection")
+async def sync_set_collection(set_num: str, session: SessionDep) -> dict[str, bool]:
+    """Re-reads this one set's lists and quantities from Rebrickable, so opening a fiche heals a
+    stale cache without the full sync. The page answers from the cache and refetches after."""
+    cached = await _cached_by_number(session, set_num)
+    if cached is None or is_minifig(cached.set_num):
+        return {"synced": False}
+    if not await has_credential(session, CredentialKey.REBRICKABLE_USER_TOKEN):
+        return {"synced": False}
+    client = await rebrickable.client_for(session)
+    user_sets = await client.fetch_all_user_sets(cached.set_num)
+    lists = await client.fetch_user_set_lists()
+    await collection_repo.sync_set_entries(session, cached.set_num, user_sets, lists)
+    return {"synced": True}
 
 
 def _alert_out(alert) -> PriceAlertOut:  # noqa: ANN001 - ORM row

@@ -99,6 +99,20 @@ class TestSyncCollection:
 
         assert len(await collection_repo.set_entries(session, "10307-1")) == 2
 
+    async def test_single_set_sync_replaces_its_entries_only(self, session) -> None:  # noqa: ANN001
+        await collection_repo.sync_collection(
+            session, [user_set("10307-1", list_id=1), user_set("10308-1", list_id=1)], LISTS
+        )
+
+        await collection_repo.sync_set_entries(session, "10307-1", [user_set("10307-1", list_id=2)], LISTS)
+
+        entries = await collection_repo.set_entries(session, "10307-1")
+        assert [(e.list_id, e.list_name) for e in entries] == [(2, "stored")]
+        assert (await collection_repo.cached_set(session, "10308-1")).current_list_id == 1
+
+        await collection_repo.sync_set_entries(session, "10307-1", [], LISTS)
+        assert (await collection_repo.cached_set(session, "10307-1")).is_in_collection is False
+
     async def test_scanned_flag_survives_a_sync(self, session) -> None:  # noqa: ANN001
         await scan(session)
 

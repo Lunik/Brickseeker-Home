@@ -135,6 +135,24 @@ export default function SetDetailPage() {
     }
   }, [canonicalSetNum, setNum, navigate, location.state])
 
+  // The fiche paints from the cache; re-read this set's lists from Rebrickable in the background and
+  // let the refetch swap the fresh data in. Failures (offline, unlinked) are silent: the cache stays.
+  useEffect(() => {
+    if (!canonicalSetNum || canonicalSetNum !== setNum) return
+    let cancelled = false
+    api
+      .post<{ synced: boolean }>(`/sets/${encodeURIComponent(canonicalSetNum)}/sync-collection`)
+      .then(({ synced }) => {
+        if (cancelled || !synced) return
+        void queryClient.invalidateQueries({ queryKey: ['set', canonicalSetNum] })
+        void queryClient.invalidateQueries({ queryKey: ['collection'] })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [canonicalSetNum, setNum, queryClient])
+
   // A refresh of this set can be the one that gets a retailer blocked: surface the global button now
   // rather than at its next poll.
   const blockedSources = data?.captchaRequiredSources?.join(',')
