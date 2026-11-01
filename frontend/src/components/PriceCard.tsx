@@ -65,6 +65,8 @@ function QuoteVerdictLine({
   onDecide: (verdict: 'trusted' | 'rejected' | null) => void
 }) {
   const action = 'text-xs font-medium text-brand underline'
+  // A trusted quote says nothing here: reporting it is the discreet flag beside its amount.
+  if (quote.verdict === 'trusted' && !quote.userDecided) return null
   return (
     <div className="mt-0.5 space-y-0.5 text-xs">
       {quote.reasonLabel && (
@@ -74,26 +76,15 @@ function QuoteVerdictLine({
         </p>
       )}
       {quote.title && isSetAside && <p className="truncate text-ink-faint">{quote.title}</p>}
-      <p className="flex flex-wrap gap-3">
-        {quote.userDecided ? (
-          <button type="button" className={action} onClick={() => onDecide(null)}>
-            Annuler ma décision
-          </button>
-        ) : (
-          <>
-            {quote.verdict !== 'trusted' && (
-              <button type="button" className={action} onClick={() => onDecide('trusted')}>
-                Bon prix
-              </button>
-            )}
-            {quote.verdict !== 'rejected' && (
-              <button type="button" className={action} onClick={() => onDecide('rejected')}>
-                Mauvais produit
-              </button>
-            )}
-          </>
-        )}
-      </p>
+      {quote.userDecided ? (
+        <button type="button" className={action} onClick={() => onDecide(null)}>
+          Annuler ma décision
+        </button>
+      ) : (
+        <button type="button" className={action} onClick={() => onDecide('trusted')}>
+          Bon prix
+        </button>
+      )}
     </div>
   )
 }
@@ -148,6 +139,17 @@ function QuoteRow({
         )}
         {quote ? (
           <>
+            {quote.verdict && quote.verdict !== 'rejected' && !quote.userDecided && (
+              <button
+                type="button"
+                className="p-1 text-ink-faint opacity-60 hover:opacity-100"
+                onClick={() => onDecide('rejected')}
+                aria-label={`Signaler le prix ${label} : mauvais produit`}
+                title="Signaler : mauvais produit"
+              >
+                <Icon name="flag" className="h-3.5 w-3.5" />
+              </button>
+            )}
             {!isSetAside && <DeltaBadge percent={percentVsStore(quote.amount, storePrice)} />}
             {quote.sourceUrl ? (
               <a

@@ -17,6 +17,7 @@ export type IconName =
   | 'clock'
   | 'gift'
   | 'bell'
+  | 'flag'
   | 'bell-off'
   | 'settings'
   | 'warning'
@@ -63,6 +64,7 @@ const PATHS: Record<IconName, string> = {
   camera: 'M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.3-2h7l1.3 2h2.2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9ZM12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3.5 2',
   gift: 'M3.5 11h17v9.5h-17V11ZM2.5 7.5h19V11h-19V7.5ZM12 7.5V20.5M12 7.5S10.5 3.5 8 3.5a2 2 0 0 0 0 4h4Zm0 0s1.5-4 4-4a2 2 0 0 1 0 4h-4Z',
+  flag: 'M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7',
   bell: 'M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6ZM10.3 20a2 2 0 0 0 3.4 0',
   'bell-off': 'M18 9a6 6 0 0 0-8.5-5.5M6.2 6.2A6 6 0 0 0 6 9c0 5-2 6-2 6h12M10.3 20a2 2 0 0 0 3.4 0M3 3l18 18',
   settings:
