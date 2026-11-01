@@ -92,6 +92,14 @@ class SetDetailOut(CamelModel):
     captcha_required_sources: list[str]
 
 
+async def _cached_by_number(session, number: str):  # noqa: ANN001, ANN202 - session, ORM row
+    """A number read off a box omits the `-1` suffix Rebrickable keys on."""
+    cached = await collection_repo.cached_set(session, number)
+    if cached is None and "-" not in number:
+        cached = await collection_repo.cached_set(session, f"{number}-1")
+    return cached
+
+
 async def _resolve(session, query: str) -> ResolveOut:
     """Cache-first, exactly like the iOS scanner: a cached row answers instantly.
 
@@ -101,9 +109,7 @@ async def _resolve(session, query: str) -> ResolveOut:
     down. Any other error (bad key, server bug) is a real problem and must not be silently masked
     by a stale catalogue hit.
     """
-    cached = await collection_repo.cached_set(session, query)
-    if cached is None and "-" not in query:
-        cached = await collection_repo.cached_set(session, f"{query}-1")
+    cached = await _cached_by_number(session, query)
     if cached is not None:
         return ResolveOut(
             status="found",
@@ -179,7 +185,7 @@ async def search_sets(
 
 @router.get("/sets/{set_num}", response_model=SetDetailOut)
 async def set_detail(set_num: str, session: SessionDep, background: BackgroundTasks) -> SetDetailOut:
-    cached = await collection_repo.cached_set(session, set_num)
+    cached = await _cached_by_number(session, set_num)
     lego_set = None
     is_offline = False
 
@@ -201,15 +207,21 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
                 if lego_set is None:
                     raise
         # Cache the row so prices, alerts and scans have something to attach to. Not marked as
-        # scanned: opening a set is not scanning it.
-        cached = await collection_repo.cache_set(
-            session,
-            lego_set,
-            is_in_collection=False,
-            list_id=None,
-            list_name=None,
-            mark_as_scanned=False,
-        )
+        # scanned: opening a set is not scanning it. Never over a row found under the number the
+        # lookup settled on: `cache_set` would reset its collection status to "not owned".
+        cached = await collection_repo.cached_set(session, lego_set.set_num)
+        if cached is None:
+            cached = await collection_repo.cache_set(
+                session,
+                lego_set,
+                is_in_collection=False,
+                list_id=None,
+                list_name=None,
+                mark_as_scanned=False,
+            )
+
+    # Everything below is keyed on the full number, whichever form the URL carried.
+    set_num = cached.set_num
 
     # Scheduled, not awaited: the response below answers from the cache regardless, so a stale set
     # is never the reason this request is slow. `refresh_set_prices` already resolves per-item

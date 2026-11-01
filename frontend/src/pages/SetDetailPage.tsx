@@ -126,6 +126,15 @@ export default function SetDetailPage() {
     },
   })
 
+  // A typed or bookmarked `/set/76906` answers for `76906-1`. Every other call on this page is keyed
+  // on the URL, so move to the full number before an action writes under the short one.
+  const canonicalSetNum = data?.set.setNum
+  useEffect(() => {
+    if (canonicalSetNum && canonicalSetNum !== setNum) {
+      navigate(`/set/${encodeURIComponent(canonicalSetNum)}`, { replace: true, state: location.state })
+    }
+  }, [canonicalSetNum, setNum, navigate, location.state])
+
   // A refresh of this set can be the one that gets a retailer blocked: surface the global button now
   // rather than at its next poll.
   const blockedSources = data?.captchaRequiredSources?.join(',')
