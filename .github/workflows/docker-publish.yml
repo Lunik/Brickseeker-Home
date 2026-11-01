@@ -38,7 +38,9 @@ jobs:
         run: ruff check .
 
       - name: Test
-        run: pytest -q
+        run: |
+          coverage run -m pytest -q
+          coverage report --sort=cover
 
   build:
     needs: test
