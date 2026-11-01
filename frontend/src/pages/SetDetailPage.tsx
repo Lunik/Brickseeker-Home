@@ -565,6 +565,7 @@ export default function SetDetailPage() {
       />
       {refreshBlocked && <ErrorLabel message="Hors-ligne : actualisation impossible pour le moment." />}
       {refreshError && <ErrorLabel message={refreshError} />}
+      {decideQuote.error && <ErrorLabel message={decideQuote.error.message} />}
       {activeCaptchaChallenge && (
         <section className="card flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-ink-muted">

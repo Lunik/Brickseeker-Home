@@ -88,7 +88,8 @@ def _extract_js(
       || (card.matches('a[href]') ? card : card.querySelector('a[href]'));
     return JSON.stringify({{
       price,
-      title: productText,
+      // Only a real title element: the whole card also holds prices, badges and promo wording.
+      title: titleElement ? productText : null,
       url: linkEl ? linkEl.href : null,
     }});
   }}

@@ -88,7 +88,8 @@ titres en français, une comparaison positive est impossible.
 La fiche d'un set montre les prix écartés (`setAsideQuotes`) avec leur raison. « Bon prix » et
 « Mauvais produit » priment sur tout le reste (`QuoteDecision`) et survivent à `clear_cache()`. Une
 décision porte sur le montant jugé et tombe dès que l'offre change du simple au double. Statistiques
-et l'accueil affichent la part de la valeur qui repose sur un prix à confirmer.
+et l'accueil affichent la part de la valeur qui repose sur un prix à confirmer. Écart assumé avec
+l'app iOS, qui n'a ni ces lignes ni ces boutons.
 
 ## Ce qui est saisi à la main survit aux caches
 

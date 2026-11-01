@@ -15,6 +15,7 @@ from app.services.quote_assessment import (
     rests_on_suspect,
     usable_quotes,
 )
+from app.services.scraping import cdiscount, retail_search
 
 NEW = PriceSource.BRICKLINK_NEW
 USED = PriceSource.BRICKLINK_USED
@@ -138,6 +139,11 @@ class TestUsableQuotes:
 
 
 class TestTitle:
+    def test_card_text_is_never_stored_as_a_title(self):
+        assert "title" not in cdiscount._extract_js("10307")
+        js = retail_search._extract_js("10307", ".card", None, None, None, ".title")
+        assert "title: titleElement ? productText : null" in js
+
     def test_other_product_words(self):
         assert is_other_product("Porte-clés LEGO Ninjago Kai")
         assert is_other_product("LEGO Minifigures : boîte de 36 sachets")
