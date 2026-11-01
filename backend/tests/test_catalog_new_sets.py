@@ -44,6 +44,7 @@ async def test_new_sets_uses_any_cached_price_row() -> None:
         patch("app.routers.catalog.app_settings.get_setting", AsyncMock(return_value=False)),
         patch("app.routers.catalog.collection_repo.owned_sets", AsyncMock(return_value=[])),
         patch("app.routers.catalog.collection_repo.all_cached_sets", AsyncMock(return_value=[cached_row])),
+        patch("app.routers.catalog.collection_repo.all_cached_prices", AsyncMock(return_value={})),
         patch("app.routers.catalog.catalog.theme_names", AsyncMock(return_value={1: "Sonic the Hedgehog"})),
         patch("app.routers.catalog.catalog.should_hide", AsyncMock(return_value=False)),
     ):

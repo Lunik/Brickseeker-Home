@@ -18,6 +18,7 @@ Each guards against the other so the two never overlap, and neither can cancel t
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -178,7 +179,8 @@ class PriceUpdater:
             for item in queue:
                 if item not in self._state.queue:
                     self._state.queue.append(item)
-            self._state.total = self._state.done + len(self._state.queue) + (1 if self._state.current_set_num else 0)
+            in_flight = 1 if self._state.current_set_num else 0
+            self._state.total = self._state.done + len(self._state.queue) + in_flight
             self._state.is_running = True
             self._state.phase = "fetching"
             self._state.last_progress_at = datetime.now(UTC)
@@ -248,10 +250,8 @@ class PriceUpdater:
         for task in tasks:
             task.cancel()
         for task in tasks:
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._tasks.clear()
         if self._run_id == cancelled_run_id:
             self._state.is_running = False
@@ -267,7 +267,6 @@ class PriceUpdater:
         await self.cancel_preserving_progress()
 
     async def _run(self) -> None:
-        current_task = asyncio.current_task()
         completed = False
         try:
             while self._state.queue and not self._cancel_requested:

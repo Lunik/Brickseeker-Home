@@ -120,7 +120,9 @@ class TestCollectionPrice:
         assert condition is ListCondition.NEW
 
     def test_valuation_uses_the_pricier_marketplace(self) -> None:
-        price = resolve_collection_price(None, ListCondition.NEW, StoreAvailability.UNKNOWN, [AMAZON_30, CDISCOUNT_25])
+        price = resolve_collection_price(
+            None, ListCondition.NEW, StoreAvailability.UNKNOWN, [AMAZON_30, CDISCOUNT_25]
+        )
         assert price == 30.0
 
     def test_no_source_at_all_is_none_not_zero(self) -> None:
@@ -177,12 +179,16 @@ class TestBestDeal:
 
 class TestValuation:
     def test_paid_price_is_the_reference_when_recorded(self) -> None:
-        valuation = make_valuation("10307-1", 100.0, 80.0, ListCondition.NEW, [], availability=StoreAvailability.AVAILABLE)
+        valuation = make_valuation(
+            "10307-1", 100.0, 80.0, ListCondition.NEW, [], availability=StoreAvailability.AVAILABLE
+        )
         assert valuation.basis is ValuationBasis.PAID
         assert valuation.growth_percent == pytest.approx(25.0)
 
     def test_retail_is_the_sole_default_reference(self) -> None:
-        valuation = make_valuation("10307-1", 100.0, None, ListCondition.NEW, [], availability=StoreAvailability.AVAILABLE)
+        valuation = make_valuation(
+            "10307-1", 100.0, None, ListCondition.NEW, [], availability=StoreAvailability.AVAILABLE
+        )
         assert valuation.basis is ValuationBasis.RETAIL
         # Worth exactly what it lists for reads as a neutral 0 %, not "unavailable".
         assert valuation.growth_percent == pytest.approx(0.0)
@@ -265,7 +271,12 @@ class TestDealVerdict:
 class TestHelpers:
     @pytest.mark.parametrize(
         ("value", "expected"),
-        [("71045-3", "71045"), ("10307-1", "10307"), ("fig-000123", "fig-000123"), ("AUTOSHOW-1", "AUTOSHOW")],
+        [
+            ("71045-3", "71045"),
+            ("10307-1", "10307"),
+            ("fig-000123", "fig-000123"),
+            ("AUTOSHOW-1", "AUTOSHOW"),
+        ],
     )
     def test_base_set_num(self, value: str, expected: str) -> None:
         assert base_set_num(value) == expected

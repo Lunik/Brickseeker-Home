@@ -12,7 +12,36 @@ permissions:
   packages: write
 
 jobs:
+  # The image build below already type-checks the frontend (`npm run build` runs `tsc -b`). This job
+  # is what stops an image being published with a failing backend test or lint error.
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Same version as the runtime stage of the Dockerfile.
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: pip install -e '.[dev]'
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.image.outputs.name }}

@@ -60,9 +60,9 @@ async def test_resolve_still_raises_missing_credentials_when_catalogue_has_no_ma
             AsyncMock(side_effect=missing_credentials("Clé API Rebrickable non configurée")),
         ),
         patch("app.routers.sets.catalog.lookup_catalog_set", AsyncMock(return_value=None)),
+        pytest.raises(ApiError) as excinfo,
     ):
-        with pytest.raises(ApiError) as excinfo:
-            await _resolve(session, "999999")
+        await _resolve(session, "999999")
 
     assert excinfo.value.status_code == 412
 

@@ -17,8 +17,8 @@
 FROM node:22-slim AS frontend
 WORKDIR /build
 
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 COPY frontend/ ./
 # What the footer reports. Passed by CI as the git tag being released; without it the build falls
