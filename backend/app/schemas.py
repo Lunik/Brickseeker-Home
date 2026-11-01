@@ -20,6 +20,7 @@ from .services.pricing import (
     StoreAvailability,
     is_minifig,
 )
+from .services.quote_assessment import AssessedQuote, QuoteVerdict
 
 
 class CamelModel(BaseModel):
@@ -51,6 +52,23 @@ class PriceQuoteOut(CamelModel):
     lot_count: int | None
     is_thin_sample: bool
     is_stale: bool
+    verdict: str = QuoteVerdict.TRUSTED.value
+    reason: str | None = None
+    reason_label: str | None = None
+    title: str | None = None
+    user_decided: bool = False
+
+    @classmethod
+    def of_assessed(cls, item: AssessedQuote) -> PriceQuoteOut:
+        return cls.of(item.quote).model_copy(
+            update={
+                "verdict": item.verdict.value,
+                "reason": item.reason.value if item.reason else None,
+                "reason_label": item.reason.label if item.reason else None,
+                "title": item.title,
+                "user_decided": item.user_decided,
+            }
+        )
 
     @classmethod
     def of(cls, quote: PriceQuote) -> PriceQuoteOut:

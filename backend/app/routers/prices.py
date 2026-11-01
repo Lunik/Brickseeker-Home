@@ -21,6 +21,7 @@ from ..services.pricing import (
     percent_vs_store,
     source_display_name,
 )
+from ..services.quote_assessment import QuoteVerdict, split_assessed
 
 router = APIRouter(prefix="/prices", tags=["prix"], dependencies=[Depends(require_auth)])
 
@@ -28,6 +29,8 @@ router = APIRouter(prefix="/prices", tags=["prix"], dependencies=[Depends(requir
 class PricesOut(CamelModel):
     set_num: str
     quotes: list[PriceQuoteOut]
+    #: Excluded from every price, shown so the user can see why and overrule it.
+    set_aside_quotes: list[PriceQuoteOut]
     store_price_eur: float | None
     store_currency: str | None
     availability: str
@@ -37,6 +40,10 @@ class PricesOut(CamelModel):
     #: number rather than each re-deriving it.
     percent_vs_store: dict[str, int]
     captcha_required_sources: list[str]
+
+
+class QuoteDecisionIn(CamelModel):
+    verdict: Literal[QuoteVerdict.TRUSTED, QuoteVerdict.REJECTED]
 
 
 class BatchStartIn(CamelModel):
@@ -68,7 +75,8 @@ class CaptchaKeyIn(CamelModel):
 
 async def _payload(session, set_num: str) -> PricesOut:
     cached = await collection_repo.cached_set(session, set_num)
-    quotes = await collection_repo.cached_prices(session, set_num)
+    usable, set_aside = split_assessed(await collection_repo.assessed_prices(session, set_num))
+    quotes = [item.quote for item in usable]
     conditions = await collection_repo.condition_by_list_id(session)
     condition = (
         conditions.get(cached.current_list_id) if cached and cached.current_list_id else None
@@ -96,7 +104,8 @@ async def _payload(session, set_num: str) -> PricesOut:
 
     return PricesOut(
         set_num=set_num,
-        quotes=[PriceQuoteOut.of(quote) for quote in quotes],
+        quotes=[PriceQuoteOut.of_assessed(item) for item in usable],
+        set_aside_quotes=[PriceQuoteOut.of_assessed(item) for item in set_aside],
         store_price_eur=store_price,
         store_currency="EUR",
         availability=availability.value,
@@ -312,6 +321,22 @@ async def refresh_store_price(set_num: str, session: SessionDep) -> PricesOut:
     icon, and two controls for overlapping work needed more explaining than they saved. Kept because
     it is the cheap half of a refresh and costs nothing to leave in place."""
     await prices.fetch_store_price(session, set_num)
+    return await _payload(session, set_num)
+
+
+@router.put("/{set_num}/quotes/{source}/decision", response_model=PricesOut)
+async def decide_quote(set_num: str, source: str, body: QuoteDecisionIn, session: SessionDep) -> PricesOut:
+    assessed = await collection_repo.assessed_prices(session, set_num)
+    amount = next((item.quote.amount for item in assessed if item.quote.source.value == source), None)
+    if amount is None:
+        raise ApiError("Ce prix n'existe plus", 404)
+    await collection_repo.decide_quote(session, set_num, source, body.verdict, amount)
+    return await _payload(session, set_num)
+
+
+@router.delete("/{set_num}/quotes/{source}/decision", response_model=PricesOut)
+async def forget_quote_decision(set_num: str, source: str, session: SessionDep) -> PricesOut:
+    await collection_repo.forget_quote_decision(session, set_num, source)
     return await _payload(session, set_num)
 
 

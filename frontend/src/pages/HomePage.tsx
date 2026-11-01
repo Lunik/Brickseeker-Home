@@ -301,6 +301,11 @@ function ValueHero({ stats }: { stats: CollectionStats }) {
           <p className="mt-2 text-[14px] text-ink-muted">
             Estimée sur {stats.setsWithKnownPrice} / {stats.setCount} sets dont le prix est connu
           </p>
+          {stats.uncertainSetCount > 0 && (
+            <p className="mt-1 text-[13px] text-amber-600">
+              Dont {formatEUR(stats.uncertainValueEur)} sur {stats.uncertainSetCount} set(s) à confirmer
+            </p>
+          )}
           <div className="mt-2 w-48 max-w-full">
             <ProgressBar value={stats.setsWithKnownPrice} total={stats.setCount} />
           </div>

@@ -81,6 +81,15 @@ porte-clés ou l'annonce d'un revendeur. `services/quote_assessment.py`, pur com
 jamais modifié (#213). Un prix d'occasion ne remplace pas un prix neuf douteux : il
 sous-évaluerait un set scellé sans le dire. Les variantes n'interrogent plus du tout les marchands.
 
+Le titre du marchand, conservé à part (`CachedQuoteTitle`, vidé avec le cache), rejette une offre sur
+des mots négatifs seulement (porte-clés, « boîte de 36 »…) : les noms de sets sont en anglais et les
+titres en français, une comparaison positive est impossible.
+
+La fiche d'un set montre les prix écartés (`setAsideQuotes`) avec leur raison. « Bon prix » et
+« Mauvais produit » priment sur tout le reste (`QuoteDecision`) et survivent à `clear_cache()`. Une
+décision porte sur le montant jugé et tombe dès que l'offre change du simple au double. Statistiques
+et l'accueil affichent la part de la valeur qui repose sur un prix à confirmer.
+
 ## Ce qui est saisi à la main survit aux caches
 
 `clear_cache()` supprime `CachedSet`, `CachedSetList`, `CachedSetPrice`, `SoldListing`,

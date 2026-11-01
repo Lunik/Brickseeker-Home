@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, imageUrl } from '../api/client'
-import type { CollectionPayload, InteractivePriceRefresh, SetDetail } from '../api/types'
+import type { CollectionPayload, InteractivePriceRefresh, PriceSourceKey, SetDetail } from '../api/types'
 import PriceAlertEditor from '../components/PriceAlertEditor'
 import PriceCard from '../components/PriceCard'
 import PriceHistoryChart from '../components/PriceHistoryChart'
@@ -168,6 +168,14 @@ export default function SetDetailPage() {
     queryFn: () => api.get<{ results: RelatedSet[] }>(`/sets/${encodeURIComponent(setNum)}/similar`),
     enabled: Boolean(data) && !data?.isMinifig,
     retry: false,
+  })
+
+  const decideQuote = useMutation({
+    mutationFn: ({ source, verdict }: { source: PriceSourceKey; verdict: 'trusted' | 'rejected' | null }) => {
+      const path = `/prices/${encodeURIComponent(setNum)}/quotes/${source}/decision`
+      return verdict ? api.put(path, { verdict }) : api.delete(path)
+    },
+    onSuccess: () => void queryClient.invalidateQueries(),
   })
 
   const refresh = useMutation({
@@ -531,6 +539,7 @@ export default function SetDetailPage() {
 
       <PriceCard
         detail={data}
+        onDecideQuote={(source, verdict) => decideQuote.mutate({ source, verdict })}
         pricePerPartTarget={Number(preferences?.['appTheme.preferredPricePerPart'] ?? 0.12)}
         isRefreshing={
           refresh.isPending

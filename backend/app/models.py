@@ -191,6 +191,22 @@ class CachedQuoteTitle(Base):
     title: Mapped[str] = mapped_column(String(255))
 
 
+class QuoteDecision(Base):
+    """The user's own verdict on one source's offer for a set. Hand-entered, so it survives
+    `clear_cache()`. `amount` is the price judged: the decision lapses once the offer moves far from
+    it, because a URL says nothing on the search-result pages most retailers link to."""
+
+    __tablename__ = "quote_decisions"
+    __table_args__ = (UniqueConstraint("set_num", "source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    set_num: Mapped[str] = mapped_column(String(64), index=True)
+    source: Mapped[str] = mapped_column(String(32))
+    verdict: Mapped[str] = mapped_column(String(16))
+    amount: Mapped[float] = mapped_column(Float)
+    decided_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class PriceHistoryEntry(Base):
     """Append-only, one row per (set, source, day). Survives `clear_cache()` — the price-evolution
     chart is the whole point of recording it, and a past reading can't be re-fetched."""

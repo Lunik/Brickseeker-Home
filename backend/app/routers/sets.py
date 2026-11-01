@@ -34,6 +34,7 @@ from ..services.pricing import (
     make_valuation,
     source_display_name,
 )
+from ..services.quote_assessment import split_assessed
 from ..services.rebrickable import Ambiguous, Found, NotFound
 from ..services.scraping.lego_store import instructions_url, store_url
 
@@ -76,6 +77,7 @@ class SetDetailOut(CamelModel):
     availability: str
     store_price_fetched_at: datetime | None
     quotes: list[PriceQuoteOut]
+    set_aside_quotes: list[PriceQuoteOut]
     valuation: ValuationOut
     paid_price_eur: float | None
     price_history: list[PriceHistoryPointOut]
@@ -246,7 +248,8 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
 
         background.add_task(run)
 
-    quotes = await collection_repo.cached_prices(session, set_num)
+    usable, set_aside = split_assessed(await collection_repo.assessed_prices(session, set_num))
+    quotes = [item.quote for item in usable]
     conditions = await collection_repo.condition_by_list_id(session)
     condition = conditions.get(cached.current_list_id) if cached.current_list_id else None
     paid_price = await collection_repo.paid_price(session, set_num)
@@ -283,7 +286,8 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
         store_currency="EUR",
         availability=StoreAvailability.from_raw(cached.store_availability).value,
         store_price_fetched_at=cached.store_price_fetched_at,
-        quotes=[PriceQuoteOut.of(quote) for quote in quotes],
+        quotes=[PriceQuoteOut.of_assessed(item) for item in usable],
+        set_aside_quotes=[PriceQuoteOut.of_assessed(item) for item in set_aside],
         valuation=ValuationOut.of(valuation),
         paid_price_eur=paid_price,
         price_history=[

@@ -246,6 +246,11 @@ export default function StatsPage() {
           Basée sur {data.setsWithKnownPrice} / {data.setCount} sets ({data.pricedUnitCount} /{' '}
           {data.unitCount} exemplaires) dont le prix est connu
         </p>
+        {data.uncertainSetCount > 0 && (
+          <p className="text-[13px] text-amber-600">
+            Dont {formatEUR(data.uncertainValueEur)} sur {data.uncertainSetCount} set(s) à confirmer
+          </p>
+        )}
         {/* When the figure was last actually re-read. A total with no date attached says nothing
             about whether it is today's market or last month's — so the line is always there, with
             the never-run case spelled out rather than hidden, exactly as on iOS. */}

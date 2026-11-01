@@ -240,13 +240,18 @@ def _fallback_suspects(assessed: Sequence[AssessedQuote]) -> list[AssessedQuote]
     ]
 
 
-def usable_quotes(assessed: Iterable[AssessedQuote]) -> list[PriceQuote]:
-    """What the pricing chains may read. A suspect quote only serves when nothing better exists."""
+def split_assessed(assessed: Iterable[AssessedQuote]) -> tuple[list[AssessedQuote], list[AssessedQuote]]:
+    """(what the pricing chains may read, what was set aside). A suspect quote only serves when
+    nothing better exists."""
     listed = list(assessed)
     fallbacks = {id(item) for item in _fallback_suspects(listed)}
-    return [
-        item.quote for item in listed if item.verdict is QuoteVerdict.TRUSTED or id(item) in fallbacks
-    ]
+    usable = [item for item in listed if item.verdict is QuoteVerdict.TRUSTED or id(item) in fallbacks]
+    kept = {id(item) for item in usable}
+    return usable, [item for item in listed if id(item) not in kept]
+
+
+def usable_quotes(assessed: Iterable[AssessedQuote]) -> list[PriceQuote]:
+    return [item.quote for item in split_assessed(assessed)[0]]
 
 
 def rests_on_suspect(assessed: Iterable[AssessedQuote], value: float | None) -> bool:

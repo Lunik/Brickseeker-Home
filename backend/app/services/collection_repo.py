@@ -34,6 +34,7 @@ from ..models import (
     CollectionValueSnapshot,
     PriceAlert,
     PriceHistoryEntry,
+    QuoteDecision,
     ScanEvent,
     SetPurchaseRecord,
     SoldListing,
@@ -45,7 +46,14 @@ from .pricing import (
     PriceSource,
     SoldSale,
 )
-from .quote_assessment import AssessedQuote, QuoteEvidence, assess_quotes, usable_quotes
+from .quote_assessment import (
+    AssessedQuote,
+    QuoteEvidence,
+    QuoteVerdict,
+    UserDecision,
+    assess_quotes,
+    usable_quotes,
+)
 from .rebrickable import LegoSet, SetList, UserSet
 
 if TYPE_CHECKING:
@@ -668,6 +676,14 @@ async def _quote_evidence(session: AsyncSession, set_num: str | None = None) -> 
         )
     ):
         titles.setdefault(row_set, {})[source] = title
+    decisions: dict[str, dict[str, UserDecision]] = {}
+    for row_set, source, verdict, amount in await session.execute(
+        scoped(
+            select(QuoteDecision.set_num, QuoteDecision.source, QuoteDecision.verdict, QuoteDecision.amount),
+            QuoteDecision,
+        )
+    ):
+        decisions.setdefault(row_set, {})[source] = UserDecision(QuoteVerdict(verdict), amount)
     names_by_set = {row_set: name for row_set, name in names}
     return {
         row_set: QuoteEvidence(
@@ -675,8 +691,9 @@ async def _quote_evidence(session: AsyncSession, set_num: str | None = None) -> 
             sales=sales.get(row_set, {}),
             history=history.get(row_set, {}),
             titles=titles.get(row_set, {}),
+            decisions=decisions.get(row_set, {}),
         )
-        for row_set in names_by_set.keys() | sales.keys() | history.keys() | titles.keys()
+        for row_set in names_by_set.keys() | sales.keys() | history.keys() | titles.keys() | decisions.keys()
     }
 
 
@@ -692,6 +709,32 @@ async def assessed_prices(session: AsyncSession, set_num: str) -> list[AssessedQ
         return []
     evidence = await _quote_evidence(session, set_num)
     return assess_quotes(set_num, quotes, evidence.get(set_num))
+
+
+async def decide_quote(
+    session: AsyncSession, set_num: str, source: str, verdict: QuoteVerdict, amount: float
+) -> None:
+    stored = await _quote_decision(session, set_num, source)
+    if stored is None:
+        session.add(QuoteDecision(set_num=set_num, source=source, verdict=verdict.value, amount=amount))
+    else:
+        stored.verdict, stored.amount, stored.decided_at = verdict.value, amount, _now()
+    await session.commit()
+
+
+async def forget_quote_decision(session: AsyncSession, set_num: str, source: str) -> None:
+    await session.execute(
+        delete(QuoteDecision).where(QuoteDecision.set_num == set_num, QuoteDecision.source == source)
+    )
+    await session.commit()
+
+
+async def _quote_decision(session: AsyncSession, set_num: str, source: str) -> QuoteDecision | None:
+    return (
+        await session.execute(
+            select(QuoteDecision).where(QuoteDecision.set_num == set_num, QuoteDecision.source == source)
+        )
+    ).scalar_one_or_none()
 
 
 async def cached_prices(session: AsyncSession, set_num: str) -> list[PriceQuote]:
@@ -1205,7 +1248,8 @@ async def collection_value_snapshots(session: AsyncSession) -> list[CollectionVa
 async def clear_cache(session: AsyncSession) -> None:
     """"Vider le cache" discards what can be rebuilt, and only that.
 
-    Kept, deliberately: `ScanEvent` (the "when did I scan this" history — though its locations go,
+    Kept, deliberately: `QuoteDecision` (a verdict given by hand), `ScanEvent` (the "when did I
+    scan this" history — though its locations go,
     since purging the history revokes the "where", #46), `SetPurchaseRecord` and `PriceAlert`
     (hand-typed, unrecoverable), `PriceHistoryEntry` and `CollectionValueSnapshot` (a past
     reading isn't merely expensive to re-fetch, it is unobtainable — no source can say today what

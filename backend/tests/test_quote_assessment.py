@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.models import CachedSet
 from app.services import collection_repo
 from app.services.pricing import PriceQuote, PriceSource
 from app.services.quote_assessment import (
@@ -218,3 +219,50 @@ class TestReadingTheCache:
         await session.commit()
         assessed = await collection_repo.assessed_prices(session, "71049-5")
         assert [item.reason for item in assessed] == [QuoteReason.SERIES_VARIANT]
+
+
+class TestDecisionRoutes:
+    async def test_decision_overrules_then_survives_the_cache_then_undoes(self, session, client):
+        await collection_repo.cache_prices(session, [quote(AMAZON, 63.9)], "71049-5")
+        await session.commit()
+
+        body = (await client.get("/api/prices/71049-5")).json()
+        assert body["quotes"] == []
+        assert body["setAsideQuotes"][0]["reason"] == "seriesVariant"
+
+        url = "/api/prices/71049-5/quotes/amazon/decision"
+        response = await client.put(url, json={"verdict": "trusted"})
+        assert response.status_code == 200
+        assert response.json()["quotes"][0]["userDecided"] is True
+
+        await collection_repo.clear_cache(session)
+        await collection_repo.cache_prices(session, [quote(AMAZON, 64.0)], "71049-5")
+        await session.commit()
+        assert (await client.get("/api/prices/71049-5")).json()["quotes"][0]["reason"] == "userConfirmed"
+
+        assert (await client.delete(url)).json()["quotes"] == []
+
+    async def test_cannot_decide_on_a_price_that_is_gone(self, client):
+        response = await client.put("/api/prices/1-1/quotes/amazon/decision", json={"verdict": "rejected"})
+        assert response.status_code == 404
+
+    async def test_suspect_verdict_is_not_for_the_user_to_give(self, session, client):
+        await collection_repo.cache_prices(session, [quote(AMAZON, 10.0)], "1-1")
+        await session.commit()
+        response = await client.put("/api/prices/1-1/quotes/amazon/decision", json={"verdict": "suspect"})
+        assert response.status_code == 422
+
+
+class TestStats:
+    async def test_value_resting_on_a_suspect_price_is_reported(self, session, client):
+        session.add(CachedSet(set_num="70500-1", name="Kai's Fire Mech", is_in_collection=True, quantity=2))
+        session.add(CachedSet(set_num="1000-1", name="Sure", is_in_collection=True))
+        await session.commit()
+        await collection_repo.cache_prices(session, [quote(NEW, 100.0, 1), quote(USED, 23.0, 9)], "70500-1")
+        await collection_repo.cache_prices(session, [quote(NEW, 40.0, 9)], "1000-1")
+        await session.commit()
+
+        body = (await client.get("/api/stats")).json()
+        assert body["totalValueEur"] == 240.0
+        assert body["uncertainValueEur"] == 200.0
+        assert body["uncertainSetCount"] == 1

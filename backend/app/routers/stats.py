@@ -14,6 +14,7 @@ from ..deps import SessionDep, require_auth
 from ..schemas import CamelModel, SetRowOut
 from ..services import catalog, collection_repo, exports
 from ..services.pricing import StoreAvailability, resolve_collection_price
+from ..services.quote_assessment import rests_on_suspect, usable_quotes
 
 router = APIRouter(prefix="/stats", tags=["statistiques"], dependencies=[Depends(require_auth)])
 
@@ -55,6 +56,9 @@ class StatsOut(CamelModel):
     year_breakdown: list[YearBreakdownOut]
     total_value_eur: float
     sets_with_known_price: int
+    #: The part of `total_value_eur` resting on a price awaiting confirmation.
+    uncertain_value_eur: float = 0
+    uncertain_set_count: int = 0
     priced_unit_count: int
     #: Sets a "compléter les prix manquants" run would actually process — unpriced *and* never
     #: fully processed. The naive `setCount - setsWithKnownPrice` includes sets already tried
@@ -71,7 +75,8 @@ class StatsOut(CamelModel):
 @router.get("", response_model=StatsOut)
 async def read_stats(session: SessionDep) -> StatsOut:
     owned = await collection_repo.owned_sets(session)
-    quotes_by_set = await collection_repo.all_cached_prices(session)
+    assessed_by_set = await collection_repo.all_assessed_prices(session)
+    quotes_by_set = {set_num: usable_quotes(items) for set_num, items in assessed_by_set.items()}
     conditions = await collection_repo.condition_by_list_id(session)
     theme_names = await catalog.theme_names(session)
 
@@ -132,7 +137,15 @@ async def read_stats(session: SessionDep) -> StatsOut:
     total_value = sum(price * cached.quantity for cached, price in priced)
     most_expensive = max(priced, key=lambda pair: pair[1], default=None)
 
+    uncertain = [
+        (cached, price)
+        for cached, price in priced
+        if rests_on_suspect(assessed_by_set.get(cached.set_num, []), price)
+    ]
+
     stats = StatsOut(
+        uncertain_value_eur=sum(price * cached.quantity for cached, price in uncertain),
+        uncertain_set_count=len(uncertain),
         set_count=len(owned),
         unit_count=sum(cached.quantity for cached in owned),
         part_count=sum(cached.num_parts * cached.quantity for cached in owned),

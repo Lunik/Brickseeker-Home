@@ -36,6 +36,8 @@ interface PriceCardProps {
   isRefreshing: boolean
   activeSources: string[]
   onRefresh: () => void
+  /** `null` forgets the user's earlier verdict. */
+  onDecideQuote: (source: PriceSourceKey, verdict: 'trusted' | 'rejected' | null) => void
 }
 
 function percentVsStore(amount: number, storePrice: number | null): number | null {
@@ -53,19 +55,67 @@ function DeltaBadge({ percent }: { percent: number | null }) {
   )
 }
 
+function QuoteVerdictLine({
+  quote,
+  isSetAside,
+  onDecide,
+}: {
+  quote: PriceQuote
+  isSetAside: boolean
+  onDecide: (verdict: 'trusted' | 'rejected' | null) => void
+}) {
+  const action = 'text-xs font-medium text-brand underline'
+  return (
+    <div className="mt-0.5 space-y-0.5 text-xs">
+      {quote.reasonLabel && (
+        <p className={quote.verdict === 'trusted' ? 'text-ink-faint' : 'text-amber-600'}>
+          {quote.reasonLabel}
+          {quote.verdict === 'suspect' && !isSetAside && ' · à confirmer'}
+        </p>
+      )}
+      {quote.title && isSetAside && <p className="truncate text-ink-faint">{quote.title}</p>}
+      <p className="flex flex-wrap gap-3">
+        {quote.userDecided ? (
+          <button type="button" className={action} onClick={() => onDecide(null)}>
+            Annuler ma décision
+          </button>
+        ) : (
+          <>
+            {quote.verdict !== 'trusted' && (
+              <button type="button" className={action} onClick={() => onDecide('trusted')}>
+                Bon prix
+              </button>
+            )}
+            {quote.verdict !== 'rejected' && (
+              <button type="button" className={action} onClick={() => onDecide('rejected')}>
+                Mauvais produit
+              </button>
+            )}
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
 function QuoteRow({
   label,
   quote,
   storePrice,
   captchaRequired,
   isLoading,
+  isSetAside,
+  onDecide,
 }: {
   label: string
   quote: PriceQuote | undefined
   storePrice: number | null
   captchaRequired: boolean
   isLoading: boolean
+  isSetAside: boolean
+  onDecide: (verdict: 'trusted' | 'rejected' | null) => void
 }) {
+  const amountTone = isSetAside ? 'text-ink-faint line-through' : ''
   return (
     <li className="flex items-start justify-between gap-3 py-2.5">
       <div className="min-w-0">
@@ -87,6 +137,7 @@ function QuoteRow({
             {quote.isStale && quote.fetchedAt && <> · relevé {formatRelative(quote.fetchedAt)}</>}
           </p>
         )}
+        {quote && <QuoteVerdictLine quote={quote} isSetAside={isSetAside} onDecide={onDecide} />}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {isLoading && (
@@ -97,18 +148,18 @@ function QuoteRow({
         )}
         {quote ? (
           <>
-            <DeltaBadge percent={percentVsStore(quote.amount, storePrice)} />
+            {!isSetAside && <DeltaBadge percent={percentVsStore(quote.amount, storePrice)} />}
             {quote.sourceUrl ? (
               <a
                 href={quote.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="text-sm font-bold text-brand underline"
+                className={`text-sm font-bold text-brand underline ${amountTone}`}
               >
                 {formatEUR(quote.amount)}
               </a>
             ) : (
-              <span className="text-sm font-bold text-ink">{formatEUR(quote.amount)}</span>
+              <span className={`text-sm font-bold text-ink ${amountTone}`}>{formatEUR(quote.amount)}</span>
             )}
           </>
         ) : captchaRequired ? (
@@ -127,8 +178,10 @@ export default function PriceCard({
   isRefreshing,
   activeSources,
   onRefresh,
+  onDecideQuote,
 }: PriceCardProps) {
-  const bySource = new Map(detail.quotes.map((quote) => [quote.source, quote]))
+  const setAside = new Set(detail.setAsideQuotes.map((quote) => quote.source))
+  const bySource = new Map([...detail.quotes, ...detail.setAsideQuotes].map((quote) => [quote.source, quote]))
   // A minifig has no retail price, so there is nothing for the ± badges to compare against either.
   const storePrice = detail.isMinifig ? null : detail.storePriceEur
 
@@ -219,6 +272,8 @@ export default function PriceCard({
             storePrice={storePrice}
             captchaRequired={detail.captchaRequiredSources?.includes(source) ?? false}
             isLoading={isSourceLoading(source)}
+            isSetAside={setAside.has(source)}
+            onDecide={(verdict) => onDecideQuote(source, verdict)}
           />
         ))}
       </ul>

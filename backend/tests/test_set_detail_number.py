@@ -61,12 +61,12 @@ async def test_owned_set_stays_owned_whatever_the_number_form(session, number: s
 
 async def test_bare_number_reads_the_prices_of_the_full_number(session) -> None:  # noqa: ANN001
     await _own_ferrari(session)
-    cached_prices = AsyncMock(return_value=[])
+    assessed_prices = AsyncMock(return_value=[])
 
-    with patch("app.routers.sets.collection_repo.cached_prices", cached_prices):
+    with patch("app.routers.sets.collection_repo.assessed_prices", assessed_prices):
         await set_detail("76906", session, BackgroundTasks())
 
-    cached_prices.assert_awaited_once_with(session, "76906-1")
+    assessed_prices.assert_awaited_once_with(session, "76906-1")
 
 
 async def test_set_found_only_in_the_catalogue_is_cached_as_not_owned(session) -> None:  # noqa: ANN001

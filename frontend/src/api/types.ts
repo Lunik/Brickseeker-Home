@@ -39,6 +39,13 @@ export interface PriceQuote {
   /** The average rests on ≤2 lots — one atypical sale *is* the quote. */
   isThinSample: boolean
   isStale: boolean
+  verdict: 'trusted' | 'suspect' | 'rejected'
+  reason: string | null
+  /** Why, in the app's own wording: the UI never maps `reason` itself. */
+  reasonLabel: string | null
+  /** What the retailer calls the offer, when a live fetch has seen it. */
+  title: string | null
+  userDecided: boolean
 }
 
 export interface Valuation {
@@ -134,6 +141,8 @@ export interface SetDetail {
   availability: StoreAvailability
   storePriceFetchedAt: string | null
   quotes: PriceQuote[]
+  /** Excluded from every price, shown so the user can see why and overrule it. */
+  setAsideQuotes: PriceQuote[]
   valuation: Valuation
   paidPriceEur: number | null
   priceHistory: PriceHistoryPoint[]
@@ -213,6 +222,9 @@ export interface CollectionStats {
   yearBreakdown: YearBreakdown[]
   totalValueEur: number
   setsWithKnownPrice: number
+  /** The part of `totalValueEur` resting on a price awaiting confirmation. */
+  uncertainValueEur: number
+  uncertainSetCount: number
   pricedUnitCount: number
   /** Sets a "compléter les prix manquants" run would actually process. */
   completablePriceCount: number
@@ -270,6 +282,8 @@ export interface CatalogStatus {
 export interface SetPrices {
   setNum: string
   quotes: PriceQuote[]
+  /** Excluded from every price, shown so the user can see why and overrule it. */
+  setAsideQuotes: PriceQuote[]
   storePriceEur: number | null
   storeCurrency: string | null
   availability: StoreAvailability
