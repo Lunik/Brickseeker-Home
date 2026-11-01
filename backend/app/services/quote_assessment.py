@@ -61,6 +61,7 @@ class QuoteReason(StrEnum):
     FAR_BELOW_MARKET = "farBelowMarket"
     FAR_ABOVE_MARKET = "farAboveMarket"
     THIN_MARKET = "thinMarket"
+    MINIFIG_PRICE = "minifigPrice"
     PRICE_JUMP = "priceJump"
     USER_CONFIRMED = "userConfirmed"
     USER_REJECTED = "userRejected"
@@ -73,6 +74,7 @@ class QuoteReason(StrEnum):
             QuoteReason.FAR_BELOW_MARKET: "Très en dessous du marché",
             QuoteReason.FAR_ABOVE_MARKET: "Très au-dessus du marché",
             QuoteReason.THIN_MARKET: "Trop peu de ventes, et loin des autres prix",
+            QuoteReason.MINIFIG_PRICE: "Prix de la minifig",
             QuoteReason.PRICE_JUMP: "Saut de prix, en attente d'un second relevé",
             QuoteReason.USER_CONFIRMED: "Confirmé par vous",
             QuoteReason.USER_REJECTED: "Écarté par vous",
@@ -193,6 +195,10 @@ def _automatic(
         others = _reference([other for other in quotes if other is not quote], evidence)
         if others is not None and quote.amount / others.amount > MAXIMUM_RATIO_TO_MARKET:
             return QuoteVerdict.SUSPECT, QuoteReason.THIN_MARKET
+
+    # Its history is the set's, so a figure priced differently is not a jump.
+    if is_set_variant(set_num) and "?M=" in (quote.source_url or ""):
+        return QuoteVerdict.TRUSTED, QuoteReason.MINIFIG_PRICE
 
     if _has_jumped(quote.amount, evidence.history.get(source, ())):
         return QuoteVerdict.SUSPECT, QuoteReason.PRICE_JUMP

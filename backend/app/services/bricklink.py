@@ -31,7 +31,7 @@ import re
 import time
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from enum import StrEnum
@@ -44,7 +44,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..deps import ApiError, network_unavailable, not_found, rate_limited, unauthorized
 from ..models import BrickLinkItemMap
 from ..security import get_bricklink_credentials
-from .pricing import PriceQuote, PriceSource, SoldSale, is_minifig
+from .pricing import PriceQuote, PriceSource, SoldSale, is_minifig, is_set_variant
+from .quote_assessment import MAXIMUM_RATIO_TO_MARKET
 from .rebrickable import LegoSet
 from .rebrickable import client_for as rebrickable_client_for
 from .throttle import bricklink_throttler
@@ -793,6 +794,54 @@ async def _resolve_ref(
 # --------------------------------------------------------------------------------------
 
 
+async def _minifig_quotes(
+    session: AsyncSession, client: BrickLinkClient, set_num: str
+) -> tuple[str, list[PriceQuote]]:
+    """The name and quotes of the one minifig a series variant contains, if it contains just one.
+
+    ponytail: one Rebrickable call per variant refresh, cache the pairing if the batch feels slow.
+    """
+    try:
+        rebrickable = await rebrickable_client_for(session)
+        figures = (await rebrickable.fetch_minifigs_in_set(set_num)).results
+    except ApiError as exc:
+        # No Rebrickable key, or a set it doesn't know: nothing to compare with, not a failure.
+        if exc.status_code in (404, 412):
+            return "", []
+        raise
+    if len(figures) != 1:
+        return "", []
+    ref = await _resolve_ref(session, client, figures[0].set_num, True)
+    return figures[0].name, await _quotes_for(client, ref) if ref is not None else []
+
+
+def _titled(quotes: Sequence[PriceQuote], title: str) -> list[PriceQuote]:
+    return [replace(quote, title=title) for quote in quotes]
+
+
+def _prefer_minifig(own: list[PriceQuote], name: str, figure: list[PriceQuote]) -> list[PriceQuote]:
+    """A variant is valued on its own item, unless that has no price or is far above the figure it
+    holds: real collections hold figures at 223 € whose minifig sells for 5 €."""
+    if not figure:
+        return own
+    if not own:
+        return _titled(figure, name)
+    figure_by_source = {quote.source: quote.amount for quote in figure}
+    outlier = next(
+        (
+            quote
+            for quote in own
+            if quote.amount > MAXIMUM_RATIO_TO_MARKET * figure_by_source.get(quote.source, quote.amount)
+        ),
+        None,
+    )
+    if outlier is None:
+        return own
+    logger.info("BrickLink : %s coté %.2f, écarté pour sa minifig %s", outlier.source, outlier.amount, name)
+    was = f"{outlier.amount:.2f}".replace(".", ",")
+    return _titled(figure, f"{name} · le set seul cotait {was} €")
+
+
 async def fetch_prices(session: AsyncSession, lego_set: LegoSet) -> list[PriceQuote]:
     """BrickLink's new and used quotes for one item, or `[]` when it has nothing to say.
 
@@ -813,16 +862,29 @@ async def fetch_prices(session: AsyncSession, lego_set: LegoSet) -> list[PriceQu
         # spending the multi-call cross-reference. A failure here is not fatal: the rare set
         # BrickLink files under another type falls through to resolution, which surfaces any real
         # error on its own calls.
+        quotes: list[PriceQuote] = []
         if not minifig:
             try:
                 quotes = await _quotes_for(client, CatalogRef("S", set_num))
             except ApiError as exc:
                 logger.debug("BrickLink : SET/%s indisponible (%s)", set_num, exc.detail)
-                quotes = []
-            if quotes:
-                return quotes
+        if not quotes:
+            ref = await _resolve_ref(session, client, set_num, minifig)
+            # Shared parts also sit in other sets: Rococo Aristocrat resolved to Assembly Square, a
+            # City book to a train. The set's own number just failed, so another number is one of
+            # those. BrickLink files a real collectible figure under a lettered id, like `col24-3`.
+            if ref is not None and (minifig or not ref.id[0].isdigit()):
+                quotes = await _quotes_for(client, ref)
+        if not is_set_variant(set_num):
+            return quotes
 
-        ref = await _resolve_ref(session, client, set_num, minifig)
-        if ref is None:
-            return []
-        return await _quotes_for(client, ref)
+        try:
+            name, figure = await _minifig_quotes(session, client, set_num)
+        except ApiError:
+            # The comparison is a bonus when the variant has its own price: a failure may only
+            # surface when there is nothing else, so the aggregator keeps the last known quote.
+            if not quotes:
+                raise
+            logger.debug("BrickLink : minifig de %s indisponible", set_num)
+            return quotes
+        return _prefer_minifig(quotes, name, figure)

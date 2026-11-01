@@ -65,8 +65,8 @@ function QuoteVerdictLine({
   onDecide: (verdict: 'trusted' | 'rejected' | null) => void
 }) {
   const action = 'text-xs font-medium text-brand underline'
-  // A trusted quote says nothing here: reporting it is the discreet flag beside its amount.
-  if (quote.verdict === 'trusted' && !quote.userDecided) return null
+  // A plain trusted quote says nothing here: reporting it is the discreet flag beside its amount.
+  if (!quote.reasonLabel && !quote.userDecided) return null
   return (
     <div className="mt-0.5 space-y-0.5 text-xs">
       {quote.reasonLabel && (
@@ -75,15 +75,19 @@ function QuoteVerdictLine({
           {quote.verdict === 'suspect' && !isSetAside && ' · à confirmer'}
         </p>
       )}
-      {quote.title && isSetAside && <p className="truncate text-ink-faint">{quote.title}</p>}
+      {quote.title && <p className="truncate text-ink-faint">{quote.title}</p>}
       {quote.userDecided ? (
         <button type="button" className={action} onClick={() => onDecide(null)}>
           Annuler ma décision
         </button>
       ) : (
-        <button type="button" className={action} onClick={() => onDecide('trusted')}>
-          Bon prix
-        </button>
+        // Not on a series variant: the next refresh drops its retail rows, decision included.
+        quote.verdict !== 'trusted'
+        && quote.reason !== 'seriesVariant' && (
+          <button type="button" className={action} onClick={() => onDecide('trusted')}>
+            Bon prix
+          </button>
+        )
       )}
     </div>
   )

@@ -111,6 +111,20 @@ class TestPriceJump:
         assert verdicts("1000-1", [quote(AMAZON, 60.0)], evidence)[AMAZON] == TRUSTED
 
 
+class TestMinifigPrice:
+    def test_a_variant_priced_on_its_minifig_says_so_and_is_no_jump(self):
+        figure = PriceQuote(source=USED, amount=5.0, source_url="https://bl/?M=col1", lot_count=9)
+        evidence = QuoteEvidence(history={USED.value: [200.0, 200.0, 200.0]})
+        assert verdicts("71034-3", [figure], evidence)[USED] == (
+            QuoteVerdict.TRUSTED,
+            QuoteReason.MINIFIG_PRICE,
+        )
+
+    def test_a_minifig_page_is_not_labelled(self):
+        figure = PriceQuote(source=USED, amount=5.0, source_url="https://bl/?M=col1", lot_count=9)
+        assert verdicts("fig-000123", [figure])[USED] == TRUSTED
+
+
 class TestUsableQuotes:
     def test_suspect_skipped_when_a_trusted_quote_of_the_same_condition_exists(self):
         new, amazon = quote(NEW, 10.0, 20), quote(AMAZON, 138.95)

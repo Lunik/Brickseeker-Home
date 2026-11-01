@@ -10,11 +10,12 @@ import pytest
 from app.deps import ApiError
 from app.services import bricklink
 from app.services.bricklink import BrickLinkClient, CatalogRef
-from app.services.pricing import PriceSource
+from app.services.pricing import PriceQuote, PriceSource
 from app.services.rebrickable import (
     BASE_URL,
     Ambiguous,
     Found,
+    LegoSet,
     NotFound,
     RebrickableClient,
     _raise_for_status,
@@ -183,3 +184,64 @@ class TestBrickLinkQuotes:
         assert seen[0].startswith("OAuth ")
         assert 'oauth_consumer_key="a"' in seen[0]
         assert "oauth_signature=" in seen[0]
+
+
+class TestVariantMinifigFallback:
+    NEW = PriceSource.BRICKLINK_NEW
+    USED = PriceSource.BRICKLINK_USED
+
+    def _quote(self, source, amount):  # noqa: ANN001, ANN202
+        return PriceQuote(source=source, amount=amount, source_url="https://bl/?M=col1")
+
+    def test_a_variant_without_price_takes_its_minifig(self):
+        figure = [self._quote(self.USED, 5.0)]
+        assert bricklink._prefer_minifig([], "Airplane Girl", figure)[0].title == "Airplane Girl"
+
+    def test_a_variant_far_above_its_minifig_takes_it_and_says_so(self):
+        own = [PriceQuote(source=self.NEW, amount=223.75)]
+        result = bricklink._prefer_minifig(own, "Fox", [self._quote(self.NEW, 5.0)])
+        assert result[0].amount == 5.0
+        assert result[0].title == "Fox · le set seul cotait 223,75 €"
+
+    def test_a_consistent_variant_keeps_its_own_price(self):
+        own = [PriceQuote(source=self.NEW, amount=8.0)]
+        assert bricklink._prefer_minifig(own, "Fox", [self._quote(self.NEW, 5.0)]) == own
+
+    def test_no_figure_changes_nothing(self):
+        own = [PriceQuote(source=self.NEW, amount=223.75)]
+        assert bricklink._prefer_minifig(own, "", []) == own
+
+    async def test_a_variant_ignores_a_cross_reference_to_a_whole_set(self):
+        figure = [self._quote(self.USED, 5.0)]
+        quotes_for = AsyncMock(return_value=[])
+        with (
+            patch.object(bricklink, "get_bricklink_credentials", AsyncMock(return_value={"a": "x"})),
+            patch.object(bricklink, "_quotes_for", quotes_for),
+            patch.object(bricklink, "_resolve_ref", AsyncMock(return_value=CatalogRef("S", "10255-1"))),
+            patch.object(bricklink, "_minifig_quotes", AsyncMock(return_value=("Rococo Aristocrat", figure))),
+        ):
+            lego_set = LegoSet("71037-10", "Rococo Aristocrat", 2023, 1, 8, None, None)
+            result = await bricklink.fetch_prices(None, lego_set)
+        assert [quote.amount for quote in result] == [5.0]
+        assert all(call.args[1].id != "10255-1" for call in quotes_for.await_args_list)
+
+    async def test_a_variant_keeps_a_cross_reference_to_its_collectible_figure(self):
+        own = [PriceQuote(source=self.NEW, amount=10.5)]
+        with (
+            patch.object(bricklink, "get_bricklink_credentials", AsyncMock(return_value={"a": "x"})),
+            patch.object(bricklink, "_quotes_for", AsyncMock(side_effect=[[], own])),
+            patch.object(bricklink, "_resolve_ref", AsyncMock(return_value=CatalogRef("S", "col24-3"))),
+            patch.object(bricklink, "_minifig_quotes", AsyncMock(return_value=("", []))),
+        ):
+            lego_set = LegoSet("71037-3", "Brown Astronaut", 2023, 1, 8, None, None)
+            assert await bricklink.fetch_prices(None, lego_set) == own
+
+    async def test_a_set_ignores_a_cross_reference_to_another_numbered_set(self):
+        with (
+            patch.object(bricklink, "get_bricklink_credentials", AsyncMock(return_value={"a": "x"})),
+            patch.object(bricklink, "_quotes_for", AsyncMock(return_value=[])) as quotes_for,
+            patch.object(bricklink, "_resolve_ref", AsyncMock(return_value=CatalogRef("S", "60098-1"))),
+        ):
+            lego_set = LegoSet("5007370-1", "City: Happy To Help!", 2022, 1, 1, None, None)
+            assert await bricklink.fetch_prices(None, lego_set) == []
+        quotes_for.assert_awaited_once()

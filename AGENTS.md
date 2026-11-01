@@ -81,6 +81,13 @@ porte-clés ou l'annonce d'un revendeur. `services/quote_assessment.py`, pur com
 jamais modifié (#213). Un prix d'occasion ne remplace pas un prix neuf douteux : il
 sous-évaluerait un set scellé sans le dire. Les variantes n'interrogent plus du tout les marchands.
 
+Une variante sans prix BrickLink, ou cotée à plus de 3 fois la seule minifig qu'elle contient, prend
+le prix de cette minifig (`bricklink.fetch_prices`). La fiche l'indique et son lien mène à la minifig.
+Une série complète, qui contient plusieurs minifigs, n'a pas ce recours. Ce contrôle existe parce que
+le numéro ment : sur BrickLink, `S=71034-3` est la boîte de 36 alors que Rebrickable y met le Snowman.
+La cross-référence par pièces ne peut pas non plus renvoyer un autre set numéroté : elle reliait
+`71037-10` à Assembly Square. Seul un identifiant à lettres (`col24-3`) est accepté.
+
 Le titre du marchand, conservé à part (`CachedQuoteTitle`, vidé avec le cache), rejette une offre sur
 des mots négatifs seulement (porte-clés, « boîte de 36 »…) : les noms de sets sont en anglais et les
 titres en français, une comparaison positive est impossible.
