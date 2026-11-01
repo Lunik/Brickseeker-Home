@@ -81,7 +81,7 @@ a single Set List", which is why `fetch_all_user_sets` dedupes by `set_num`.
 
 ## After you find the real shape
 
-A shape change is a contract change: update `docs/contract.md` and the code on both sides in the
+A shape change crosses the API boundary: update the backend schema and `frontend/src/api/types.ts` in the
 same change, never one without the other.
 
 Dropped from the iOS version: the "no test target, verify by hand" clause. `backend/tests/` exists,

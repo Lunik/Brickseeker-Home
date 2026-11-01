@@ -1,6 +1,7 @@
 [project]
 name = "brickseeker-backend"
-version = "1.0.0"
+# Never read: the real version is the git tag, passed at build time as BRICKSEEKER_VERSION.
+version = "0.0.0"
 description = "Self-hosted BrickSeeker API — LEGO set scanning, collection, pricing"
 requires-python = ">=3.12"
 dependencies = [

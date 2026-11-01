@@ -24,7 +24,7 @@ GitHub Copilot (Web, CLI, VS Code), Claude Code, etc.
 
 Chargé **automatiquement** par tous les clients Copilot. Contient :
 - Les règles et conventions du dépôt
-- Références aux sources de vérité (`AGENTS.md`, `docs/contract.md`)
+- Références aux sources de vérité (`AGENTS.md`, `/api/openapi.json`)
 - Checklist de vérification avant de terminer
 - Skills disponibles et quand les invoquer
 
@@ -88,7 +88,7 @@ Explique ce qu'elle fait et comment l'utiliser.
 
 - **Instructions générales du dépôt** : `.copilot/instructions.md` (partagé partout)
 - **Conventions métier** : `AGENTS.md` (source de vérité, référencé depuis instructions.md)
-- **Contrat API** : `docs/contract.md` (source de vérité)
+- **Surface REST** : `/api/openapi.json` (générée par le backend)
 - **Autres docs** : `CLAUDE.md`, `README.md` (points d'entrée, référencent les sources)
 
 ## Notes

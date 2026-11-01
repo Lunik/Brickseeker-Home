@@ -72,10 +72,11 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="BrickSeeker",
         description=(
-            "Scanne des sets LEGO®, gère ta collection Rebrickable et ta liste cadeaux Brickset, "
+            "Retrouve des sets LEGO® par leur numéro, gère ta collection Rebrickable et ta liste "
+            "cadeaux Brickset, "
             "et compare les prix entre lego.com, BrickLink, Amazon et Cdiscount."
         ),
-        version="1.0.0",
+        version=settings.version or "dev",
         lifespan=lifespan,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",

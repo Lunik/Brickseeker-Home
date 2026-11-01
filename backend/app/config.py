@@ -21,6 +21,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BRICKSEEKER_", extra="ignore")
 
+    version: str = ""
+    """The git tag or commit CI built this image from, as `BRICKSEEKER_VERSION`."""
+
     # --- Storage -------------------------------------------------------------------
     data_dir: Path = Path("/data")
     """Everything mutable lives here: SQLite file, image cache, catalogue snapshots."""

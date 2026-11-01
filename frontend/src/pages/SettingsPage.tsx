@@ -211,7 +211,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 pb-8">
       <NavBar title="Paramètres" backLabel="Fermer" />
-      {feedback && <p className="text-sm text-brand">{feedback}</p>}
+      {feedback && <p role="status" className="text-sm text-ink">{feedback}</p>}
 
       <Section
         title="Thème"

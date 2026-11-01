@@ -15,10 +15,9 @@ avant de « simplifier » quelque chose ici, cherche si la question a déjà ét
 
 ## Le contrat
 
-[`docs/contract.md`](docs/contract.md) définit les signatures des services et toute la surface REST.
-Backend et frontend ont été écrits en parallèle contre lui. Si le code et le contrat divergent,
-c'est le contrat qu'il faut corriger — mais **en même temps** que le code des deux côtés de la
-frontière, jamais à la place.
+La surface REST, c'est le schéma OpenAPI généré par le backend (`/api/openapi.json`, consultable sur
+`/api/docs`). `frontend/src/api/types.ts` en est la copie écrite à la main et rien ne vérifie leur
+accord : tout changement de forme se fait **en même temps** des deux côtés de la frontière.
 
 ## Build
 
@@ -264,7 +263,7 @@ rappelle le piège du conteneur : l'image embarque le bundle, donc un changement
 invisible sur `:8000` tant que l'image n'est pas reconstruite.
 
 Pour un changement visible à l'écran, `ui-parity-check` explique comment piloter l'app en Playwright
-et la comparer aux captures iOS de `docs/ui-parity/`. Le volet Browser intégré suffit pour regarder,
+et la comparer aux captures iOS de `docs/ui-parity/`, dossier non versionné à régénérer d'abord. Le volet Browser intégré suffit pour regarder,
 mais ses captures peuvent rester en retard sur le DOM après une mise à jour sans navigation : lis le
 DOM pour affirmer, prends les images avec Playwright.
 

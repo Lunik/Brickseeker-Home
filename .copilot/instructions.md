@@ -5,7 +5,7 @@
 Les conventions, l'architecture et les règles métier de ce dépôt vivent dans :
 
 1. **[AGENTS.md](../AGENTS.md)** — Conventions et contexte durement acquis
-2. **[docs/contract.md](../docs/contract.md)** — Signatures des services et surface REST
+2. **`/api/openapi.json`** — Surface REST, générée par le backend
 
 Avant de modifier ce dépôt, lis `AGENTS.md` — ce sont des exigences payées par des bugs résolus et des choix tranchés, pas des suggestions.
 

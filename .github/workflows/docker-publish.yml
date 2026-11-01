@@ -29,10 +29,10 @@ jobs:
           # Same version as the runtime stage of the Dockerfile.
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: backend/requirements.lock
 
       - name: Install
-        run: pip install -e '.[dev]'
+        run: pip install -r requirements.lock -e '.[dev]'
 
       - name: Lint
         run: ruff check .

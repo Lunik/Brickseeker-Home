@@ -45,13 +45,14 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY backend/pyproject.toml ./backend/pyproject.toml
+COPY backend/requirements.lock ./backend/requirements.lock
 COPY backend/app/__init__.py ./backend/app/__init__.py
 # Editable, not a normal install: at this point `backend/app/` holds nothing but `__init__.py` (kept
 # minimal on purpose, so a code-only change doesn't bust this layer and force every dependency to
 # reinstall) — a normal `pip install` would copy *that* into site-packages as the whole `app`
 # package. Editable only registers a path redirect, so it resolves against whatever is actually in
 # `/app/backend/app/` once the real tree lands below, rather than the empty stub frozen at this step.
-RUN pip install --no-cache-dir -e ./backend
+RUN pip install --no-cache-dir -r ./backend/requirements.lock && pip install --no-cache-dir --no-deps -e ./backend
 
 COPY backend/ ./backend/
 # `outDir: '../backend/app/static'` from /build resolves to /backend/app/static in that stage.
@@ -64,6 +65,10 @@ RUN useradd --create-home --uid 1000 brickseeker \
     && mkdir -p /data \
     && chown -R brickseeker:brickseeker /data /app
 USER brickseeker
+
+# What the API reports in its schema; same value the frontend stage bakes into the footer.
+ARG BRICKSEEKER_VERSION
+ENV BRICKSEEKER_VERSION=${BRICKSEEKER_VERSION}
 
 VOLUME ["/data"]
 EXPOSE 8000

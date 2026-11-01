@@ -5,8 +5,8 @@ description: Capture the web UI with headless Playwright at the iPhone's size an
 
 # UI parity check — web vs iOS
 
-Baselines already exist in `docs/ui-parity/` (`ios/`, `web/`, plus a `README.md` listing the 13
-screens). Re-capturing overwrites in place, so `git status` after a run *is* the visual diff. Read
+Baselines live in `docs/ui-parity/` (`ios/`, `web/`), a folder that is not versioned: if it is
+absent, capture a first set before comparing anything. Re-capturing overwrites in place, so `git status` after a run *is* the visual diff. Read
 that README and `scripts/capture_ui.py` before changing how captures are taken — don't build a
 second capture tool.
 

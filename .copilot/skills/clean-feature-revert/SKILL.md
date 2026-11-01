@@ -11,8 +11,7 @@ commit leaves the plumbing behind — as the iOS app found out when a helper com
 survived the revert and called a constant the revert had deleted.
 
 **Here it is worse, because nothing breaks.** Swift refused to compile that leftover; FastAPI
-serves an unused route forever, SQLite keeps a table no model reads, and `docs/contract.md` is
-prose. A green build proves only that the *reachable* code is consistent — the sweeps below are
+serves an unused route forever, and SQLite keeps a table no model reads. A green build proves only that the *reachable* code is consistent — the sweeps below are
 the only thing that finds the rest.
 
 ## 1. Revert
@@ -56,20 +55,6 @@ rg -o '^export (?:interface|type) (\w+)' -r '$1' frontend/src/api/types.ts | whi
 done
 ```
 
-**Dead entry in `docs/contract.md`** — a documented path with no router behind it:
-
-```bash
-rg -o '^\| *(?:GET|POST|PUT|PATCH|DELETE) *\| *`([^`]+)`' -r '$1' docs/contract.md |
-  sed 's/?.*//' | sort -u | while read -r p; do
-  seg=$(echo "$p" | sed 's/{[^}]*}//g' | awk -F/ '{print $NF}')
-  [ -z "$seg" ] && seg=$(echo "$p" | awk -F/ '{print $2}')
-  rg -q -- "$seg" backend/app/routers || echo "NOT IN ROUTERS: $p"
-done
-```
-
-Delete the contract line in the *same* commit as the code on both sides — AGENTS.md's rule that
-contract and code move together applies to removal too.
-
 **Column with no migration.** There is no Alembic and no `ALTER TABLE` anywhere: `init_db()` runs
 `create_all`, which adds missing tables and never alters an existing one. A column the feature
 added therefore exists only in databases created after it, and stays there forever:
@@ -97,7 +82,7 @@ git log -S"<symbol>" --oneline --no-show-signature -- backend frontend docs
 
 `log.showSignature` is on here — without `--no-show-signature` each line is buried in three lines of
 GPG output. If the introducing commit predates the one you reverted, it is a leftover: delete it,
-and its pair (the model *and* its Pydantic schema, the route *and* its contract row).
+and its pair (the model *and* its Pydantic schema, the route *and* its type in `frontend/src/api/types.ts`).
 
 ## 4. Verify, then commit the cleanup separately
 

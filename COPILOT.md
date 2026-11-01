@@ -16,8 +16,8 @@ Ce dépôt utilise **`.copilot/`** pour centraliser toutes les instructions et c
 | [`.copilot/instructions.md`](.copilot/instructions.md) | Instructions centralisées (chargé automatiquement par tous les clients Copilot) |
 | [`.copilot/skills/`](.copilot/skills/) | Compétences du dépôt : `web-build-test`, `check-bricklink-endpoint`, etc. |
 | [`.copilot/README.md`](.copilot/README.md) | Guide pour ajouter nouvelles compétences |
-| [AGENTS.md](AGENTS.md) | Source de vérité : conventions, architecture, règles métier (8200+ lignes) |
-| [docs/contract.md](docs/contract.md) | Contrat API : signatures des services, surface REST |
+| [AGENTS.md](AGENTS.md) | Source de vérité : conventions, architecture, règles métier |
+| `/api/openapi.json` | Surface REST, générée par le backend |
 | [CLAUDE.md](CLAUDE.md) | Point d'entrée pour Claude Code (réfère aux sources) |
 
 ## Utilisation

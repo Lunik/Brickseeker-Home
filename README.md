@@ -1,6 +1,6 @@
 # BrickSeeker (auto-hébergé)
 
-Scanne des sets LEGO®, gère ta collection Rebrickable et ta liste cadeaux Brickset, et compare
+Retrouve des sets LEGO® par leur numéro, gère ta collection Rebrickable et ta liste cadeaux Brickset, et compare
 ce que vaut un set entre lego.com, BrickLink et plusieurs sites marchands — avec Docker Compose,
 chez toi.
 
@@ -134,7 +134,6 @@ brickseeker-home/
 │       └── static/         bundle Vite compilé (généré)
 ├── frontend/           React + TypeScript + Tailwind + Vite
 │   └── src/{api,components,hooks,lib,pages}
-├── docs/contract.md    le contrat partagé backend ↔ frontend
 ├── Dockerfile          image applicative (API + UI, sans Chromium)
 └── docker-compose.yml  service applicatif + sidecar Chromium
 ```
@@ -172,8 +171,7 @@ npm install && npm run dev
 ## Chromium tourne à part
 
 lego.com est derrière un Cloudflare Managed Challenge, et les sites marchands derrière leurs
-propres protections anti-bot.
-protections anti-bot. Aucun client HTTP simple ne passe, quels que soient les en-têtes : le défi
+propres protections anti-bot. Aucun client HTTP simple ne passe, quels que soient les en-têtes : le défi
 exige d'exécuter du vrai JavaScript, donc un vrai moteur de navigateur. `BRICKSEEKER_SCRAPING_ENABLED=false`
 permet de s'en passer entièrement — les prix BrickLink, la collection, l'historique et les
 statistiques continuent de fonctionner.

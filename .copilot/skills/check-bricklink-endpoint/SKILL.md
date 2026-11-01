@@ -35,8 +35,8 @@ Pick an item that will have data: a popular long-retired set (`10300-1`) has rea
 or brand-new one legitimately returns zeros, which proves nothing. `region=europe` shrinks samples
 hard — `10300-1` used came back with **4** sales.
 
-Record what you saw where the decoder lives (`services/bricklink.py` docstrings,
-`docs/contract.md`), like the notes already there. That is the evidence the fields were seen, not
+Record what you saw where the decoder lives (`services/bricklink.py` docstrings),
+like the notes already there. That is the evidence the fields were seen, not
 assumed.
 
 ## Before writing code against what you found

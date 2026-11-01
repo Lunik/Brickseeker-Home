@@ -22,7 +22,7 @@ Any Python ≥ 3.12 works; verified here with 3.13.
    ```bash
    cd frontend && npm run lint          # tsc -b --noEmit
    ```
-   This is the only thing that checks the frontend half of `docs/contract.md`. Silence = pass.
+   This only checks the frontend against its own `api/types.ts`, not against the backend. Silence = pass.
 
 2. **Build** — `npm run build` runs `tsc -b && vite build`, so it subsumes step 1 and must be run
    at least once before you call a frontend change done:
