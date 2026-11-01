@@ -23,6 +23,9 @@ A `.retired` lego.com availability gates the retail step out of the *value* chai
 lego.com keeps serving a residual `product:price:amount` for sets it no longer sells, and
 reporting that as the set's price is wrong. It never gates the growth *reference* — measuring
 the market's move away from the catalogue price is the whole point of that percentage.
+
+For a retired set, the value chains also rank BrickLink's realised sales above retail: the only
+retail offers left are resellers', at a median of twice what the set actually sells for.
 """
 
 from __future__ import annotations
@@ -201,6 +204,10 @@ def _amount(quotes: Iterable[PriceQuote], source: PriceSource) -> float | None:
 # --------------------------------------------------------------------------------------
 
 
+#: Under this share of BrickLink's new price, a "retail" quote is another product: on real data these
+#: were 1 % to 8 % of the market, while genuine offers sit well above it.
+MINIMUM_RETAIL_TO_MARKET_RATIO = 0.35
+
 RETAIL_SOURCES = (
     PriceSource.AMAZON,
     PriceSource.CDISCOUNT,
@@ -267,8 +274,13 @@ def _resolve_new_price_for_valuation(
     availability: StoreAvailability,
     quotes: Sequence[PriceQuote],
 ) -> float | None:
-    """Same chain, taking the priciest external retail quote (#124)."""
-    if availability is not StoreAvailability.RETIRED and store_price_eur is not None:
+    """Same chain, taking the priciest external retail quote (#124). A retired set is no longer
+    sold at retail, so what it really sells for comes first."""
+    if availability is StoreAvailability.RETIRED:
+        realised = _amount(quotes, PriceSource.BRICKLINK_NEW)
+        if realised is not None:
+            return realised
+    elif store_price_eur is not None:
         return store_price_eur
     market = most_expensive_external_retail(quotes)
     if market is not None:
@@ -589,6 +601,31 @@ def percent_vs_store(
 
 def is_minifig(set_num: str) -> bool:
     return set_num.startswith("fig-")
+
+
+def is_set_variant(set_num: str) -> bool:
+    """`71049-5`, one minifig of a series: retailers file the whole series under `71049`. Suffix
+    `-0` is the sealed blind bag itself, which is what they do sell."""
+    if is_minifig(set_num) or "-" not in set_num:
+        return False
+    return set_num.rpartition("-")[2] not in ("0", "1")
+
+
+def plausible_quotes(set_num: str, quotes: Iterable[PriceQuote]) -> list[PriceQuote]:
+    """Drops retail quotes that can't be this item. Searches match on the number alone, so a variant
+    gets its series' box, and a set can get a keyring or a book mentioning its number. High quotes
+    stay: a reseller's price is real, however steep.
+
+    ponytail: fixed ratio against BrickLink, so a mismatch is only caught where BrickLink knows the
+    set. Move the check into the scrapers (title match) if false matches persist."""
+    kept = list(quotes)
+    if is_set_variant(set_num):
+        return [quote for quote in kept if quote.source not in RETAIL_SOURCES]
+    market = _amount(kept, PriceSource.BRICKLINK_NEW)
+    if market is None:
+        return kept
+    floor = market * MINIMUM_RETAIL_TO_MARKET_RATIO
+    return [quote for quote in kept if quote.source not in RETAIL_SOURCES or quote.amount >= floor]
 
 
 def base_set_num(set_num: str) -> str:

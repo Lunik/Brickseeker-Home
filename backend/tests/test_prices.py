@@ -326,3 +326,27 @@ def test_background_refresh_claim_is_single_flight() -> None:
     finally:
         prices.release_background_refresh(set_num)
     assert prices.is_background_refreshing(set_num) is False
+
+
+@pytest.mark.asyncio
+async def test_a_series_variant_never_asks_the_retailers() -> None:
+    lego_set = LegoSet(
+        set_num="71049-5",
+        name="Minifigure",
+        year=2025,
+        theme_id=1,
+        num_parts=5,
+        set_img_url=None,
+        set_url=None,
+    )
+    retailer = AsyncMock(return_value=None)
+
+    with (
+        patch.object(prices, "_retail_fetchers", return_value=[("amazon", retailer, False)]),
+        patch.object(prices.bricklink, "fetch_prices", new=AsyncMock(return_value=[])),
+        patch.object(prices.collection_repo, "cache_prices", new=AsyncMock()),
+        patch.object(prices.alerts, "evaluate_alerts", new=AsyncMock(return_value=[])),
+    ):
+        await prices.refresh_set_prices(None, lego_set, include_store=False, mark_fetched=False)
+
+    retailer.assert_not_awaited()

@@ -37,7 +37,14 @@ from ..models import (
     SetPurchaseRecord,
     SoldListing,
 )
-from .pricing import LEGO_STORE_HISTORY_SOURCE, ListCondition, PriceQuote, PriceSource, SoldSale
+from .pricing import (
+    LEGO_STORE_HISTORY_SOURCE,
+    ListCondition,
+    PriceQuote,
+    PriceSource,
+    SoldSale,
+    plausible_quotes,
+)
 from .rebrickable import LegoSet, SetList, UserSet
 
 if TYPE_CHECKING:
@@ -614,7 +621,7 @@ async def cached_prices(session: AsyncSession, set_num: str) -> list[PriceQuote]
         .scalars()
         .all()
     )
-    return [quote for quote in (_to_quote(row) for row in rows) if quote is not None]
+    return plausible_quotes(set_num, (quote for quote in (_to_quote(row) for row in rows) if quote))
 
 
 async def all_cached_prices(session: AsyncSession) -> dict[str, list[PriceQuote]]:
@@ -626,7 +633,7 @@ async def all_cached_prices(session: AsyncSession) -> dict[str, list[PriceQuote]
         quote = _to_quote(row)
         if quote is not None:
             by_set_num.setdefault(row.set_num, []).append(quote)
-    return by_set_num
+    return {set_num: plausible_quotes(set_num, quotes) for set_num, quotes in by_set_num.items()}
 
 
 async def record_price_history(

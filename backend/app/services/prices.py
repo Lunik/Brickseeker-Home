@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import session_scope
 from . import alerts, bricklink, collection_repo
-from .pricing import PriceQuote, PriceSource, is_minifig
+from .pricing import PriceQuote, PriceSource, is_minifig, is_set_variant
 from .rebrickable import LegoSet
 from .scraping import (
     amazon,
@@ -417,16 +417,19 @@ async def _refresh_set_prices(
         asyncio.create_task(quote_output("bricklink", isolated_bricklink))
     ]
     if not is_minifig(set_num) and settings.scraping_enabled:
-        tasks.extend(
-            asyncio.create_task(
-                quote_output(
-                    source,
-                    lambda fetch=fetch: fetch(lego_set),
-                    browser_backed=browser_backed,
+        # A retailer can only answer with the variant's whole series. Asking costs browser pages for
+        # a quote that would be discarded, and leaving them out lets `reconcile` purge the old ones.
+        if not is_set_variant(set_num):
+            tasks.extend(
+                asyncio.create_task(
+                    quote_output(
+                        source,
+                        lambda fetch=fetch: fetch(lego_set),
+                        browser_backed=browser_backed,
+                    )
                 )
+                for source, fetch, browser_backed in _retail_fetchers()
             )
-            for source, fetch, browser_backed in _retail_fetchers()
-        )
         if include_store:
             tasks.append(asyncio.create_task(store_output()))
 

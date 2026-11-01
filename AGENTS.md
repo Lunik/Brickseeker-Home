@@ -58,6 +58,18 @@ servir un prix résiduel pour un set qu'il ne vend plus. Elle n'écarte jamais l
 croissance : mesurer l'écart du marché face au prix catalogue est précisément l'intérêt de ce
 pourcentage.
 
+Écart assumé avec l'app iOS : pour un set `retired`, les chaînes de **valeur** passent BrickLink neuf
+**avant** les marchands. Il ne reste alors que des revendeurs : sur une vraie collection de 506 sets,
+les 77 sets valorisés par un marchand l'étaient à une médiane de 2,1 fois BrickLink neuf.
+
+## Un prix marchand peut désigner un autre produit
+
+Les sites sont interrogés sur le seul numéro. `pricing.plausible_quotes`, appliqué à la lecture du
+cache, écarte donc deux cas constatés en production : une variante (`71049-5`, une minifig de la
+série), pour laquelle le site renvoie la boîte de toute la série à 63,90 € au lieu de 3 €, et un prix
+sous 35 % de BrickLink neuf (Cultura à 0,99 € pour un set à 160 €). Les variantes n'interrogent plus
+du tout les marchands. Les prix élevés restent : celui d'un revendeur est réel.
+
 ## Ce qui est saisi à la main survit aux caches
 
 `clear_cache()` supprime `CachedSet`, `CachedSetList`, `CachedSetPrice`, `SoldListing`,
