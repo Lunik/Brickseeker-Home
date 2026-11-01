@@ -39,7 +39,8 @@ export interface PriceQuote {
   /** The average rests on ≤2 lots — one atypical sale *is* the quote. */
   isThinSample: boolean
   isStale: boolean
-  verdict: 'trusted' | 'suspect' | 'rejected'
+  /** Absent from a response persisted before verdicts existed, restored for up to 7 days. */
+  verdict?: 'trusted' | 'suspect' | 'rejected'
   reason: string | null
   /** Why, in the app's own wording: the UI never maps `reason` itself. */
   reasonLabel: string | null
@@ -141,8 +142,9 @@ export interface SetDetail {
   availability: StoreAvailability
   storePriceFetchedAt: string | null
   quotes: PriceQuote[]
-  /** Excluded from every price, shown so the user can see why and overrule it. */
-  setAsideQuotes: PriceQuote[]
+  /** Excluded from every price, shown so the user can see why and overrule it. Absent from a
+   *  response persisted before it existed: the restored cache renders before any refetch. */
+  setAsideQuotes?: PriceQuote[]
   valuation: Valuation
   paidPriceEur: number | null
   priceHistory: PriceHistoryPoint[]
@@ -282,8 +284,9 @@ export interface CatalogStatus {
 export interface SetPrices {
   setNum: string
   quotes: PriceQuote[]
-  /** Excluded from every price, shown so the user can see why and overrule it. */
-  setAsideQuotes: PriceQuote[]
+  /** Excluded from every price, shown so the user can see why and overrule it. Absent from a
+   *  response persisted before it existed: the restored cache renders before any refetch. */
+  setAsideQuotes?: PriceQuote[]
   storePriceEur: number | null
   storeCurrency: string | null
   availability: StoreAvailability

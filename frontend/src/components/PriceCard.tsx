@@ -137,7 +137,7 @@ function QuoteRow({
             {quote.isStale && quote.fetchedAt && <> · relevé {formatRelative(quote.fetchedAt)}</>}
           </p>
         )}
-        {quote && <QuoteVerdictLine quote={quote} isSetAside={isSetAside} onDecide={onDecide} />}
+        {quote?.verdict && <QuoteVerdictLine quote={quote} isSetAside={isSetAside} onDecide={onDecide} />}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {isLoading && (
@@ -180,8 +180,9 @@ export default function PriceCard({
   onRefresh,
   onDecideQuote,
 }: PriceCardProps) {
-  const setAside = new Set(detail.setAsideQuotes.map((quote) => quote.source))
-  const bySource = new Map([...detail.quotes, ...detail.setAsideQuotes].map((quote) => [quote.source, quote]))
+  const setAsideQuotes = detail.setAsideQuotes ?? []
+  const setAside = new Set(setAsideQuotes.map((quote) => quote.source))
+  const bySource = new Map([...detail.quotes, ...setAsideQuotes].map((quote) => [quote.source, quote]))
   // A minifig has no retail price, so there is nothing for the ± badges to compare against either.
   const storePrice = detail.isMinifig ? null : detail.storePriceEur
 
