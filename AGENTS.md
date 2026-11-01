@@ -61,13 +61,25 @@ pourcentage.
 **avant** les marchands. Il ne reste alors que des revendeurs : sur une vraie collection de 506 sets,
 les 77 sets valorisés par un marchand l'étaient à une médiane de 2,1 fois BrickLink neuf.
 
-## Un prix marchand peut désigner un autre produit
+## Un prix n'est cru qu'après examen
 
-Les sites sont interrogés sur le seul numéro. `pricing.plausible_quotes`, appliqué à la lecture du
-cache, écarte donc deux cas constatés en production : une variante (`71049-5`, une minifig de la
-série), pour laquelle le site renvoie la boîte de toute la série à 63,90 € au lieu de 3 €, et un prix
-sous 35 % de BrickLink neuf (Cultura à 0,99 € pour un set à 160 €). Les variantes n'interrogent plus
-du tout les marchands. Les prix élevés restent : celui d'un revendeur est réel.
+Les sites sont interrogés sur le seul numéro : un prix peut être la boîte de toute la série, un
+porte-clés ou l'annonce d'un revendeur. `services/quote_assessment.py`, pur comme `pricing.py`, donne
+à chaque prix un verdict et une raison, à la lecture du cache. Rien n'est supprimé.
+
+- `rejected`, jamais lu : marchand sur une variante (`71049-5`, jamais le suffixe `-0`, vrai sachet),
+  ou sous 35 % du marché (Cultura à 0,99 € pour un set à 160 €).
+- `suspect`, lu seulement si aucun prix `trusted` de même état n'existe, et la valeur est alors
+  signalée comme incertaine : marchand à plus de 3 fois le marché, BrickLink adossé à moins de 3 lots
+  et à plus de 3 fois les autres prix, saut de prix du simple au double contre son propre historique,
+  jusqu'à ce qu'un second relevé confirme.
+- Le marché est la médiane des ventes BrickLink neuves si au moins 3 existent, sinon la moyenne si
+  au moins 3 lots la soutiennent, sinon la médiane d'au moins 3 marchands, sinon le prix occasion,
+  qui ne sert alors que de plancher.
+
+`cached_prices` et `all_cached_prices` ne rendent que ce que les chaînes peuvent lire. `amount` n'est
+jamais modifié (#213). Un prix d'occasion ne remplace pas un prix neuf douteux : il
+sous-évaluerait un set scellé sans le dire. Les variantes n'interrogent plus du tout les marchands.
 
 ## Ce qui est saisi à la main survit aux caches
 

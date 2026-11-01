@@ -204,9 +204,6 @@ def _amount(quotes: Iterable[PriceQuote], source: PriceSource) -> float | None:
 # --------------------------------------------------------------------------------------
 
 
-#: Under this share of BrickLink's new price, a "retail" quote is another product: on real data these
-#: were 1 % to 8 % of the market, while genuine offers sit well above it.
-MINIMUM_RETAIL_TO_MARKET_RATIO = 0.35
 
 RETAIL_SOURCES = (
     PriceSource.AMAZON,
@@ -609,23 +606,6 @@ def is_set_variant(set_num: str) -> bool:
     if is_minifig(set_num) or "-" not in set_num:
         return False
     return set_num.rpartition("-")[2] not in ("0", "1")
-
-
-def plausible_quotes(set_num: str, quotes: Iterable[PriceQuote]) -> list[PriceQuote]:
-    """Drops retail quotes that can't be this item. Searches match on the number alone, so a variant
-    gets its series' box, and a set can get a keyring or a book mentioning its number. High quotes
-    stay: a reseller's price is real, however steep.
-
-    ponytail: fixed ratio against BrickLink, so a mismatch is only caught where BrickLink knows the
-    set. Move the check into the scrapers (title match) if false matches persist."""
-    kept = list(quotes)
-    if is_set_variant(set_num):
-        return [quote for quote in kept if quote.source not in RETAIL_SOURCES]
-    market = _amount(kept, PriceSource.BRICKLINK_NEW)
-    if market is None:
-        return kept
-    floor = market * MINIMUM_RETAIL_TO_MARKET_RATIO
-    return [quote for quote in kept if quote.source not in RETAIL_SOURCES or quote.amount >= floor]
 
 
 def base_set_num(set_num: str) -> str:

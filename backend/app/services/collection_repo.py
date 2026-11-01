@@ -43,8 +43,8 @@ from .pricing import (
     PriceQuote,
     PriceSource,
     SoldSale,
-    plausible_quotes,
 )
+from .quote_assessment import AssessedQuote, QuoteEvidence, assess_quotes, usable_quotes
 from .rebrickable import LegoSet, SetList, UserSet
 
 if TYPE_CHECKING:
@@ -613,27 +613,82 @@ async def _replace_sold_listings(
         )
 
 
-async def cached_prices(session: AsyncSession, set_num: str) -> list[PriceQuote]:
-    """Every cached quote for a set, whatever its age (#244) — a stale price is captioned by the
-    UI, never dropped here."""
+async def _quote_evidence(session: AsyncSession, set_num: str | None = None) -> dict[str, QuoteEvidence]:
+    """What `assess_quotes` needs beyond the quotes, for one set or all of them.
+
+    Column tuples, not entities: a real collection holds tens of thousands of these rows and the
+    collection-wide screens read them on every recompute.
+    ponytail: re-reads the whole history per request, cache it if Statistiques ever feels slow.
+    """
+
+    def scoped(statement, model):
+        return statement if set_num is None else statement.where(model.set_num == set_num)
+
+    names = await session.execute(scoped(select(CachedSet.set_num, CachedSet.name), CachedSet))
+    sales: dict[str, dict[str, list[float]]] = {}
+    for row_set, source, amount in await session.execute(
+        scoped(select(SoldListing.set_num, SoldListing.source, SoldListing.unit_amount), SoldListing)
+    ):
+        sales.setdefault(row_set, {}).setdefault(source, []).append(amount)
+    history: dict[str, dict[str, list[float]]] = {}
+    for row_set, source, amount in await session.execute(
+        scoped(
+            select(PriceHistoryEntry.set_num, PriceHistoryEntry.source, PriceHistoryEntry.amount),
+            PriceHistoryEntry,
+        ).order_by(PriceHistoryEntry.fetched_at)
+    ):
+        history.setdefault(row_set, {}).setdefault(source, []).append(amount)
+    names_by_set = {row_set: name for row_set, name in names}
+    return {
+        row_set: QuoteEvidence(
+            set_name=names_by_set.get(row_set, ""),
+            sales=sales.get(row_set, {}),
+            history=history.get(row_set, {}),
+        )
+        for row_set in names_by_set.keys() | sales.keys() | history.keys()
+    }
+
+
+async def assessed_prices(session: AsyncSession, set_num: str) -> list[AssessedQuote]:
+    """Every cached quote for a set with its verdict, those the chains may not read included."""
     rows = (
         (await session.execute(select(CachedSetPrice).where(CachedSetPrice.set_num == set_num)))
         .scalars()
         .all()
     )
-    return plausible_quotes(set_num, (quote for quote in (_to_quote(row) for row in rows) if quote))
+    quotes = [quote for quote in (_to_quote(row) for row in rows) if quote]
+    if not quotes:
+        return []
+    evidence = await _quote_evidence(session, set_num)
+    return assess_quotes(set_num, quotes, evidence.get(set_num))
 
 
-async def all_cached_prices(session: AsyncSession) -> dict[str, list[PriceQuote]]:
-    """Every cached quote in one query, for the collection-wide screens (valuation, Statistiques,
-    exports). Calling `cached_prices` per set is one query per set — hundreds per recompute."""
+async def cached_prices(session: AsyncSession, set_num: str) -> list[PriceQuote]:
+    """The cached quotes the pricing chains may read, whatever their age (#244) — a stale price is
+    captioned by the UI, never dropped here."""
+    return usable_quotes(await assessed_prices(session, set_num))
+
+
+async def all_assessed_prices(session: AsyncSession) -> dict[str, list[AssessedQuote]]:
+    """`assessed_prices` for every set in a few queries, for the collection-wide screens."""
     rows = (await session.execute(select(CachedSetPrice))).scalars().all()
     by_set_num: dict[str, list[PriceQuote]] = {}
     for row in rows:
         quote = _to_quote(row)
         if quote is not None:
             by_set_num.setdefault(row.set_num, []).append(quote)
-    return {set_num: plausible_quotes(set_num, quotes) for set_num, quotes in by_set_num.items()}
+    evidence = await _quote_evidence(session)
+    return {
+        set_num: assess_quotes(set_num, quotes, evidence.get(set_num))
+        for set_num, quotes in by_set_num.items()
+    }
+
+
+async def all_cached_prices(session: AsyncSession) -> dict[str, list[PriceQuote]]:
+    """`cached_prices` for every set. Calling it per set is several queries per set — hundreds per
+    recompute of the valuation, Statistiques or an export."""
+    assessed = await all_assessed_prices(session)
+    return {set_num: usable_quotes(items) for set_num, items in assessed.items()}
 
 
 async def record_price_history(

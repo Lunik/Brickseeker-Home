@@ -26,7 +26,6 @@ from app.services.pricing import (
     make_valuation,
     most_expensive_amazon_or_cdiscount,
     percent_vs_store,
-    plausible_quotes,
     resolve_collection_price,
     resolve_collection_price_condition,
     resolve_minifig_price,
@@ -333,31 +332,6 @@ class TestParseAmount:
 
     def test_returns_none_without_a_number(self) -> None:
         assert parse_amount("Indisponible") is None
-
-
-class TestPlausibleQuotes:
-    BRICKLINK_100 = quote(PriceSource.BRICKLINK_NEW, 100.0)
-
-    def test_a_series_variant_keeps_only_bricklink(self) -> None:
-        quotes = [self.BRICKLINK_100, AMAZON_30]
-        assert plausible_quotes("71049-5", quotes) == [self.BRICKLINK_100]
-
-    @pytest.mark.parametrize("set_num", ["71038-0", "10307-1", "AUTOSHOW", "fig-000123"])
-    def test_what_retailers_really_sell_keeps_its_quotes(self, set_num: str) -> None:
-        assert plausible_quotes(set_num, [AMAZON_30]) == [AMAZON_30]
-
-    def test_a_retail_quote_far_below_the_market_is_another_product(self) -> None:
-        keyring = quote(PriceSource.CULTURA, 0.99)
-        genuine = quote(PriceSource.AMAZON, 35.0)
-        kept = plausible_quotes("10307-1", [self.BRICKLINK_100, keyring, genuine])
-        assert kept == [self.BRICKLINK_100, genuine]
-
-    def test_an_expensive_reseller_stays(self) -> None:
-        reseller = quote(PriceSource.AMAZON, 900.0)
-        assert reseller in plausible_quotes("10307-1", [self.BRICKLINK_100, reseller])
-
-    def test_without_bricklink_there_is_nothing_to_compare_to(self) -> None:
-        assert plausible_quotes("10307-1", [quote(PriceSource.CULTURA, 0.99)]) != []
 
 
 class TestRetiredValuation:
