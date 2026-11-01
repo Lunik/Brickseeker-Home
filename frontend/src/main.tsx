@@ -77,7 +77,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         // online, this governs "how old can offline-restored data be before showing nothing beats
         // showing it" — a much longer horizon on purpose.
         maxAge: 1000 * 60 * 60 * 24 * 7,
-        buster: 'v1',
+        buster: 'v2',
         dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
       }}
     >
