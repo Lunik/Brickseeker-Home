@@ -12,7 +12,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 
 from ..deps import ApiError, SessionDep, require_auth
-from ..schemas import CamelModel, SetListOut, SetRowOut
+from ..schemas import CamelModel, EntryOut, SetListOut, SetRowOut
 from ..security import CredentialKey, has_credential
 from ..services import catalog, collection_repo, rebrickable
 from ..services.brickset import is_linked as brickset_is_linked
@@ -107,12 +107,15 @@ async def read_collection(session: SessionDep) -> CollectionOut:
     )
 
 
-@router.post("/sync", response_model=CollectionOut)
-async def sync_collection(session: SessionDep) -> CollectionOut:
-    client = await rebrickable.client_for(session)
+async def _resync(session, client) -> None:  # noqa: ANN001
     user_sets = await client.fetch_all_user_sets()
     set_lists = await client.fetch_user_set_lists()
     await collection_repo.sync_collection(session, user_sets, set_lists)
+
+
+@router.post("/sync", response_model=CollectionOut)
+async def sync_collection(session: SessionDep) -> CollectionOut:
+    await _resync(session, await rebrickable.client_for(session))
     return await read_collection(session)
 
 
@@ -197,6 +200,7 @@ async def bulk_action(payload: BulkIn, session: SessionDep) -> dict[str, object]
                         is_in_collection=True,
                         list_id=payload.list_id,
                         list_name=list_name,
+                        from_list_id=cached.current_list_id if cached else None,
                     )
             else:
                 raise ApiError(f"Action inconnue : {payload.action}")
@@ -239,12 +243,22 @@ async def add_to_collection(set_num: str, payload: AddToCollectionIn, session: S
         await collection_repo.set_collection_status(
             session, set_num, is_in_collection=True, list_id=payload.list_id, list_name=list_name
         )
+    # `cache_set` only seeds an entry for a set with none: a second list needs its own.
+    entries = {e.list_id for e in await collection_repo.set_entries(session, set_num)}
+    if payload.list_id not in entries:
+        await collection_repo.set_entry_quantity(session, set_num, payload.list_id, list_name, 1)
     return {"status": "inCollection", "listId": payload.list_id, "listName": list_name}
 
 
 @router.delete("/{set_num}")
-async def remove_from_collection(set_num: str, session: SessionDep) -> dict:
+async def remove_from_collection(set_num: str, session: SessionDep, list_id: int | None = None) -> dict:
+    """`list_id` drops the set from that list only; without it the set leaves every list."""
     client = await rebrickable.client_for(session)
+    if list_id is not None:
+        await client.remove_set_from_list(set_num, list_id)
+        await collection_repo.set_entry_quantity(session, set_num, list_id, None, 0)
+        cached = await collection_repo.cached_set(session, set_num)
+        return {"status": "inCollection" if cached and cached.is_in_collection else "notInCollection"}
     await client.remove_set_from_collection(set_num)
     await collection_repo.set_collection_status(
         session, set_num, is_in_collection=False, list_id=None, list_name=None
@@ -252,43 +266,81 @@ async def remove_from_collection(set_num: str, session: SessionDep) -> dict:
     return {"status": "notInCollection"}
 
 
+async def _list_name(session, list_id: int) -> str | None:
+    return next(
+        (row.name for row in await collection_repo.cached_set_lists(session) if row.list_id == list_id),
+        None,
+    )
+
+
 @router.patch("/{set_num}")
 async def update_collection_entry(
     set_num: str, payload: UpdateCollectionIn, session: SessionDep
 ) -> dict:
+    """Two shapes. `{listId, quantity}` sets the copies held in *that* list (0 drops it, a list the
+    set isn't in yet adds it). `{listId}` alone moves the set's biggest list to `listId`; a bare
+    `{quantity}` targets that biggest list too."""
     cached = await collection_repo.cached_set(session, set_num)
     if cached is None or not cached.is_in_collection:
         raise ApiError("Ce set n'est pas dans la collection", 404)
 
     client = await rebrickable.client_for(session)
-    list_id = cached.current_list_id
+    entries = {entry.list_id: entry for entry in await collection_repo.set_entries(session, set_num)}
 
-    if payload.list_id is not None and payload.list_id != cached.current_list_id:
-        if cached.current_list_id is None:
+    if payload.list_id is not None and payload.quantity is not None:
+        list_id, quantity = payload.list_id, max(0, payload.quantity)
+        list_name = await _list_name(session, list_id)
+        if quantity == 0:
+            if list_id in entries:
+                await client.remove_set_from_list(set_num, list_id)
+        else:
+            if list_id not in entries:
+                try:
+                    await client.add_set_to_list(set_num, list_id)
+                except ApiError as error:
+                    if "already exists" not in error.detail:
+                        raise
+                    # Our cache missed a list Rebrickable already has (synced before entries were
+                    # kept per list): reconcile instead of failing, and leave its quantity alone.
+                    await _resync(session, client)
+                    return await _entry_state(session, set_num)
+            if quantity != 1 or list_id in entries:
+                await client.update_set_quantity(set_num, list_id, quantity)
+        await collection_repo.set_entry_quantity(session, set_num, list_id, list_name, quantity)
+    elif payload.list_id is not None and payload.list_id not in entries:
+        source = cached.current_list_id
+        if source is None:
             await client.add_set_to_list(set_num, payload.list_id)
         else:
             # Rebrickable has no "change the list" endpoint: a move is a delete then an add.
-            await client.move_set_to_list(set_num, cached.current_list_id, payload.list_id)
-        list_id = payload.list_id
-        list_name = next(
-            (row.name for row in await collection_repo.cached_set_lists(session) if row.list_id == list_id),
-            None,
-        )
+            await client.move_set_to_list(set_num, source, payload.list_id)
         await collection_repo.set_collection_status(
-            session, set_num, is_in_collection=True, list_id=list_id, list_name=list_name
+            session,
+            set_num,
+            is_in_collection=True,
+            list_id=payload.list_id,
+            list_name=await _list_name(session, payload.list_id),
+            from_list_id=source,
+        )
+    elif payload.quantity is not None and cached.current_list_id is not None:
+        quantity = max(1, payload.quantity)
+        await client.update_set_quantity(set_num, cached.current_list_id, quantity)
+        await collection_repo.set_entry_quantity(
+            session, set_num, cached.current_list_id, cached.current_list_name, quantity
         )
 
-    if payload.quantity is not None and list_id is not None:
-        quantity = max(1, payload.quantity)
-        await client.update_set_quantity(set_num, list_id, quantity)
-        await collection_repo.set_quantity(session, set_num, quantity)
+    return await _entry_state(session, set_num)
 
+
+async def _entry_state(session, set_num: str) -> dict:  # noqa: ANN001
     refreshed = await collection_repo.cached_set(session, set_num)
     return {
-        "status": "inCollection",
-        "listId": refreshed.current_list_id if refreshed else list_id,
+        "status": "inCollection" if refreshed and refreshed.is_in_collection else "notInCollection",
+        "listId": refreshed.current_list_id if refreshed else None,
         "listName": refreshed.current_list_name if refreshed else None,
-        "quantity": refreshed.quantity if refreshed else payload.quantity,
+        "quantity": refreshed.quantity if refreshed else 0,
+        "entries": [
+            EntryOut(list_id=e.list_id, list_name=e.list_name, quantity=e.quantity).model_dump(by_alias=True)
+            for e in await collection_repo.set_entries(session, set_num)
+        ],
     }
-
-

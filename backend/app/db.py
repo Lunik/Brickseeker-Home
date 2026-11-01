@@ -44,6 +44,14 @@ def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:  # noqa: A
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # One-off, idempotent: rows cached before per-list entries existed carry one list + quantity.
+        await conn.execute(
+            text(
+                "INSERT OR IGNORE INTO cached_set_entries (set_num, list_id, list_name, quantity) "
+                "SELECT set_num, current_list_id, current_list_name, quantity FROM cached_sets "
+                "WHERE is_in_collection AND current_list_id IS NOT NULL"
+            )
+        )
         await conn.execute(text("PRAGMA optimize"))
 
 

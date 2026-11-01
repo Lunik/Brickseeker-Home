@@ -128,12 +128,20 @@ export interface SoldSale {
   orderedAt: string
 }
 
+/** Copies of a set held in one list. */
+export interface SetEntry {
+  listId: number
+  listName: string | null
+  quantity: number
+}
+
 export interface SetDetail {
   set: LegoSet
   themeName: string
   isInCollection: boolean
   currentListId: number | null
   currentListName: string | null
+  entries: SetEntry[]
   listCondition: ListCondition | null
   quantity: number
   isInWishlist: boolean

@@ -58,12 +58,46 @@ class TestSyncCollection:
         )
         assert await collection_repo.last_full_sync_at(session) is not None
 
-    async def test_set_in_several_lists_keeps_its_first_list(self, session) -> None:  # noqa: ANN001
+    async def test_set_in_several_lists_gets_one_entry_per_list(self, session) -> None:  # noqa: ANN001
         await collection_repo.sync_collection(
-            session, [user_set("10307-1", list_id=2), user_set("10307-1", list_id=1)], LISTS
+            session,
+            [user_set("10307-1", list_id=2), user_set("10307-1", list_id=1)],
+            LISTS,
         )
 
-        assert (await collection_repo.cached_set(session, "10307-1")).current_list_name == "stored"
+        row = await collection_repo.cached_set(session, "10307-1")
+        entries = await collection_repo.set_entries(session, "10307-1")
+        assert [(e.list_id, e.quantity) for e in entries] == [(1, 1), (2, 1)]
+        assert row.quantity == 2
+        assert row.current_list_name == "displayed"  # tie: lowest list id
+
+    async def test_entry_quantity_moves_the_total_and_the_main_list(self, session) -> None:  # noqa: ANN001
+        await collection_repo.sync_collection(
+            session, [user_set("10307-1", list_id=1), user_set("10307-1", list_id=2)], LISTS
+        )
+
+        await collection_repo.set_entry_quantity(session, "10307-1", 2, "stored", 3)
+        row = await collection_repo.cached_set(session, "10307-1")
+        assert (row.quantity, row.current_list_id) == (4, 2)
+
+        await collection_repo.set_entry_quantity(session, "10307-1", 2, "stored", 0)
+        row = await collection_repo.cached_set(session, "10307-1")
+        assert (row.quantity, row.current_list_id, row.is_in_collection) == (1, 1, True)
+
+        await collection_repo.set_entry_quantity(session, "10307-1", 1, "displayed", 0)
+        assert (await collection_repo.cached_set(session, "10307-1")).is_in_collection is False
+
+    async def test_rescan_keeps_a_split_across_lists(self, session) -> None:  # noqa: ANN001
+        await collection_repo.sync_collection(
+            session, [user_set("10307-1", list_id=1), user_set("10307-1", list_id=2)], LISTS
+        )
+
+        await collection_repo.cache_set(
+            session, lego_set("10307-1"), is_in_collection=True, list_id=1, list_name="displayed",
+            mark_as_scanned=True,
+        )
+
+        assert len(await collection_repo.set_entries(session, "10307-1")) == 2
 
     async def test_scanned_flag_survives_a_sync(self, session) -> None:  # noqa: ANN001
         await scan(session)

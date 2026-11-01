@@ -108,6 +108,14 @@ class ValuationOut(CamelModel):
         )
 
 
+class EntryOut(CamelModel):
+    """Copies of a set held in one list."""
+
+    list_id: int
+    list_name: str | None
+    quantity: int
+
+
 class SetRowOut(CamelModel):
     """One list row. `price_condition` is what the amount actually represents — not always the
     list's nominal condition, since the resolvers cross-fall-back as a last resort."""

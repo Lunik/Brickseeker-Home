@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import (
     CachedQuoteTitle,
     CachedSet,
+    CachedSetEntry,
     CachedSetList,
     CachedSetPrice,
     CollectionSyncState,
@@ -215,11 +216,89 @@ async def cache_set(
         )
         cached.was_scanned = mark_as_scanned
         session.add(cached)
+    await _reconcile_entries(session, cached, is_in_collection, list_id, list_name)
 
     if is_in_collection:
         await _enter_collection(session, lego_set.set_num)
     await session.commit()
     return cached
+
+
+async def set_entries(session: AsyncSession, set_num: str) -> list[CachedSetEntry]:
+    """Per-list copies of a set, biggest first (the one `current_list_*` mirrors)."""
+    rows = await session.execute(
+        select(CachedSetEntry)
+        .where(CachedSetEntry.set_num == set_num)
+        .order_by(CachedSetEntry.quantity.desc(), CachedSetEntry.list_id)
+    )
+    return list(rows.scalars().all())
+
+
+async def _sync_from_entries(session: AsyncSession, cached: CachedSet) -> None:
+    """Re-derives the summary columns of `cached` from its entries. Flushes first so the query
+    sees pending changes. No entries left means the set left the collection."""
+    await session.flush()
+    entries = await set_entries(session, cached.set_num)
+    if not entries:
+        cached.is_in_collection = False
+        cached.current_list_id = None
+        cached.current_list_name = None
+        return
+    cached.is_in_collection = True
+    cached.quantity = sum(entry.quantity for entry in entries)
+    # ponytail: valuation reads the biggest entry's list condition for every copy, split by list if
+    # lists with different conditions (neuf/occasion) turn out to matter.
+    cached.current_list_id = entries[0].list_id
+    cached.current_list_name = entries[0].list_name
+
+
+async def _upsert_entry(
+    session: AsyncSession, set_num: str, list_id: int, list_name: str | None, quantity: int
+) -> None:
+    entry = await session.get(CachedSetEntry, (set_num, list_id))
+    if entry is None:
+        session.add(CachedSetEntry(set_num=set_num, list_id=list_id, list_name=list_name, quantity=quantity))
+    else:
+        entry.quantity = quantity
+        if list_name is not None:
+            entry.list_name = list_name
+
+
+async def _reconcile_entries(
+    session: AsyncSession,
+    cached: CachedSet,
+    is_in_collection: bool,
+    list_id: int | None,
+    list_name: str | None,
+) -> None:
+    """A caller that knows one list (a scan, an add) must not wipe a split across several: entries
+    are only created when the set has none, and only dropped when it leaves the collection."""
+    await session.flush()
+    entries = await set_entries(session, cached.set_num)
+    if not is_in_collection:
+        for entry in entries:
+            await session.delete(entry)
+    elif entries:
+        await _sync_from_entries(session, cached)
+    elif list_id is not None:
+        await _upsert_entry(session, cached.set_num, list_id, list_name, max(1, cached.quantity or 1))
+
+
+async def set_entry_quantity(
+    session: AsyncSession, set_num: str, list_id: int, list_name: str | None, quantity: int
+) -> None:
+    """Copies of a set in one list; 0 drops the entry (and the set, when it was the last one)."""
+    cached = await session.get(CachedSet, set_num)
+    if cached is None:
+        return
+    if quantity <= 0:
+        entry = await session.get(CachedSetEntry, (set_num, list_id))
+        if entry is not None:
+            await session.delete(entry)
+    else:
+        await _upsert_entry(session, set_num, list_id, list_name, quantity)
+    await _sync_from_entries(session, cached)
+    await session.commit()
 
 
 async def _enter_collection(session: AsyncSession, set_num: str) -> None:
@@ -285,16 +364,31 @@ async def set_collection_status(
     is_in_collection: bool,
     list_id: int | None = None,
     list_name: str | None = None,
+    from_list_id: int | None = None,
 ) -> None:
     """The collection-status half of `cache_set`, for the bulk actions menu (#141): those callers
     only mirror a remote move/add/remove that already succeeded and hold no `LegoSet` to upsert.
-    No-ops when no row exists."""
+    `from_list_id` makes it a move of that list's copies (merged into the target); without it the
+    set just gains an entry in `list_id` when it has none. No-ops when no row exists."""
     existing = await session.get(CachedSet, set_num)
     if existing is None:
         return
-    existing.is_in_collection = is_in_collection
-    existing.current_list_id = list_id
-    existing.current_list_name = list_name
+    if not is_in_collection:
+        await _reconcile_entries(session, existing, False, None, None)
+        await _sync_from_entries(session, existing)
+    elif list_id is not None:
+        source = await session.get(CachedSetEntry, (set_num, from_list_id)) if from_list_id else None
+        if source is not None and from_list_id != list_id:
+            target = await session.get(CachedSetEntry, (set_num, list_id))
+            await _upsert_entry(
+                session, set_num, list_id, list_name, source.quantity + (target.quantity if target else 0)
+            )
+            await session.delete(source)
+        else:
+            await _reconcile_entries(session, existing, True, list_id, list_name)
+        await _sync_from_entries(session, existing)
+    else:
+        existing.is_in_collection = True
     if is_in_collection:
         await _enter_collection(session, set_num)
     await session.commit()
@@ -307,16 +401,6 @@ async def set_wishlist_status(session: AsyncSession, set_num: str, is_in_wishlis
     if existing is None:
         return
     existing.is_in_wishlist = is_in_wishlist
-    await session.commit()
-
-
-async def set_quantity(session: AsyncSession, set_num: str, quantity: int) -> None:
-    """Its own setter rather than a `cache_set` argument — `cache_set` never touches `quantity`,
-    only `sync_collection`'s full reconcile does."""
-    existing = await session.get(CachedSet, set_num)
-    if existing is None:
-        return
-    existing.quantity = quantity
     await session.commit()
 
 
@@ -357,11 +441,15 @@ async def sync_collection(
     for set_list in lists:
         list_name_by_id.setdefault(set_list.id, set_list.name)
 
-    # A set owned in several lists is returned once per list; `CachedSet` assumes one current
-    # list per set, so the first occurrence wins.
+    # A set owned in several lists is returned once per list: one entry per (set, list).
     first_by_set_num: dict[str, UserSet] = {}
+    entries_by_set_num: dict[str, dict[int, int]] = {}
     for user_set in user_sets:
-        first_by_set_num.setdefault(user_set.lego_set.set_num, user_set)
+        set_num = user_set.lego_set.set_num
+        first_by_set_num.setdefault(set_num, user_set)
+        if user_set.list_id is not None:
+            per_list = entries_by_set_num.setdefault(set_num, {})
+            per_list[user_set.list_id] = per_list.get(user_set.list_id, 0) + user_set.quantity
 
     # One indexed fetch of the whole cache instead of one per owned set (a 500-set collection used
     # to mean 500 queries per sync). The same rows serve the "gone from the collection" pass.
@@ -393,6 +481,27 @@ async def sync_collection(
             cached.quantity = user_set.quantity
             cached.last_synced_at = now
             session.add(cached)
+            cached_by_set_num[set_num] = cached
+    await session.flush()
+
+    # Entries mirror Rebrickable exactly: replaced wholesale, then the summary columns follow.
+    await session.execute(delete(CachedSetEntry))
+    for set_num, per_list in entries_by_set_num.items():
+        for list_id, quantity in per_list.items():
+            session.add(
+                CachedSetEntry(
+                    set_num=set_num,
+                    list_id=list_id,
+                    list_name=list_name_by_id.get(list_id),
+                    quantity=quantity,
+                )
+            )
+    for set_num, per_list in entries_by_set_num.items():
+        row = cached_by_set_num[set_num]
+        biggest = min(per_list, key=lambda list_id: (-per_list[list_id], list_id))
+        row.quantity = sum(per_list.values())
+        row.current_list_id = biggest
+        row.current_list_name = list_name_by_id.get(biggest)
 
     # A row that left the collection but was scanned stays as a History row, losing only its
     # collection fields; a sync-only row has nothing left to justify it and goes.

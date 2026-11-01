@@ -79,6 +79,21 @@ class CachedSet(Base):
     )
 
 
+class CachedSetEntry(Base):
+    """Copies of a set held in one Rebrickable Set List. A set owned in several lists has one row
+    per list; `CachedSet.quantity` is their sum and `current_list_*` mirrors the biggest entry, so
+    the price/stats code that reads one list per set keeps working."""
+
+    __tablename__ = "cached_set_entries"
+
+    set_num: Mapped[str] = mapped_column(
+        String(64), ForeignKey("cached_sets.set_num", ondelete="CASCADE"), primary_key=True
+    )
+    list_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    list_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class CachedSetList(Base):
     """A Rebrickable Set List, plus the local per-list `condition` annotation that decides which
     price source values the sets inside it (neuf → retail chain, occasion → BrickLink used)."""

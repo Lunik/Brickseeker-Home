@@ -20,6 +20,7 @@ from ..db import session_scope
 from ..deps import ApiError, SessionDep, not_found, require_auth
 from ..schemas import (
     CamelModel,
+    EntryOut,
     LegoSetOut,
     PriceAlertOut,
     PriceQuoteOut,
@@ -69,6 +70,7 @@ class SetDetailOut(CamelModel):
     is_in_collection: bool
     current_list_id: int | None
     current_list_name: str | None
+    entries: list[EntryOut] = []
     list_condition: str | None
     quantity: int
     is_in_wishlist: bool
@@ -279,6 +281,10 @@ async def set_detail(set_num: str, session: SessionDep, background: BackgroundTa
         is_in_collection=cached.is_in_collection,
         current_list_id=cached.current_list_id,
         current_list_name=cached.current_list_name,
+        entries=[
+            EntryOut(list_id=e.list_id, list_name=e.list_name, quantity=e.quantity)
+            for e in await collection_repo.set_entries(session, set_num)
+        ],
         list_condition=condition.value if condition else None,
         quantity=cached.quantity,
         is_in_wishlist=cached.is_in_wishlist,

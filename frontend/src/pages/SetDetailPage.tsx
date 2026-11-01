@@ -277,11 +277,11 @@ export default function SetDetailPage() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
   const addToCollection = useMutation({
-    // Adding and moving are different endpoints: POST only adds, so using it on a set already in
-    // a list left the set in both. PATCH performs the delete-then-add Rebrickable requires.
+    // A set already owned gains a copy in the new list (PATCH with a quantity); the first add is
+    // the POST. Neither moves the existing copies: each list row carries its own count.
     mutationFn: (listId: number) =>
       data?.isInCollection
-        ? api.patch(`/collection/${encodeURIComponent(setNum)}`, { listId })
+        ? api.patch(`/collection/${encodeURIComponent(setNum)}`, { listId, quantity: 1 })
         : api.post(`/collection/${encodeURIComponent(setNum)}`, { listId }),
     onSuccess: () => {
       setShowLists(false)
@@ -293,7 +293,9 @@ export default function SetDetailPage() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
   const setQuantity = useMutation({
-    mutationFn: (quantity: number) => api.patch(`/collection/${encodeURIComponent(setNum)}`, { quantity }),
+    // Copies in one list; 0 takes the set out of that list.
+    mutationFn: ({ listId, quantity }: { listId: number; quantity: number }) =>
+      api.patch(`/collection/${encodeURIComponent(setNum)}`, { listId, quantity }),
     onSuccess: () => queryClient.invalidateQueries(),
   })
   const deleteScan = useMutation({
@@ -428,50 +430,62 @@ export default function SetDetailPage() {
 
         {data.isInCollection ? (
           <StatusLine>
-            Dans votre liste «&nbsp;{data.currentListName ?? 'collection'}&nbsp;»
+            {data.entries.length > 1
+              ? `Dans ${data.entries.length} listes · ×${data.quantity} au total`
+              : `Dans votre liste « ${data.currentListName ?? 'collection'} »`}
           </StatusLine>
         ) : (
           <StatusLine tone="neutral">Pas dans votre collection</StatusLine>
         )}
 
         {data.isInCollection && (
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <span className="text-[20px] text-ink">Quantité : ×{data.quantity}</span>
-            <div className="flex items-center rounded-xl bg-surface-raised">
-              <button
-                type="button"
-                className="flex h-11 w-12 items-center justify-center text-ink disabled:opacity-30"
-                onClick={() => setQuantity.mutate(Math.max(1, data.quantity - 1))}
-                disabled={data.quantity <= 1}
-                aria-label="Retirer un exemplaire"
-              >
-                <Icon name="minus" className="h-5 w-5" />
-              </button>
-              <span className="h-6 w-px bg-line" />
-              <button
-                type="button"
-                className="flex h-11 w-12 items-center justify-center text-ink"
-                onClick={() => setQuantity.mutate(data.quantity + 1)}
-                aria-label="Ajouter un exemplaire"
-              >
-                <Icon name="plus" className="h-5 w-5" />
-              </button>
-            </div>
+          <div className="space-y-2 pt-1">
+            {data.entries.map((entry) => (
+              <div key={entry.listId} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-[20px] text-ink">
+                  {entry.listName ?? 'Collection'} : ×{entry.quantity}
+                </span>
+                <div className="flex shrink-0 items-center rounded-xl bg-surface-raised">
+                  <button
+                    type="button"
+                    className="flex h-11 w-12 items-center justify-center text-ink"
+                    onClick={() => setQuantity.mutate({ listId: entry.listId, quantity: entry.quantity - 1 })}
+                    aria-label={`Retirer un exemplaire de ${entry.listName ?? 'la liste'}`}
+                  >
+                    <Icon name="minus" className="h-5 w-5" />
+                  </button>
+                  <span className="h-6 w-px bg-line" />
+                  <button
+                    type="button"
+                    className="flex h-11 w-12 items-center justify-center text-ink"
+                    onClick={() => setQuantity.mutate({ listId: entry.listId, quantity: entry.quantity + 1 })}
+                    aria-label={`Ajouter un exemplaire dans ${entry.listName ?? 'la liste'}`}
+                  >
+                    <Icon name="plus" className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button type="button" className="btn-ghost px-0 text-[16px]" onClick={() => setShowLists(true)}>
+              + Ajouter à une autre liste
+            </button>
           </div>
         )}
 
         {/* Grouped by what they act on: the two that change where the set lives, then the two
             that watch its price. Five identical full-width rows gave equal weight to everything. */}
         <div className="space-y-3 pt-1">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className={`${data.isInCollection ? 'btn-secondary' : 'btn-primary'} whitespace-nowrap px-2 text-[16px]`}
-              onClick={() => setShowLists(true)}
-            >
-              <Icon name="box" className="h-5 w-5" />
-              {data.isInCollection ? 'Changer de liste' : 'Ajouter'}
-            </button>
+          <div className={`grid gap-2 ${data.isInCollection ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {!data.isInCollection && (
+              <button
+                type="button"
+                className="btn-primary whitespace-nowrap px-2 text-[16px]"
+                onClick={() => setShowLists(true)}
+              >
+                <Icon name="box" className="h-5 w-5" />
+                Ajouter
+              </button>
+            )}
             <button
               type="button"
               className="btn-secondary whitespace-nowrap px-2 text-[16px]"
@@ -698,7 +712,7 @@ export default function SetDetailPage() {
       <Sheet open={showLists} title="Choisir une liste" onClose={() => setShowLists(false)}>
         <div className="space-y-2">
           {(collection.data?.lists ?? [])
-            .filter((list) => list.id !== data.currentListId)
+            .filter((list) => !data.entries.some((entry) => entry.listId === list.id))
             .map((list) => (
             <button
               key={list.id}

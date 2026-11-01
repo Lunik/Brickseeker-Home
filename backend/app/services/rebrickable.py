@@ -289,6 +289,10 @@ def _raise_for_status(response: httpx.Response) -> None:
         raise rate_limited()
     if code >= 500:
         raise _server_error(code)
+    # Rebrickable explains a rejected write in the body (`{"detail": ...}` or per-field errors).
+    reason = response.text.strip()[:200]
+    if reason:
+        raise ApiError(f"Rebrickable a refusé la requête ({code}) : {reason}")
     raise ApiError("Une erreur inconnue est survenue")
 
 
@@ -511,6 +515,13 @@ class RebrickableClient:
             "DELETE", f"{BASE_URL}/users/{_seg(token)}/setlists/{from_list_id}/sets/{_seg(set_num)}/"
         )
         await self.add_set_to_list(set_num, to_list_id)
+
+    async def remove_set_from_list(self, set_num: str, list_id: int) -> None:
+        """Drops the set from one Set List only — `remove_set_from_collection` clears every list."""
+        token = self._require_token()
+        await self._request(
+            "DELETE", f"{BASE_URL}/users/{_seg(token)}/setlists/{list_id}/sets/{_seg(set_num)}/"
+        )
 
     async def remove_set_from_collection(self, set_num: str) -> None:
         token = self._require_token()
