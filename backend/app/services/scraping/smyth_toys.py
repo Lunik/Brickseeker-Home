@@ -65,6 +65,7 @@ def _quote_from_payload(payload: object, digits: str) -> PriceQuote | None:
             amount=amount,
             currency=parse_currency(price_text),
             source_url=_source_url(product.get("url")),
+            title=name,
             fetched_at=datetime.now(UTC),
         )
     return None

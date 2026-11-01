@@ -156,6 +156,8 @@ class PriceQuote:
     #: quote says nothing about sales" (rebuilt from cache), `[]` is a live fetch that found none —
     #: the only one of the two allowed to clear stored rows.
     sales: list[SoldSale] | None = None
+    #: What the retailer calls the offer, which only a live fetch knows. `None` leaves the stored one.
+    title: str | None = None
 
     @property
     def is_thin_sample(self) -> bool:

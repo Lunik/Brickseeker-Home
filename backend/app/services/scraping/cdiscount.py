@@ -60,7 +60,7 @@ def _extract_js(digits: str) -> str:
     const priceText = cardText.split('{digits}').join(' ');
     const matches = priceText.match(priceRegex);
     if (!matches || !matches.length) continue;
-    return JSON.stringify({{ price: matches[matches.length - 1], url: link.href }});
+    return JSON.stringify({{ price: matches[matches.length - 1], url: link.href, title: cardText }});
   }}
   return null;
 }})()
@@ -91,5 +91,6 @@ async def fetch_price(lego_set: LegoSet) -> PriceQuote | None:
         amount=amount,
         currency=parse_currency(price_text),
         source_url=payload.get("url"),
+        title=payload.get("title"),
         fetched_at=datetime.now(UTC),
     )

@@ -26,6 +26,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import (
+    CachedQuoteTitle,
     CachedSet,
     CachedSetList,
     CachedSetPrice,
@@ -549,6 +550,11 @@ async def cache_prices(
         for row in rows:
             if row.source not in fetched_sources and row.source not in (preserve_sources or set()):
                 await session.delete(row)
+                await session.execute(
+                    delete(CachedQuoteTitle).where(
+                        CachedQuoteTitle.set_num == set_num, CachedQuoteTitle.source == row.source
+                    )
+                )
 
     now = _now()
     for quote in quotes:
@@ -581,6 +587,8 @@ async def cache_prices(
             # second one, which the (set_num, source) unique constraint would reject.
             cached_by_source[source] = inserted
 
+        if quote.title:
+            await _store_quote_title(session, set_num, source, quote.title)
         await record_price_history(session, set_num, source, quote.amount, quote.currency)
         # Only a quote carrying sales information may rewrite the stored rows: `None` means "says
         # nothing about sales" (a cache-rebuilt quote), `[]` is a live fetch that found none.
@@ -613,6 +621,20 @@ async def _replace_sold_listings(
         )
 
 
+async def _store_quote_title(session: AsyncSession, set_num: str, source: str, title: str) -> None:
+    stored = (
+        await session.execute(
+            select(CachedQuoteTitle).where(
+                CachedQuoteTitle.set_num == set_num, CachedQuoteTitle.source == source
+            )
+        )
+    ).scalar_one_or_none()
+    if stored is not None:
+        stored.title = title[:255]
+    else:
+        session.add(CachedQuoteTitle(set_num=set_num, source=source, title=title[:255]))
+
+
 async def _quote_evidence(session: AsyncSession, set_num: str | None = None) -> dict[str, QuoteEvidence]:
     """What `assess_quotes` needs beyond the quotes, for one set or all of them.
 
@@ -638,14 +660,23 @@ async def _quote_evidence(session: AsyncSession, set_num: str | None = None) -> 
         ).order_by(PriceHistoryEntry.fetched_at)
     ):
         history.setdefault(row_set, {}).setdefault(source, []).append(amount)
+    titles: dict[str, dict[str, str]] = {}
+    for row_set, source, title in await session.execute(
+        scoped(
+            select(CachedQuoteTitle.set_num, CachedQuoteTitle.source, CachedQuoteTitle.title),
+            CachedQuoteTitle,
+        )
+    ):
+        titles.setdefault(row_set, {})[source] = title
     names_by_set = {row_set: name for row_set, name in names}
     return {
         row_set: QuoteEvidence(
             set_name=names_by_set.get(row_set, ""),
             sales=sales.get(row_set, {}),
             history=history.get(row_set, {}),
+            titles=titles.get(row_set, {}),
         )
-        for row_set in names_by_set.keys() | sales.keys() | history.keys()
+        for row_set in names_by_set.keys() | sales.keys() | history.keys() | titles.keys()
     }
 
 
@@ -1182,6 +1213,13 @@ async def clear_cache(session: AsyncSession) -> None:
     6-month window on the next refresh.
     """
     await _strip_scan_locations(session, None)
-    for model in (CachedSet, CachedSetList, CachedSetPrice, SoldListing, CollectionSyncState):
+    for model in (
+        CachedSet,
+        CachedSetList,
+        CachedSetPrice,
+        CachedQuoteTitle,
+        SoldListing,
+        CollectionSyncState,
+    ):
         await session.execute(delete(model))
     await session.commit()

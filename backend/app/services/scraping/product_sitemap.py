@@ -138,6 +138,7 @@ def _extract_js(digits: str) -> str:
             price: String(offer.price || offer.lowPrice),
             currency: offer.priceCurrency || 'EUR',
             availability: offer.availability || null,
+            title: value.name || null,
             url: value.url || location.href
           }};
         }}
@@ -201,5 +202,6 @@ async def fetch_sitemap_product_price(
         amount=amount,
         currency=str(payload.get("currency") or "EUR"),
         source_url=str(payload.get("url") or product_url),
+        title=payload.get("title"),
         fetched_at=datetime.now(UTC),
     )

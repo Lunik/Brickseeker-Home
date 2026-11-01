@@ -50,6 +50,7 @@ def _extract_js(digits: str) -> str:
     const linkEl = card.querySelector('h2 a') || card.querySelector('a.a-link-normal');
     return JSON.stringify({{
       price: priceEl.textContent.trim(),
+      title,
       url: linkEl ? linkEl.href : null
     }});
   }}
@@ -82,5 +83,6 @@ async def fetch_price(lego_set: LegoSet) -> PriceQuote | None:
         amount=amount,
         currency=parse_currency(price_text),
         source_url=payload.get("url"),
+        title=payload.get("title"),
         fetched_at=datetime.now(UTC),
     )

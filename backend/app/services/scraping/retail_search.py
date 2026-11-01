@@ -88,6 +88,7 @@ def _extract_js(
       || (card.matches('a[href]') ? card : card.querySelector('a[href]'));
     return JSON.stringify({{
       price,
+      title: productText,
       url: linkEl ? linkEl.href : null,
     }});
   }}
@@ -140,5 +141,6 @@ async def fetch_retail_price(
         amount=amount,
         currency=parse_currency(price_text),
         source_url=payload.get("url"),
+        title=payload.get("title"),
         fetched_at=datetime.now(UTC),
     )

@@ -38,29 +38,14 @@ MINIMUM_READINGS_FOR_JUMP = 3
 #: A user's verdict is about one offer. Once the price moves this much it is another offer.
 DECISION_VALID_FACTOR = 2.0
 
-#: Words in a retailer's title that mean it is not selling one set. Ignored when the set's own name
-#: contains them, so a set really called "Book" is not rejected for it.
-_OTHER_PRODUCT_WORDS = (
-    "porte-clé",
-    "porte-clef",
-    "porte clé",
-    "keychain",
-    "key chain",
-    "keyring",
-    "livre",
-    "book",
-    "magazine",
-    "puzzle",
-    "montre",
-    "réveil",
-    "boîte de",
-    "boite de",
-    "lot de",
-    "pack de",
-    "série complète",
-    "serie complete",
-    "collection complète",
-    "complete set of",
+#: What a retailer's title says when it is not selling one set. Set names are English and titles
+#: French, so a positive match is impossible and only these negative words are looked for. A count
+#: is required after "boîte de" and the like: "Boîte de briques créatives" is a real set.
+_OTHER_PRODUCT = re.compile(
+    r"(?<!\w)(?:porte[- ]cl(?:é|e|ef)s?|key ?chains?|key ?rings?|livres?|books?|magazines?|puzzles?"
+    r"|montres?|réveils?|(?:boîte|boite|lot|pack)s? de \d+|s[ée]rie compl[èe]te"
+    r"|collection compl[èe]te|complete set of)(?!\w)",
+    re.IGNORECASE,
 )
 
 
@@ -163,11 +148,9 @@ def _reference(quotes: Sequence[PriceQuote], evidence: QuoteEvidence) -> _Refere
 
 
 def is_other_product(title: str, set_name: str = "") -> bool:
-    lowered, own_name = title.casefold(), set_name.casefold()
-    return any(
-        re.search(rf"(?<!\w){re.escape(word)}", lowered) and word not in own_name
-        for word in _OTHER_PRODUCT_WORDS
-    )
+    """A set really called "Book" is not rejected for saying so."""
+    own_name = set_name.casefold()
+    return any(match.group().casefold() not in own_name for match in _OTHER_PRODUCT.finditer(title))
 
 
 def _has_jumped(amount: float, readings: Sequence[float]) -> bool:

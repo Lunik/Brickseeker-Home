@@ -142,6 +142,9 @@ class TestTitle:
         assert is_other_product("LEGO Minifigures : boîte de 36 sachets")
         assert not is_other_product("LEGO 42141 Technic McLaren Formula 1")
 
+    def test_a_real_set_named_box_of_something_is_spared(self):
+        assert not is_other_product("LEGO 11016 Boîte de briques créatives")
+
     def test_word_inside_another_is_not_matched(self):
         assert not is_other_product("LEGO Facebook Tower")
 
@@ -187,6 +190,28 @@ class TestReadingTheCache:
         bulk = await collection_repo.all_cached_prices(session)
         assert [item.source for item in bulk["71049-5"]] == [NEW]
         assert {item.source for item in bulk["1000-1"]} == {NEW, AMAZON}
+
+    async def test_title_survives_a_rebuilt_quote_and_goes_with_the_cache(self, session):
+        keyring = PriceQuote(source=AMAZON, amount=12.0, title="Porte-clés LEGO 10307")
+        await collection_repo.cache_prices(session, [keyring], "10307-1")
+        await collection_repo.cache_prices(session, [quote(AMAZON, 12.0)], "10307-1")
+        await session.commit()
+        assessed = await collection_repo.assessed_prices(session, "10307-1")
+        assert assessed[0].reason is QuoteReason.OTHER_PRODUCT
+        assert (await collection_repo.all_assessed_prices(session))["10307-1"][0].title == keyring.title
+
+        await collection_repo.clear_cache(session)
+        await collection_repo.cache_prices(session, [quote(AMAZON, 12.0)], "10307-1")
+        await session.commit()
+        assert (await collection_repo.assessed_prices(session, "10307-1"))[0].title is None
+
+    async def test_title_goes_when_the_retailer_stops_listing_it(self, session):
+        keyring = PriceQuote(source=AMAZON, amount=12.0, title="Porte-clés LEGO 10307")
+        await collection_repo.cache_prices(session, [keyring], "10307-1")
+        await collection_repo.cache_prices(session, [], "10307-1", reconcile=True)
+        await collection_repo.cache_prices(session, [quote(AMAZON, 12.0)], "10307-1")
+        await session.commit()
+        assert (await collection_repo.assessed_prices(session, "10307-1"))[0].title is None
 
     async def test_set_aside_quotes_stay_readable(self, session):
         await collection_repo.cache_prices(session, [quote(AMAZON, 63.9)], "71049-5")

@@ -178,6 +178,19 @@ class SoldListing(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class CachedQuoteTitle(Base):
+    """What a retailer calls its offer. Its own table because schema changes are `create_all` only,
+    which never adds a column to an existing one. Pure cache: cleared by `clear_cache()`."""
+
+    __tablename__ = "cached_quote_titles"
+    __table_args__ = (UniqueConstraint("set_num", "source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    set_num: Mapped[str] = mapped_column(String(64), index=True)
+    source: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+
+
 class PriceHistoryEntry(Base):
     """Append-only, one row per (set, source, day). Survives `clear_cache()` — the price-evolution
     chart is the whole point of recording it, and a past reading can't be re-fetched."""

@@ -92,6 +92,7 @@ def _quote_from_payload(payload: object, digits: str) -> PriceQuote | None:
             source=PriceSource.CULTURA,
             amount=amount,
             currency=str(final.get("currency") or "EUR"),
+            title=name,
             source_url=(
                 f"https://www.cultura.com/p-{url_key}.html"
                 if isinstance(url_key, str) and url_key
